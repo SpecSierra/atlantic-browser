@@ -29,6 +29,7 @@
 #include "persistenttabmodel.h"
 #include "privatetabmodel.h"
 #include "declarativehistorymodel.h"
+#include "declarativetabfiltermodel.h"
 #include "declarativewebcontainer.h"
 #include "declarativewebpage.h"
 #include "declarativewebpagecreator.h"
@@ -159,6 +160,7 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
         qmlRegisterType<BookmarkFilterModel>(uri, 1, 0, "BookmarkFilterModel");
         qmlRegisterType<DeclarativeLoginModel>(uri, 1, 0, "LoginModel");
         qmlRegisterType<LoginFilterModel>(uri, 1, 0, "LoginFilterModel");
+        qmlRegisterType<DeclarativeTabFilterModel>(uri, 1, 0, "TabFilterModel");
         qmlRegisterSingletonType<BookmarkManager>(uri, 1, 0, "BookmarkManager", bookmarkmanager_factory);
     }
 
