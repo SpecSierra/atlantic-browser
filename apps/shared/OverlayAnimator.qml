@@ -99,7 +99,10 @@ Item {
         // Animation end changes to true state. Hence not like atTop = state !== _fullscreenOverlay
         var wasAtMiddle = (!atBottom && !atTop) || _midPos
         var goingUp = (atBottom || wasAtMiddle) && (state === _fullscreenOverlay || state === _startPage)
-        var goingDown = (atTop || wasAtMiddle) && (state === _chromeVisible || state === _fullscreenWebPage || state === _doubleToolBar || state === _noOverlay || state === _draggingOverlay || state === _certOverlay || state === _startPage )
+        var goingDown = (atTop || wasAtMiddle)
+                && (state === _chromeVisible || state === _fullscreenWebPage || state === _doubleToolBar
+                    || state === _noOverlay || state === _draggingOverlay || state === _certOverlay
+                    || state === _startPage)
 
         if ((state !== _fullscreenOverlay && state !== _certOverlay && state !== _startPage) || _midPos) {
             atTop = false
