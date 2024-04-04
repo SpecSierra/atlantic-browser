@@ -8,7 +8,6 @@ CONFIG += link_pkgconfig
 target.path = $$[QT_INSTALL_LIBS]
 
 PKGCONFIG += mlite5 sailfishwebengine
-INCLUDEPATH += $$system(pkg-config --cflags sailfishwebengine)
 
 include(../../defaults.pri)
 include(../../common/browserapp.pri)

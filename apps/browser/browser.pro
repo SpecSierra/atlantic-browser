@@ -8,8 +8,7 @@ TARGETPATH = /usr/bin
 target.path = $$TARGETPATH
 
 INSTALLS += target
-PKGCONFIG +=  mlite5 sailfishwebengine
-INCLUDEPATH += $$system(pkg-config --cflags sailfishwebengine)
+PKGCONFIG += mlite5 sailfishwebengine
 INCLUDEPATH += $$PWD/../core $$PWD/../storage $$PWD/../history $$PWD/../qtmozembed $$PWD/../../common
 
 DEPLOYMENT_PATH = /usr/share/$$TARGET
