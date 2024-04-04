@@ -69,11 +69,12 @@ void BrowserPrivate::initUserData()
         QFile::copy(MOZILLA_DATA_PREFS_SOURCE, mozillaDir + MOZILLA_DATA_PREFS);
 }
 
-Browser::Browser(QQuickView *view, QObject *parent)
+Browser::Browser(QQuickView *view, const QString &dataPath, QObject *parent)
     : QObject(parent)
     , d_ptr(new BrowserPrivate(view))
 {
     Q_D(Browser);
+    d->m_dataPath = dataPath;
 
     Q_ASSERT(view);
     Q_ASSERT(qGuiApp);
@@ -112,11 +113,12 @@ void Browser::load()
 
 QString Browser::applicationFilePath()
 {
+    Q_D(Browser);
     Q_ASSERT_X(qGuiApp, Q_FUNC_INFO, "There should always be a QGuiApplication running.");
     if (qGuiApp->arguments().contains("-desktop")) {
         return qGuiApp->applicationDirPath() + QDir::separator();
     } else {
-        return QString(DEPLOYMENT_PATH);
+        return QString(d->m_dataPath);
     }
 }
 

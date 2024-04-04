@@ -23,6 +23,7 @@ public:
 
 private:
     void initUserData();
+    QString m_dataPath;
 
 protected:
     QQuickView *view;

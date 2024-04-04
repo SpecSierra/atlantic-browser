@@ -3,9 +3,6 @@ INCLUDEPATH += $$PWD
 CONFIG += link_pkgconfig
 PKGCONFIG += sailfishpolicy nemotransferengine-qt5 dsme_dbus_if
 
-DEPLOYMENT_PATH = /usr/share/$$TARGET
-DEFINES += DEPLOYMENT_PATH=\"\\\"\"$${DEPLOYMENT_PATH}/\"\\\"\"
-
 # C++ sources
 SOURCES += \
     $$PWD/browser.cpp \

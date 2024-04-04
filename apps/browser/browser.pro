@@ -11,6 +11,9 @@ INSTALLS += target
 PKGCONFIG +=  mlite5 sailfishwebengine
 INCLUDEPATH += $$system(pkg-config --cflags sailfishwebengine)
 
+DEPLOYMENT_PATH = /usr/share/$$TARGET
+DEFINES += DEPLOYMENT_PATH=\"\\\"\"$${DEPLOYMENT_PATH}/\"\\\"\"
+
 packagesExist(qdeclarative5-boostable) {
     message("Building with qdeclarative-boostable support")
     DEFINES += HAS_BOOSTER

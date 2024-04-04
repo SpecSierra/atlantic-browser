@@ -7,6 +7,9 @@ CONFIG += link_pkgconfig
 TARGETPATH = /usr/bin
 target.path = $$TARGETPATH
 
+DEPLOYMENT_PATH = /usr/share/$$TARGET
+DEFINES += DEPLOYMENT_PATH=\"\\\"\"$${DEPLOYMENT_PATH}/\"\\\"\"
+
 INSTALLS += target
 PKGCONFIG +=  mlite5 sailfishwebengine
 INCLUDEPATH += $$system(pkg-config --cflags sailfishwebengine)

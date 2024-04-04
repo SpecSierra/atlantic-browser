@@ -173,7 +173,7 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     qmlRegisterType<SecureAction>(uri, 1, 0, "SecureAction");
     qmlRegisterSingletonType<SearchEngineModel>(uri, 1, 0, "SearchEngineModel", search_model_factory);
 
-    Browser *browser = new Browser(view.data(), app.data());
+    Browser *browser = new Browser(view.data(), DEPLOYMENT_PATH, app.data());
     browser->connect(service, &BrowserService::openUrlRequested,
                      browser, &Browser::openUrl);
     browser->connect(service, &BrowserService::activateNewTabViewRequested,
