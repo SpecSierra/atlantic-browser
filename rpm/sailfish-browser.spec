@@ -112,7 +112,7 @@ mkdir -p %{buildroot}/%{_sharedstatedir}/environment/nemo/
 cp -f data/70-browser.conf %{buildroot}/%{_sharedstatedir}/environment/nemo/
 
 %post
-/usr/bin/update-desktop-database -q || :
+/sbin/ldconfig || :
 
 # Upgrade, count is 2 or higher (depending on the number of versions installed)
 if [ "$1" -ge 2 ]; then
@@ -122,6 +122,9 @@ if [ "$1" -ge 2 ]; then
     %{_bindir}/add-oneshot --all-users browser-move-data-to-new-location || :
     %{_bindir}/add-oneshot --all-users browser-deprecate-dconf-keys || :
 fi
+
+%postun
+/sbin/ldconfig || :
 
 %files
 %defattr(-,root,root,-)
@@ -139,6 +142,8 @@ fi
 %{_userunitdir}/user-session.target.d/50-sailfish-browser.conf
 # Let main package own import root level
 %dir %{_libdir}/qt5/qml/org/sailfishos/browser
+%{_libdir}/libsailfishbrowser.so.*
+%exclude %{_libdir}/libsailfishbrowser.so
 %{_sharedstatedir}/environment/nemo/*
 %{_libexecdir}/jolla-vault/units/vault-browser
 %{_datadir}/jolla-vault/units/Browser.json

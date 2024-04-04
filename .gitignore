@@ -6,5 +6,6 @@ moc_*.cpp
 *.qm
 Makefile
 *.so
+*.so.*
 RPMS/*
 sailfish-browser.pro.user
