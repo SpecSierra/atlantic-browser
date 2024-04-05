@@ -2,7 +2,6 @@
 %global min_qtmozembed_version 1.53.8
 %global min_embedlite_components_version 1.20.0
 %global min_sailfishwebengine_version 1.5.9
-%global min_systemsettings_version 0.5.25
 
 %global captiveportal sailfish-captiveportal
 
@@ -19,7 +18,6 @@ BuildRequires:  pkgconfig(Qt5Qml)
 BuildRequires:  pkgconfig(Qt5Gui)
 BuildRequires:  pkgconfig(Qt5Quick)
 BuildRequires:  pkgconfig(qt5embedwidget) >= %{min_qtmozembed_version}
-BuildRequires:  pkgconfig(systemsettings) >= %{min_systemsettings_version}
 BuildRequires:  pkgconfig(Qt5DBus)
 BuildRequires:  pkgconfig(Qt5Concurrent)
 BuildRequires:  pkgconfig(Qt5Sql)
@@ -57,7 +55,6 @@ Requires: jolla-settings-system >= 1.0.70
 Requires: libkeepalive >= 1.7.0
 Requires: sailfish-components-pickers-qt5 >= 0.1.7
 Requires: nemo-qml-plugin-notifications-qt5 >= 1.0.12
-Requires: nemo-qml-plugin-systemsettings >= %{min_systemsettings_version}
 Requires: mapplauncherd-booster-browser
 Requires: nemo-qml-plugin-connectivity
 Requires: connman-qt5-declarative >= 1.3.0
