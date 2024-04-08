@@ -13,5 +13,3 @@ HEADERS += \
     $$PWD/dbworker.h \
     $$PWD/link.h \
     $$PWD/tab.h
-
-DEFINES += DB_NAME=\\\"sailfish-browser.sqlite\\\"

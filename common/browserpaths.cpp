@@ -58,6 +58,19 @@ QString BrowserPaths::cacheLocation()
     return getLocation(QStandardPaths::CacheLocation);
 }
 
+QString BrowserPaths::databasePath()
+{
+    QString databaseDir = BrowserPaths::dataLocation();
+    if (databaseDir.isNull()) {
+        qWarning() << "Unable to get database dir";
+        return QString();
+    }
+
+    QDir dir(databaseDir);
+    const QString dbFileName(QLatin1String("sailfish-browser.sqlite"));
+    return dir.absoluteFilePath(dbFileName);
+}
+
 bool BrowserPaths::createDirectory(const QString &dirStr)
 {
     QDir dir(dirStr);
@@ -70,7 +83,12 @@ bool BrowserPaths::createDirectory(const QString &dirStr)
         int gid = getgrnam(getpwuid(uid)->pw_name)->gr_gid;
         int success = chown(dirStr.toLatin1().data(), uid, gid);
         Q_UNUSED(success);
-        QFile::Permissions permissions(QFile::ExeOwner | QFile::ExeGroup | QFile::ReadOwner | QFile::WriteOwner | QFile::ReadGroup | QFile::WriteGroup);
+        QFile::Permissions permissions(QFile::ExeOwner
+                                       | QFile::ExeGroup
+                                       | QFile::ReadOwner
+                                       | QFile::WriteOwner
+                                       | QFile::ReadGroup
+                                       | QFile::WriteGroup);
         QFile::setPermissions(dirStr, permissions);
     }
     return true;

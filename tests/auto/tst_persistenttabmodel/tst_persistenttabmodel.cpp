@@ -67,9 +67,7 @@ void tst_persistenttabmodel::initTestCase()
     int argc(0);
     char* argv[0] = {};
     ::testing::InitGoogleMock(&argc, argv);
-    mDbFile = QString("%1/%2")
-            .arg(BrowserPaths::dataLocation())
-            .arg(QLatin1String(DB_NAME));
+    mDbFile = BrowserPaths::databasePath();
     QFile dbFile(mDbFile);
     dbFile.remove();
 }

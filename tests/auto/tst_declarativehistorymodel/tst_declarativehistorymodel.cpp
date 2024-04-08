@@ -75,10 +75,7 @@ tst_declarativehistorymodel::tst_declarativehistorymodel()
 
 void tst_declarativehistorymodel::initTestCase()
 {
-
-    dbFileName = QString("%1/%2")
-            .arg(BrowserPaths::dataLocation())
-            .arg(QLatin1String(DB_NAME));
+    dbFileName = BrowserPaths::databasePath();
     QFile dbFile(dbFileName);
     dbFile.remove();
 }

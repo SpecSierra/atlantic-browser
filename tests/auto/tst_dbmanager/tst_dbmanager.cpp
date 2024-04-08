@@ -51,9 +51,7 @@ private:
 
 void tst_dbmanager::initTestCase()
 {
-    mDbFile = QString("%1/%2")
-            .arg(BrowserPaths::dataLocation())
-            .arg(QLatin1String(DB_NAME));
+    mDbFile = BrowserPaths::databasePath();
     QFile dbFile(mDbFile);
     dbFile.remove();
 }
