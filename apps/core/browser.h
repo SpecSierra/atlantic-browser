@@ -23,11 +23,11 @@ class Browser : public QObject
     Q_OBJECT
 
 public:
-    explicit Browser(QQuickView *view, QObject *parent = nullptr);
+    Browser(QQuickView *view, const QString &dataPath, QObject *parent = nullptr);
 
     void load();
 
-    static QString applicationFilePath();
+    QString applicationFilePath();
 
 public slots:
     void openUrl(const QString &url);

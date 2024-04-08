@@ -1,4 +1,4 @@
-QT += qml quick gui gui-private dbus sql
+QT += qml quick gui dbus
 # The name of your app
 TARGET = sailfish-captiveportal
 
@@ -7,9 +7,14 @@ CONFIG += link_pkgconfig
 TARGETPATH = /usr/bin
 target.path = $$TARGETPATH
 
+DEPLOYMENT_PATH = /usr/share/$$TARGET
+DEFINES += DEPLOYMENT_PATH=\"\\\"\"$${DEPLOYMENT_PATH}/\"\\\"\"
+
 INSTALLS += target
-PKGCONFIG +=  mlite5 sailfishwebengine
-INCLUDEPATH += $$system(pkg-config --cflags sailfishwebengine)
+PKGCONFIG += mlite5 sailfishwebengine
+INCLUDEPATH += $$PWD/../core $$PWD/../storage $$PWD/../history $$PWD/../qtmozembed $$PWD/../../common
+
+LIBS += -L../lib -lsailfishbrowser
 
 packagesExist(qdeclarative5-boostable) {
     message("Building with qdeclarative-boostable support")
@@ -29,12 +34,6 @@ EE_QM = $$OUT_PWD/sailfish-captiveportal_eng_en.qm
 include(../../translations/translations.pri)
 
 include(../../defaults.pri)
-include(../../common/browserapp.pri)
-include(../../common/opensearchconfigs.pri)
-include(../core/core.pri)
-include(../history/history.pri)
-include(../qtmozembed/qtmozembed.pri)
-include(../factories/factories.pri)
 include(../shared/shared.pri)
 
 # QML files and folders of captiveportal

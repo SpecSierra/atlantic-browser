@@ -19,7 +19,8 @@
 #include <grp.h>
 #include <unistd.h>
 
-static QString getLocation(QStandardPaths::StandardLocation locationType) {
+static QString getLocation(QStandardPaths::StandardLocation locationType)
+{
     QString location(QStandardPaths::writableLocation(locationType));
     QDir dir(location);
     if (!dir.exists()) {

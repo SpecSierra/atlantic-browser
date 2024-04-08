@@ -106,7 +106,7 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     qmlRegisterType<DeclarativeWebPageCreator>(uri, 1, 0, "WebPageCreator");
     qmlRegisterType<InputRegion>(uri, 1, 0, "InputRegion");
 
-    Browser *browser = new Browser(view.data(), app.data());
+    Browser *browser = new Browser(view.data(), DEPLOYMENT_PATH, app.data());
     browser->connect(service, &CaptivePortalService::openUrlRequested,
                      browser, &Browser::openUrl);
     browser->load();

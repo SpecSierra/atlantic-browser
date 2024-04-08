@@ -1,4 +1,4 @@
-QT += qml quick gui gui-private dbus concurrent sql
+QT += qml quick gui dbus concurrent
 # The name of your app
 TARGET = sailfish-browser
 
@@ -8,8 +8,11 @@ TARGETPATH = /usr/bin
 target.path = $$TARGETPATH
 
 INSTALLS += target
-PKGCONFIG +=  mlite5 sailfishwebengine
-INCLUDEPATH += $$system(pkg-config --cflags sailfishwebengine)
+PKGCONFIG += mlite5 sailfishwebengine
+INCLUDEPATH += $$PWD/../core $$PWD/../storage $$PWD/../history $$PWD/../qtmozembed $$PWD/../../common
+
+DEPLOYMENT_PATH = /usr/share/$$TARGET
+DEFINES += DEPLOYMENT_PATH=\"\\\"\"$${DEPLOYMENT_PATH}/\"\\\"\"
 
 packagesExist(qdeclarative5-boostable) {
     message("Building with qdeclarative-boostable support")
@@ -18,6 +21,8 @@ packagesExist(qdeclarative5-boostable) {
 } else {
     warning("qdeclarative5-boostable not available; startup times will be slower")
 }
+
+LIBS += -L../lib -lsailfishbrowser
 
 # Translations
 TS_PATH = $$PWD
@@ -29,13 +34,7 @@ EE_QM = $$OUT_PWD/sailfish-browser_eng_en.qm
 include(../../translations/translations.pri)
 
 include(../../defaults.pri)
-include(../../common/browserapp.pri)
-include(../../common/opensearchconfigs.pri)
-include(../core/core.pri)
 include(../browser/browser.pri)
-include(../history/history.pri)
-include(../qtmozembed/qtmozembed.pri)
-include(../factories/factories.pri)
 include(../shared/shared.pri)
 include(settings/settings.pri)
 include(bookmarks/bookmarks.pri)

@@ -14,8 +14,8 @@
 
 typedef QMap<QString, QString> StringMap;
 
-class OpenSearchConfigs : public QObject {
-
+class OpenSearchConfigs : public QObject
+{
 public:
     static const StringMap getAvailableOpenSearchConfigs();
     static const QStringList getSearchEngineList();

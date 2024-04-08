@@ -152,8 +152,7 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     qmlRegisterUncreatableType<DeclarativeTabModel>(uri, 1, 0, "TabModel", "TabModel is abstract!");
     qmlRegisterUncreatableType<PrivateTabModel>(uri, 1, 0, "PrivateTabModel", "");
 
-    if (!BrowserApp::captivePortal())
-    {
+    if (!BrowserApp::captivePortal()) {
         qmlRegisterType<DeclarativeBookmarkModel>(uri, 1, 0, "BookmarkModel");
         qmlRegisterUncreatableType<PersistentTabModel>(uri, 1, 0, "PersistentTabModel", "");
         qmlRegisterType<DeclarativeHistoryModel>(uri, 1, 0, "HistoryModel");
@@ -162,6 +161,7 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
         qmlRegisterType<LoginFilterModel>(uri, 1, 0, "LoginFilterModel");
         qmlRegisterSingletonType<BookmarkManager>(uri, 1, 0, "BookmarkManager", bookmarkmanager_factory);
     }
+
     qmlRegisterSingletonType<FaviconManager>(uri, 1, 0, "FaviconManager", faviconmanager_factory);
     qmlRegisterUncreatableType<DownloadStatus>(uri, 1, 0, "DownloadStatus", "");
     qmlRegisterType<DeclarativeWebContainer>(uri, 1, 0, "WebContainer");
@@ -173,7 +173,7 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     qmlRegisterType<SecureAction>(uri, 1, 0, "SecureAction");
     qmlRegisterSingletonType<SearchEngineModel>(uri, 1, 0, "SearchEngineModel", search_model_factory);
 
-    Browser *browser = new Browser(view.data(), app.data());
+    Browser *browser = new Browser(view.data(), DEPLOYMENT_PATH, app.data());
     browser->connect(service, &BrowserService::openUrlRequested,
                      browser, &Browser::openUrl);
     browser->connect(service, &BrowserService::activateNewTabViewRequested,
@@ -181,8 +181,7 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     browser->connect(service, &BrowserService::dumpMemoryInfoRequested,
                      browser, &Browser::dumpMemoryInfo);
 
-    if (uiService)
-    {
+    if (uiService) {
         browser->connect(uiService, &BrowserUIService::openUrlRequested,
                         browser, &Browser::openUrl);
         browser->connect(uiService, &BrowserUIService::openSettingsRequested,
