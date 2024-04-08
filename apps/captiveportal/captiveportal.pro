@@ -11,10 +11,7 @@ DEPLOYMENT_PATH = /usr/share/$$TARGET
 DEFINES += DEPLOYMENT_PATH=\"\\\"\"$${DEPLOYMENT_PATH}/\"\\\"\"
 
 INSTALLS += target
-PKGCONFIG += mlite5 sailfishwebengine
-INCLUDEPATH += $$PWD/../core $$PWD/../storage $$PWD/../history $$PWD/../qtmozembed $$PWD/../../common
-
-LIBS += -L../lib -lsailfishbrowser
+include(../use_lib.pri)
 
 packagesExist(qdeclarative5-boostable) {
     message("Building with qdeclarative-boostable support")

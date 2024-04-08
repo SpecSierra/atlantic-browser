@@ -1,7 +1,7 @@
 INCLUDEPATH += $$PWD
 
 CONFIG += link_pkgconfig
-PKGCONFIG += sailfishpolicy
+PKGCONFIG += mlite5 sailfishwebengine
 
 # C++ sources
 SOURCES += \

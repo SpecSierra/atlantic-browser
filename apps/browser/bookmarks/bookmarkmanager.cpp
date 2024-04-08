@@ -16,7 +16,6 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QRegularExpression>
-#include <MGConfItem>
 #include <QStandardPaths>
 
 #include "bookmark.h"

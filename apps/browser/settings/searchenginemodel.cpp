@@ -26,12 +26,15 @@ SearchEngineModel::SearchEngineModel(QObject *parent)
 {
     QString userSearchPrefix = OpenSearchConfigs::getOpenSearchConfigPath();
     QMap<QString, QString> searchConfigs = OpenSearchConfigs::getAvailableOpenSearchConfigs();
-    Status status;
 
     for (const QString &name : searchConfigs.keys()) {
+        Status status;
         // User installed searches are saved to user config dir
-        if (searchConfigs.value(name).startsWith(userSearchPrefix)) status = Status::UserInstalled;
-        else status = Status::System;
+        if (searchConfigs.value(name).startsWith(userSearchPrefix)) {
+            status = Status::UserInstalled;
+        } else {
+            status = Status::System;
+        }
 
         SearchEngine engine(QUrl(), name, status);
         m_searchEngines.append(engine);
@@ -40,6 +43,7 @@ SearchEngineModel::SearchEngineModel(QObject *parent)
     // Get available searches from config
     MGConfItem gconf(SEARCH_ENGINES_AVAILABLE_CONFIG);
     QMap<QString, QVariant> engines = gconf.value().toMap();
+
     for (const QString &name : engines.keys()) {
         SearchEngine engine(engines.value(name).toString(), name, Status::Available);
         m_searchEngines.append(engine);
@@ -48,7 +52,6 @@ SearchEngineModel::SearchEngineModel(QObject *parent)
 
 SearchEngineModel::~SearchEngineModel()
 {
-
 }
 
 int SearchEngineModel::rowCount(const QModelIndex &parent) const
@@ -86,12 +89,10 @@ QHash<int, QByteArray> SearchEngineModel::roleNames() const
 
 void SearchEngineModel::classBegin()
 {
-
 }
 
 void SearchEngineModel::componentComplete()
 {
-
 }
 
 void SearchEngineModel::add(const QString &title, const QString &url)

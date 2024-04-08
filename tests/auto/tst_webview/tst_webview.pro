@@ -2,7 +2,7 @@ TARGET = tst_webview
 
 CONFIG += link_pkgconfig
 
-PKGCONFIG += nemotransferengine-qt5 mlite5 sailfishwebengine
+PKGCONFIG += sailfishwebengine
 
 QT += quick concurrent sql gui-private
 
@@ -12,11 +12,7 @@ include(../common/testobject.pri)
 include(../../../apps/browser/bookmarks/bookmarks.pri)
 include(../../../apps/browser/settings/settings.pri)
 include(../../../apps/browser/browser.pri)
-include(../../../apps/core/core.pri)
-include(../../../apps/qtmozembed/qtmozembed.pri)
-include(../../../apps/factories/factories.pri)
-include(../../../apps/history/history.pri)
-include(../../../common/browserapp.pri)
+include(../../../apps/use_lib.pri)
 
 SOURCES += tst_webview.cpp
 

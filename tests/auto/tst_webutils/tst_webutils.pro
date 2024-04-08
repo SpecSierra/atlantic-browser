@@ -3,10 +3,9 @@ CONFIG += link_pkgconfig
 
 PKGCONFIG += mlite5
 
+include(../../../apps/use_lib.pri)
 include(../mocks/webengine/webengine.pri)
 include(../test_common.pri)
-include(../../../common/opensearchconfigs.pri)
-include(../../../common/browserapp.pri)
 
 LIBS += -lgtest -lgmock
 

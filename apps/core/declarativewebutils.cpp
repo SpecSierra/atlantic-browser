@@ -29,6 +29,8 @@
 #include <QtGui/QGuiApplication>
 #include <QtGui/QScreen>
 
+#include <MGConfItem>
+
 #include <webengine.h>
 #include <webenginesettings.h>
 
@@ -48,7 +50,7 @@ static bool fileExists(QString fileName)
 
 DeclarativeWebUtils::DeclarativeWebUtils()
     : QObject()
-    , m_homePage("/apps/sailfish-browser/settings/home_page", this)
+    , m_homePage(new MGConfItem("/apps/sailfish-browser/settings/home_page", this))
 {
     updateWebEngineSettings();
     connect(SailfishOS::WebEngine::instance(), &SailfishOS::WebEngine::recvObserve,
@@ -57,7 +59,7 @@ DeclarativeWebUtils::DeclarativeWebUtils()
     QString path = BrowserPaths::dataLocation() + QStringLiteral("/.firstUseDone");
     m_firstUseDone = fileExists(path);
 
-    connect(&m_homePage, &MGConfItem::valueChanged,
+    connect(m_homePage, &MGConfItem::valueChanged,
             this, &DeclarativeWebUtils::homePageChanged);
 }
 
@@ -141,7 +143,8 @@ void DeclarativeWebUtils::updateWebEngineSettings()
     setRenderingPreferences();
 }
 
-void DeclarativeWebUtils::setFirstUseDone(bool firstUseDone) {
+void DeclarativeWebUtils::setFirstUseDone(bool firstUseDone)
+{
     QString path = BrowserPaths::dataLocation() + QStringLiteral("/.firstUseDone");
     if (m_firstUseDone != firstUseDone) {
         m_firstUseDone = firstUseDone;
@@ -164,13 +167,14 @@ qreal DeclarativeWebUtils::cssPixelRatio() const
     return 1.0;
 }
 
-bool DeclarativeWebUtils::firstUseDone() const {
+bool DeclarativeWebUtils::firstUseDone() const
+{
     return m_firstUseDone;
 }
 
 QString DeclarativeWebUtils::homePage() const
 {
-    return m_homePage.value("http://jolla.com").value<QString>();
+    return m_homePage->value("http://jolla.com").value<QString>();
 }
 
 DeclarativeWebUtils *DeclarativeWebUtils::instance()
