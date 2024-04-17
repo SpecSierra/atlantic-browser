@@ -13,7 +13,6 @@
 #include "browserservice.h"
 #include "browserservice_p.h"
 #include "declarativewebcontainer.h"
-#include "browserapp.h"
 #include "logging.h"
 
 #include "dbusadaptor.h"

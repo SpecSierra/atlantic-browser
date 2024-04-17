@@ -17,7 +17,7 @@
 #include "webpagefactory.h"
 #include "webpages.h"
 #include "browserpaths.h"
-#include "browserapp.h"
+#include "browserappinfo.h"
 #include "logging.h"
 #include "declarativehistorymodel.h"
 #include "closeeventfilter.h"
@@ -101,7 +101,8 @@ DeclarativeWebContainer::DeclarativeWebContainer(QWindow *parent)
     m_persistentTabModel = new PersistentTabModel(maxTabid + 1, this);
     m_privateTabModel = new PrivateTabModel(maxTabid + 1001, this);
 
-    setTabModel((BrowserApp::captivePortal() || m_privateMode) ? m_privateTabModel.data() : m_persistentTabModel.data());
+    setTabModel((BrowserAppInfo::captivePortal() || m_privateMode) ? m_privateTabModel.data()
+                                                                   : m_persistentTabModel.data());
 
     connect(DownloadManager::instance(), &DownloadManager::downloadStarted,
             this, &DeclarativeWebContainer::onDownloadStarted);
@@ -214,7 +215,7 @@ void DeclarativeWebContainer::setWebPage(DeclarativeWebPage *webPage, bool trigg
             });
 
             connect(m_webPage.data(), &DeclarativeWebPage::updateUrl, [this]() {
-                if (!BrowserApp::captivePortal() && !m_privateMode && m_historyModel)
+                if (!BrowserAppInfo::captivePortal() && !m_privateMode && m_historyModel)
                     m_historyModel->add(m_webPage->url().toString(), QString());
             });
 
@@ -617,7 +618,8 @@ int DeclarativeWebContainer::previouslyUsedTabId() const
 
 void DeclarativeWebContainer::updateMode()
 {
-    setTabModel((BrowserApp::captivePortal() || m_privateMode) ? m_privateTabModel.data() : m_persistentTabModel.data());
+    setTabModel((BrowserAppInfo::captivePortal() || m_privateMode) ? m_privateTabModel.data()
+                                                                   : m_persistentTabModel.data());
     emit tabIdChanged();
 
     // Reload active tab from new mode

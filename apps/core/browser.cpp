@@ -15,7 +15,7 @@
 #include "declarativewebutils.h"
 #include "downloadmanager.h"
 #include "settingmanager.h"
-#include "browserapp.h"
+#include "browserappinfo.h"
 
 #include <QDir>
 #include <QGuiApplication>
@@ -26,7 +26,6 @@
 #include <QDebug>
 #include <webengine.h>
 #include <webenginesettings.h>
-#include <browserapp.h>
 
 const auto MOZILLA_DATA_UA_UPDATE = QStringLiteral("ua-update.json");
 const auto MOZILLA_DATA_UA_UPDATE_SOURCE = QStringLiteral("/usr/share/sailfish-browser/data/ua-update.json.in");
@@ -41,7 +40,7 @@ BrowserPrivate::BrowserPrivate(QQuickView *view)
 
 void BrowserPrivate::initUserData()
 {
-    QString mozillaDir = QString("%1/.mozilla/").arg(BrowserApp::profileName());
+    QString mozillaDir = QString("%1/.mozilla/").arg(BrowserAppInfo::profileName());
     QDir dir(mozillaDir);
     if (!dir.exists())
         dir.mkpath(dir.path());
@@ -79,7 +78,7 @@ Browser::Browser(QQuickView *view, const QString &dataPath, QObject *parent)
     Q_ASSERT(view);
     Q_ASSERT(qGuiApp);
 
-    SailfishOS::WebEngine::initialize(BrowserApp::profileName());
+    SailfishOS::WebEngine::initialize(BrowserAppInfo::profileName());
     SailfishOS::WebEngineSettings::initialize();
 
     DeclarativeWebUtils *utils = DeclarativeWebUtils::instance();
@@ -89,7 +88,7 @@ Browser::Browser(QQuickView *view, const QString &dataPath, QObject *parent)
     d->view->rootContext()->setContextProperty("Settings", SettingManager::instance());
     d->view->rootContext()->setContextProperty("DownloadManager", downloadManager);
 
-    QString mainQml = BrowserApp::captivePortal() ? "captiveportal.qml" : "browser.qml";
+    QString mainQml = BrowserAppInfo::captivePortal() ? "captiveportal.qml" : "browser.qml";
 
 #ifdef USE_RESOURCES
     d->view->setSource(QUrl(QString("qrc:///") + mainQml));

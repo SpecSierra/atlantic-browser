@@ -2,10 +2,10 @@ INCLUDEPATH += $$PWD
 
 # C++ sources
 SOURCES += \
-    $$PWD/browserapp.cpp \
+    $$PWD/browserappinfo.cpp \
     $$PWD/browserpaths.cpp
 
 # C++ headers
 HEADERS += \
-    $$PWD/browserapp.h \
+    $$PWD/browserappinfo.h \
     $$PWD/browserpaths.h
