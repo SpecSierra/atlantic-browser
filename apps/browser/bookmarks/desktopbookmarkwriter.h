@@ -26,7 +26,7 @@ public:
     static void setTestModeEnabled(bool testMode);
     static bool isTestModeEnabled();
 
-    Q_INVOKABLE void save(QString url, QString title, QString icon);
+    Q_INVOKABLE void save(const QString &url, const QString &title, const QString &icon);
 
 signals:
     void saved(const QString &desktopFile);
