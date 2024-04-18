@@ -959,9 +959,7 @@ int main(int argc, char *argv[])
     delete testcase;
     testcase = nullptr;
 
-    QString dbFileName = QString("%1/%2")
-            .arg(BrowserPaths::dataLocation())
-            .arg(QLatin1String(DB_NAME));
+    QString dbFileName = BrowserPaths::databasePath();
     QFile dbFile(dbFileName);
     dbFile.remove();
 

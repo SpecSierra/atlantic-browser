@@ -10,7 +10,7 @@
 #include "declarativewebpage.h"
 #include "declarativewebcontainer.h"
 #include "dbmanager.h"
-#include "browserapp.h"
+#include "browserappinfo.h"
 #include "browserpaths.h"
 #include "logging.h"
 
@@ -73,7 +73,7 @@ DeclarativeWebPage::DeclarativeWebPage(QObject *parent)
 
     addMessageListeners(messages);
 
-    if (BrowserApp::captivePortal()) {
+    if (BrowserAppInfo::captivePortal()) {
         addMessageListener(OPEN_LINK);
         loadFrameScript("file:///usr/share/sailfish-captiveportal/pages/captiveportal.js");
     }

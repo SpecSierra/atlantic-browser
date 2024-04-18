@@ -19,7 +19,6 @@
 #include <QDBusPendingCall>
 
 #include "browser.h"
-#include "browserapp.h"
 #include "captiveportalservice.h"
 // Registered QML types
 #include "downloadstatus.h"

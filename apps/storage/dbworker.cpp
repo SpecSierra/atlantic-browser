@@ -87,16 +87,14 @@ DBWorker::DBWorker(QObject *parent) :
 
 void DBWorker::init()
 {
-    QString databaseDir = BrowserPaths::dataLocation();
-    if (databaseDir.isNull()) {
+    QString dbPath = BrowserPaths::databasePath();
+    if (dbPath.isNull()) {
         return;
     }
-    QDir dir(databaseDir);
-    const QString dbFileName(QLatin1String(DB_NAME));
 
     m_database = QSqlDatabase::addDatabase("QSQLITE");
-    m_database.setDatabaseName(dir.absoluteFilePath(dbFileName));
-    bool dbCreated = dir.exists(dbFileName);
+    m_database.setDatabaseName(dbPath);
+    bool dbCreated = QFile::exists(dbPath);
     bool ok = m_database.open();
 
     if (!ok)

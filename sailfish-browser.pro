@@ -1,6 +1,8 @@
 TEMPLATE = subdirs
 SUBDIRS += apps tests settings backup-unit
 
+tests.depends = apps
+
 # The .desktop file
 desktop.files = sailfish-browser.desktop sailfish-captiveportal.desktop
 desktop.path = /usr/share/applications

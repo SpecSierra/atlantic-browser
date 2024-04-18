@@ -8,15 +8,15 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#ifndef BROWSERAPP_H
-#define BROWSERAPP_H
+#ifndef BROWSERAPPINFO_H
+#define BROWSERAPPINFO_H
 
-class QString;
+#include <QString>
 
-struct BrowserApp
+namespace BrowserAppInfo
 {
-    static bool captivePortal();
-    static QString profileName();
+    bool captivePortal();
+    QString profileName();
 };
 
-#endif // BROWSERAPP_H
+#endif // BROWSERAPPINFO_H

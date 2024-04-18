@@ -17,7 +17,6 @@
 #include <QPointer>
 
 class Bookmark;
-class MGConfItem;
 
 class BookmarkManager : public QObject
 {

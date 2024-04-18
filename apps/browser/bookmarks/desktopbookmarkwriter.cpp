@@ -41,18 +41,19 @@ bool DesktopBookmarkWriter::isTestModeEnabled()
     return dbw_testMode;
 }
 
-void DesktopBookmarkWriter::save(QString url, QString title, QString icon)
+void DesktopBookmarkWriter::save(const QString &url, const QString &title, const QString &icon)
 {
+    QString effectiveIcon = icon;
     if (url.trimmed().isEmpty() || title.trimmed().isEmpty()) {
-        emit saved("");
+        emit saved(QString());
         return;
     }
 
     if (icon.isEmpty()) {
-        icon = DEFAULT_DESKTOP_BOOKMARK_ICON;
+        effectiveIcon = DEFAULT_DESKTOP_BOOKMARK_ICON;
     }
 
-    m_writter.setFuture(QtConcurrent::run(this, &DesktopBookmarkWriter::write, url, title, icon));
+    m_writter.setFuture(QtConcurrent::run(this, &DesktopBookmarkWriter::write, url, title, effectiveIcon));
 }
 
 void DesktopBookmarkWriter::desktopFileWritten()

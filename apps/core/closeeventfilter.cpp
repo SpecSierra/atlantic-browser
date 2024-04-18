@@ -9,11 +9,13 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#include <QCoreApplication>
 #include <webengine.h>
 #include "closeeventfilter.h"
 #include "declarativewebutils.h"
 #include "dbmanager.h"
+
+#include <QCoreApplication>
+#include <MGConfItem>
 
 CloseEventFilter::CloseEventFilter(DownloadManager *dlMgr, QObject *parent)
     : QObject(parent),

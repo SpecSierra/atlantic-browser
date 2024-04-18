@@ -15,7 +15,6 @@
 #include <QTextStream>
 
 #include "declarativewebutils.h"
-#include "browserpaths.h"
 
 class tst_webutils : public QObject
 {

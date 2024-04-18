@@ -19,7 +19,7 @@
 #include <QDBusPendingCall>
 
 #include "browser.h"
-#include "browserapp.h"
+#include "browserappinfo.h"
 // Registered QML types
 #include "declarativebookmarkmodel.h"
 #include "bookmarkfiltermodel.h"
@@ -152,7 +152,7 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     qmlRegisterUncreatableType<DeclarativeTabModel>(uri, 1, 0, "TabModel", "TabModel is abstract!");
     qmlRegisterUncreatableType<PrivateTabModel>(uri, 1, 0, "PrivateTabModel", "");
 
-    if (!BrowserApp::captivePortal()) {
+    if (!BrowserAppInfo::captivePortal()) {
         qmlRegisterType<DeclarativeBookmarkModel>(uri, 1, 0, "BookmarkModel");
         qmlRegisterUncreatableType<PersistentTabModel>(uri, 1, 0, "PersistentTabModel", "");
         qmlRegisterType<DeclarativeHistoryModel>(uri, 1, 0, "HistoryModel");

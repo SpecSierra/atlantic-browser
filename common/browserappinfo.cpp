@@ -9,11 +9,10 @@
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include <QCoreApplication>
-#include <QString>
 #include <QStandardPaths>
-#include "browserapp.h"
+#include "browserappinfo.h"
 
-bool BrowserApp::captivePortal()
+bool BrowserAppInfo::captivePortal()
 {
     static bool captivePortalMode = false;
     static bool argsChecked = false;
@@ -27,7 +26,7 @@ bool BrowserApp::captivePortal()
     return captivePortalMode;
 }
 
-QString BrowserApp::profileName()
+QString BrowserAppInfo::profileName()
 {
     const QStringList &arguments = QCoreApplication::arguments();
     int index = arguments.indexOf(QLatin1String("-profile"));

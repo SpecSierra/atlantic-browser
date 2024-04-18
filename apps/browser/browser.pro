@@ -8,8 +8,7 @@ TARGETPATH = /usr/bin
 target.path = $$TARGETPATH
 
 INSTALLS += target
-PKGCONFIG += mlite5 sailfishwebengine
-INCLUDEPATH += $$PWD/../core $$PWD/../storage $$PWD/../history $$PWD/../qtmozembed $$PWD/../../common
+include(../use_lib.pri)
 
 DEPLOYMENT_PATH = /usr/share/$$TARGET
 DEFINES += DEPLOYMENT_PATH=\"\\\"\"$${DEPLOYMENT_PATH}/\"\\\"\"
@@ -22,7 +21,6 @@ packagesExist(qdeclarative5-boostable) {
     warning("qdeclarative5-boostable not available; startup times will be slower")
 }
 
-LIBS += -L../lib -lsailfishbrowser
 
 # Translations
 TS_PATH = $$PWD

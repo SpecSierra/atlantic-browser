@@ -2,13 +2,10 @@
 
 QT += testlib
 
-CONFIG += c++1z
-
 include(../../defaults.pri)
 
 SRCDIR = $$PWD/../../apps
 CORESRCDIR = $$SRCDIR/core
-BROWSERSRCDIR = $$SRCDIR/browser
 
 CONFIG(gcov) {
     message("GCOV instrumentalization enabled")
