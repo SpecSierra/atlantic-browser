@@ -46,4 +46,4 @@ SOURCES += captiveportaladaptor.cpp \
 HEADERS += captiveportaladaptor.h \
     captiveportalservice.h
 
-OTHER_FILES = ../qml/*
+OTHER_FILES = qml/*.qml qml/pages/*.qml qml/pages/*.js qml/pages/components/*.qml

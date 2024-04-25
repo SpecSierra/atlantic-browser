@@ -44,3 +44,5 @@ INSTALLS += qml
 
 # C++ sources
 SOURCES += main.cpp
+
+OTHER_FILES += qml/*.qml qml/pages/*.qml qml/pages/components/*.qml qml/cover/*.qml
