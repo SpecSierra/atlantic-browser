@@ -39,6 +39,8 @@ ApplicationWindow {
     _mainWindow: webView
     _backgroundVisible: false
     _opaque: false
+    // for time being make this fullscreen. TODO: avoid drawing over cutout and corner areas.
+    defaultPageCutoutMode: CutoutMode.FullScreen
 
     cover: null
 
@@ -46,6 +48,7 @@ ApplicationWindow {
 
     DisabledByMdmView {
         id: mdmView
+
         enabled: !AccessPolicy.browserEnabled
         onEnabledChanged: {
             if (enabled) {
