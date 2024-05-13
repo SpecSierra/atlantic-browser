@@ -27,7 +27,6 @@ Rectangle {
         height: root.height
 
         Shared.IconButton {
-            id: closeTabButton
             width: Theme.itemSizeLarge
             icon.source: "image://theme/icon-m-tab-close"
             icon.opacity: enabled ? 1.0 : Theme.opacityLow
@@ -41,7 +40,6 @@ Rectangle {
         }
 
         Shared.IconButton {
-            id: forwardButton
             width: Theme.itemSizeLarge
             icon.source: "image://theme/icon-m-forward"
             icon.opacity: enabled ? 1.0 : Theme.opacityLow
@@ -54,7 +52,8 @@ Rectangle {
 
         Shared.IconButton {
             width: Theme.itemSizeLarge
-            icon.source: overlay.toolBar.bookmarked ? "image://theme/icon-m-favorite-selected" : "image://theme/icon-m-favorite"
+            icon.source: overlay.toolBar.bookmarked ? "image://theme/icon-m-favorite-selected"
+                                                    : "image://theme/icon-m-favorite"
             icon.opacity: enabled ? 1.0 : Theme.opacityLow
             enabled: webView.contentItem
             onTapped: {

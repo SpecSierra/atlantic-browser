@@ -18,6 +18,7 @@ Item {
 
     Item {
         id: glassTextureItem
+
         visible: false
         width: glassTextureImage.width
         height: glassTextureImage.height
@@ -37,11 +38,12 @@ Item {
 
     ShaderEffect {
         id: wallpaperEffect
+
         anchors.fill: parent
 
         // glass texture size
-        property size glassTextureSizeInv: Qt.size(1.0/(glassTextureImage.sourceSize.width),
-                                                   -1.0/(glassTextureImage.sourceSize.height))
+        property size glassTextureSizeInv: Qt.size(1.0 / (glassTextureImage.sourceSize.width),
+                                                   -1.0 / (glassTextureImage.sourceSize.height))
 
         property variant glassTexture: ShaderEffectSource {
             hideSource: true

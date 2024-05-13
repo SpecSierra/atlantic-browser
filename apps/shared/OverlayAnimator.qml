@@ -20,7 +20,8 @@ Item {
     property bool atTop
     property bool atBottom: true
     property int transitionDuration: !_immediate ? (state === _certOverlay ? proportionalDuration : 250) : 0
-    readonly property bool allowContentUse: state === _chromeVisible || state === _fullscreenWebPage && state !== _doubleToolBar
+    readonly property bool allowContentUse: state === _chromeVisible
+                                            || state === _fullscreenWebPage && state !== _doubleToolBar
     readonly property bool dragging: state === _draggingOverlay
     readonly property bool secondaryTools: state === _doubleToolBar
     readonly property bool certOverlay: state === _certOverlay
@@ -259,15 +260,20 @@ Item {
     transitions: [
         Transition {
             id: overlayTransition
+
             to: "fullscreenWebPage,chromeVisible,loadProgressOverlay,fullscreenOverlay,noOverlay,doubleToolBar,certOverlay,startPage"
 
             SequentialAnimation {
                 NumberAnimation { target: webView; property: "height"; duration: transitionDuration; easing.type: Easing.InOutQuad }
                 ScriptAction {
                     script: {
-                        if (animator.state === _chromeVisible || animator.state === _fullscreenWebPage || animator.state === _doubleToolBar) {
+                        if (animator.state === _chromeVisible
+                                || animator.state === _fullscreenWebPage
+                                || animator.state === _doubleToolBar) {
                             atBottom = true
-                        } else if (animator.state === _fullscreenOverlay || animator.state === _certOverlay || animator.state === _startPage) {
+                        } else if (animator.state === _fullscreenOverlay
+                                   || animator.state === _certOverlay
+                                   || animator.state === _startPage) {
                             atTop = true
                         }
 

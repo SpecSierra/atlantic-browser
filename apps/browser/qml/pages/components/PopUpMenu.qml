@@ -68,9 +68,12 @@ SilicaControl {
 
             property real percentageClosed
             readonly property real menuTop: Math.max(0, headerItem.y - menuFlickable.contentY)
-            readonly property real topPadding: Math.max(0, footerLoader.y - headerItem.height - (Screen.sizeCategory > Screen.Medium
-                    ? contentLoader.height
-                    : Math.min(contentLoader.height, Theme.paddingLarge * popUpMenu.heightRatio)))
+            readonly property real topPadding: Math.max(0,
+                                                        footerLoader.y - headerItem.height
+                                                        - (Screen.sizeCategory > Screen.Medium
+                                                           ? contentLoader.height
+                                                           : Math.min(contentLoader.height,
+                                                                      Theme.paddingLarge * popUpMenu.heightRatio)))
 
             width: popUpMenu.width
             height: popUpMenu.height
@@ -227,11 +230,10 @@ SilicaControl {
                 // menu, this is so each frame of animation doesn't have to allocate a new texture
                 // of a different size when the menu expands. This matrix transforms the normalized
                 // item rectangle coordinates to the visible sub rectangle of the source item.
-                readonly property matrix4x4 menuSourceMatrix: Qt.matrix4x4(
-                        1, 0, 0, 0,
-                        0, height / menuFlickable.height, 0, 0,
-                        0, 0, 1, 0,
-                        0, menuItem.menuTop / menuFlickable.height, 0, 1)
+                readonly property matrix4x4 menuSourceMatrix: Qt.matrix4x4(1, 0, 0, 0,
+                                                                           0, height / menuFlickable.height, 0, 0,
+                                                                           0, 0, 1, 0,
+                                                                           0, menuItem.menuTop / menuFlickable.height, 0, 1)
 
                 x: menuFlickable.x
                 y: menuFlickable.y + menuItem.menuTop - Math.min(0, menuFlickable.contentY)

@@ -120,7 +120,10 @@ Shared.Background {
         webView: overlay.webView
 
         readonly property real _fullHeight: isPortrait ? overlay.toolBar.rowHeight : 0
-        readonly property real _infoHeight: Math.max(webView.fullscreenHeight - overlay.toolBar.certOverlayPreferedHeight - overlay.toolBar.rowHeight, 0)
+        readonly property real _infoHeight: Math.max(webView.fullscreenHeight
+                                                     - overlay.toolBar.certOverlayPreferedHeight
+                                                     - overlay.toolBar.rowHeight,
+                                                     0)
 
         onAtBottomChanged: {
             if (atBottom) {
@@ -219,6 +222,7 @@ Shared.Background {
 
         Shared.ProgressBar {
             id: progressBar
+
             width: parent.width
             height: toolBar.rowHeight
             visible: !searchField.enteringNewTabUrl
@@ -240,11 +244,11 @@ Shared.Background {
             width: parent.width
             height: toolBar.rowHeight + historyList.height
             // Clip only when content has been moved and we're at top or animating downwards.
-            clip: (overlayAnimator.atTop ||
-                   overlayAnimator.direction === "downwards" ||
-                   overlayAnimator.direction === "upwards" ||
-                   favoriteGrid.opacity != 0.0 ||
-                   historyList.opacity != 0.0) && searchField.y < 0
+            clip: (overlayAnimator.atTop
+                   || overlayAnimator.direction === "downwards"
+                   || overlayAnimator.direction === "upwards"
+                   || favoriteGrid.opacity != 0.0
+                   || historyList.opacity != 0.0) && searchField.y < 0
 
             PrivateModeTexture {
                 opacity: toolBar.visible && webView.privateMode ? toolBar.opacity : 0.0
@@ -300,7 +304,11 @@ Shared.Background {
             TextField {
                 id: searchField
 
-                readonly property bool requestingFocus: AccessPolicy.browserEnabled && overlayAnimator.atTop && browserPage.active && !dragArea.moved && (_showFindInPage || _showUrlEntry)
+                readonly property bool requestingFocus: AccessPolicy.browserEnabled
+                                                        && overlayAnimator.atTop
+                                                        && browserPage.active
+                                                        && !dragArea.moved
+                                                        && (_showFindInPage || _showUrlEntry)
 
                 // Release focus when ever history list or favorite grid is moved and overlay itself starts moving
                 // from the top. After moving the overlay or the content, search field can be focused by tapping.
@@ -319,9 +327,11 @@ Shared.Background {
                 }
 
                 // Follow grid / list position.
-                y: -((!historyContainer.showHistoryList ? favoriteGrid.contentY : favoriteGrid.count > 0
+                y: -((!historyContainer.showHistoryList ? favoriteGrid.contentY
+                                                        : favoriteGrid.count > 0
                                                           ? historyList.contentY + favoriteGrid.cellHeight + favoriteGrid.menuHeight
-                                                          : historyList.contentY) + favoriteGrid.headerItem.height + favoriteGrid.menuHeight)
+                                                          : historyList.contentY)
+                     + favoriteGrid.headerItem.height + favoriteGrid.menuHeight)
 
                 // On top of HistoryList and FavoriteGrid
                 z: 1
@@ -343,13 +353,13 @@ Shared.Background {
                     opacity: 0.1
                 }
 
-                placeholderText: toolBar.findInPageActive ?
-                                     //: Placeholder text for finding text from the web page
-                                     //% "Find from page"
-                                     qsTrId("sailfish_browser-ph-type_find_from_page") :
-                                     //: Placeholder text for url typing and searching
-                                     //% "Type URL or search"
-                                     qsTrId("sailfish_browser-ph-type_url_or_search")
+                placeholderText: toolBar.findInPageActive
+                                 ? //: Placeholder text for finding text from the web page
+                                   //% "Find from page"
+                                   qsTrId("sailfish_browser-ph-type_find_from_page")
+                                 : //: Placeholder text for url typing and searching
+                                   //% "Type URL or search"
+                                   qsTrId("sailfish_browser-ph-type_url_or_search")
 
                 EnterKey.onClicked: {
                     if (!text) {
@@ -408,6 +418,7 @@ Shared.Background {
 
             OverlayListItem {
                 id: historyButton
+
                 height: historyContainer.showHistoryButton ? toolBar.rowHeight : 0
                 iconWidth: toolBar.iconWidth
                 horizontalOffset: toolBar.horizontalOffset
@@ -461,7 +472,10 @@ Shared.Background {
             Browser.ToolBar {
                 id: toolBar
 
-                property real crossfadeRatio: (_showFindInPage || _showUrlEntry) ? (overlay.y - webView.fullscreenHeight/2)  / (webView.fullscreenHeight/2 - toolBar.height) : 1.0
+                property real crossfadeRatio: (_showFindInPage || _showUrlEntry)
+                                              ? (overlay.y - webView.fullscreenHeight/2)
+                                                / (webView.fullscreenHeight/2 - toolBar.height)
+                                              : 1.0
 
                 url: webView.contentItem && webView.contentItem.url || ""
                 findText: searchField.text
@@ -518,11 +532,14 @@ Shared.Background {
 
                 onShowCertDetail: {
                     if (webView.security && !webView.security.certIsNull) {
-                        pageStack.animatorPush("com.jolla.settings.system.CertificateDetailsPage", {"website": webView.security.subjectDisplayName, "details": webView.security.serverCertDetails})
+                        pageStack.animatorPush("com.jolla.settings.system.CertificateDetailsPage",
+                                               {"website": webView.security.subjectDisplayName,
+                                                   "details": webView.security.serverCertDetails})
                     }
                 }
                 onSavePageAsPDF: {
-                    var filename = ((webView.title && webView.title.length !== 0) ? webView.title : (WebUtils.pageName(webView.url) || "unnamed_file")) + ".pdf"
+                    var filename = ((webView.title && webView.title.length !== 0)
+                                    ? webView.title : (WebUtils.pageName(webView.url) || "unnamed_file")) + ".pdf"
                     var targetUrl = DownloadHelper.createUniqueFileUrl(filename, StandardPaths.download)
                     WebEngine.notifyObservers("embedui:download",
                                               {
@@ -540,14 +557,20 @@ Shared.Background {
             Browser.HistoryList {
                 id: historyList
 
-                property int panelSize: favoriteGrid.contextMenu && favoriteGrid.contextMenu.active ? 0 : virtualKeyboardObserver.panelSize
+                property int panelSize: favoriteGrid.contextMenu && favoriteGrid.contextMenu.active
+                                        ? 0 : virtualKeyboardObserver.panelSize
 
                 width: parent.width
-                height: webView.tabModel.count !== 0 || webView.privateMode ? browserPage.height - _overlayHeight - panelSize : browserPage.height - panelSize
+                height: webView.tabModel.count !== 0 || webView.privateMode ? browserPage.height - _overlayHeight - panelSize
+                                                                            : browserPage.height - panelSize
 
                 header: Browser.FavoriteGrid {
                     id: favoriteGrid
-                    height: !historyContainer.showHistoryList ? historyList.height : count > 0 ? cellHeight + headerItem.height + menuHeight : headerItem.height
+
+                    height: !historyContainer.showHistoryList ? historyList.height
+                                                              : count > 0
+                                                                ? cellHeight + headerItem.height + menuHeight
+                                                                : headerItem.height
                     opacity: visible && toolBar.opacity < 0.9 ? 1.0 : 0.0
                     enabled: overlayAnimator.atTop
                     visible: historyContainer.showFavorites
@@ -605,6 +628,7 @@ Shared.Background {
 
     Component {
         id: tabView
+
         Page {
             id: tabPage
 

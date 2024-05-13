@@ -19,9 +19,12 @@ Item {
     property int scaledLandscapeHeight
 
     readonly property int horizontalOffset: largeScreen ? Theme.paddingLarge : Theme.paddingSmall
-    readonly property int buttonPadding: largeScreen || orientation === Orientation.Landscape || orientation === Orientation.LandscapeInverted
+    readonly property int buttonPadding: largeScreen
+                                         || orientation === Orientation.Landscape
+                                         || orientation === Orientation.LandscapeInverted
                                          ? Theme.paddingMedium : Theme.paddingSmall
-    readonly property int iconWidth: largeScreen ? (Theme.iconSizeLarge + 3 * buttonPadding) : (Theme.iconSizeMedium + 2 * buttonPadding)
+    readonly property int iconWidth: largeScreen ? (Theme.iconSizeLarge + 3 * buttonPadding)
+                                                 : (Theme.iconSizeMedium + 2 * buttonPadding)
 
     signal back
     signal enterNewTabUrl
@@ -43,6 +46,7 @@ Item {
 
         Shared.IconButton {
             id: returnIcon
+
             width: iconWidth
             icon.anchors.horizontalCenterOffset: root.horizontalOffset
             icon.source: "image://theme/icon-m-tab-return"

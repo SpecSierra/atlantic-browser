@@ -22,9 +22,9 @@ ApplicationWindow {
 
     readonly property bool largeScreen: Screen.sizeCategory > Screen.Medium
     readonly property int browserVisibility: _mainWindow ? _mainWindow.visibility : QuickWindow.Window.Hidden
-    property bool coverMode: browserVisibility === QuickWindow.Window.Hidden ||
-                             browserVisibility === QuickWindow.Window.Minimized ||
-                             browserVisibility === QuickWindow.Window.Windowed
+    property bool coverMode: browserVisibility === QuickWindow.Window.Hidden
+                             || browserVisibility === QuickWindow.Window.Minimized
+                             || browserVisibility === QuickWindow.Window.Windowed
 
     property var rootPage
     property QtObject webView
@@ -32,7 +32,8 @@ ApplicationWindow {
 
     allowedOrientations: defaultAllowedOrientations
     // For non large screen fix cover to portrait.
-    _defaultPageOrientations: !largeScreen && coverMode ? Orientation.Portrait : Orientation.LandscapeMask | Orientation.Portrait
+    _defaultPageOrientations: !largeScreen && coverMode ? Orientation.Portrait
+                                                        : Orientation.LandscapeMask | Orientation.Portrait
     _defaultLabelFormat: Text.PlainText
     _clippingItem.opacity: 1.0
     _resizeContent: !window.rootPage.active

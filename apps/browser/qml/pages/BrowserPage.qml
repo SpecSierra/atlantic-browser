@@ -26,7 +26,9 @@ Page {
     readonly property rect inputMask: inputMaskForOrientation(orientation)
     readonly property bool active: status == PageStatus.Active
     property bool tabPageActive
-    readonly property size thumbnailSize: Qt.size(width - Theme.horizontalPageMargin * 2, Math.max(height / 2.5, width / 1.66) - (Theme.iconSizeSmall + Theme.paddingMedium * 2))
+    readonly property size thumbnailSize: Qt.size(width - Theme.horizontalPageMargin * 2,
+                                                  Math.max(height / 2.5, width / 1.66)
+                                                  - (Theme.iconSizeSmall + Theme.paddingMedium * 2))
     property Item debug
     property Component tabPageComponent
 
@@ -152,11 +154,13 @@ Page {
 
     ConfigurationValue {
         id: maxliveTabs
+
         key: "/apps/sailfish-browser/settings/max_live_tab_count"
         defaultValue: 3
     }
 
     Browser.DownloadRemorsePopup { id: downloadPopup }
+
     Shared.WebView {
         id: webView
 
@@ -326,6 +330,7 @@ Page {
 
     Component {
         id: desktopBookmarkWriter_
+
         DesktopBookmarkWriter {
             onSaved: destroy()
         }
@@ -357,7 +362,10 @@ Page {
     }
 
     CoverActionList {
-        enabled: (browserPage.status === PageStatus.Active || browserPage.tabPageActive || !webView.tabModel || webView.tabModel.count === 0)
+        enabled: browserPage.status === PageStatus.Active
+                 || browserPage.tabPageActive
+                 || !webView.tabModel
+                 || webView.tabModel.count === 0
         iconBackground: true
         window: webView
 

@@ -31,10 +31,14 @@ Column {
     readonly property int maxRowCount: 6
 
     readonly property int horizontalOffset: largeScreen ? Theme.paddingLarge : Theme.paddingSmall
-    readonly property int buttonPadding: largeScreen || orientation === Orientation.Landscape || orientation === Orientation.LandscapeInverted
+    readonly property int buttonPadding: largeScreen
+                                         || orientation === Orientation.Landscape
+                                         || orientation === Orientation.LandscapeInverted
                                          ? Theme.paddingMedium : Theme.paddingSmall
-    readonly property int iconWidth: largeScreen ? (Theme.iconSizeLarge + 3 * buttonPadding) : (Theme.iconSizeMedium + 2 * buttonPadding)
-    readonly property int smallIconWidth: largeScreen ? (Theme.iconSizeMedium + 3 * buttonPadding) : (Theme.iconSizeSmall + 2 * buttonPadding)
+    readonly property int iconWidth: largeScreen ? (Theme.iconSizeLarge + 3 * buttonPadding)
+                                                 : (Theme.iconSizeMedium + 2 * buttonPadding)
+    readonly property int smallIconWidth: largeScreen ? (Theme.iconSizeMedium + 3 * buttonPadding)
+                                                      : (Theme.iconSizeSmall + 2 * buttonPadding)
     // Height of toolbar should be such that viewport height is
     // even number both chrome and fullscreen modes. For instance
     // height of 110px for toolbar would result 1px rounding
@@ -44,12 +48,14 @@ Column {
     // target values when Theme.pixelratio == 1 are:
     // portrait: 108px
     // landcape: 78px
-    property int scaledPortraitHeight: Screen.height -
-                                       Math.floor((Screen.height - Settings.toolbarLarge * Theme.pixelRatio) /
-                                                  WebUtils.cssPixelRatio) * WebUtils.cssPixelRatio
-    property int scaledLandscapeHeight: Screen.width -
-                                        Math.floor((Screen.width - Settings.toolbarSmall * Theme.pixelRatio) /
-                                                   WebUtils.cssPixelRatio) * WebUtils.cssPixelRatio
+    property int scaledPortraitHeight: Screen.height
+                                       - Math.floor((Screen.height - Settings.toolbarLarge * Theme.pixelRatio)
+                                                    / WebUtils.cssPixelRatio)
+                                       * WebUtils.cssPixelRatio
+    property int scaledLandscapeHeight: Screen.width
+                                        - Math.floor((Screen.width - Settings.toolbarSmall * Theme.pixelRatio)
+                                                     / WebUtils.cssPixelRatio)
+                                        * WebUtils.cssPixelRatio
 
 
     signal showTabs
@@ -103,6 +109,7 @@ Column {
 
         Loader {
             id: certOverlayLoader
+
             active: false
             sourceComponent: CertificateInfo {
                 security: webView.security
@@ -125,6 +132,7 @@ Column {
 
     Row {
         id: toolsRow
+
         width: parent.width
         height: browserPage.isPortrait ? scaledPortraitHeight : scaledLandscapeHeight
 
@@ -142,17 +150,17 @@ Column {
                     if (webView.privateMode) {
                         return webView.tabModel.count > 0 ? "image://theme/icon-m-incognito-selected"
                                                           : "image://theme/icon-m-incognito"
-                    } else {
-                        return "image://theme/icon-m-tabs"
                     }
+
+                    return "image://theme/icon-m-tabs"
                 }
 
                 label.color: {
                     if (webView.privateMode) {
                         return Theme.overlayBackgroundColor ? Theme.overlayBackgroundColor : "black"
-                    } else {
-                        return highlighted ? Theme.highlightColor : Theme.primaryColor
                     }
+
+                    return highlighted ? Theme.highlightColor : Theme.primaryColor
                 }
 
                 opacity: findInPageActive ? 0.0 : 1.0
@@ -162,6 +170,7 @@ Column {
 
                 RotationAnimator {
                     id: rotationAnimator
+
                     target: tabs.icon
                     duration: 1500
                     alwaysRunToEnd: true
@@ -199,6 +208,7 @@ Column {
 
         Shared.ExpandingButton {
             id: backIcon
+
             expandedWidth: toolBarRow.iconWidth
             icon {
                 source: {
@@ -231,8 +241,10 @@ Column {
 
         Shared.ExpandingButton {
             id: padlockIcon
+
             property bool danger: webView.security && webView.security.validState && !webView.security.allGood
             property real glow
+
             expandedWidth: toolBarRow.smallIconWidth
             icon.source: danger ? "image://theme/icon-s-filled-warning" : "image://theme/icon-s-outline-secure"
             active: webView.security && webView.security.validState && !findInPageActive
@@ -252,6 +264,7 @@ Column {
 
             SequentialAnimation {
                 id: securityAnimation
+
                 PauseAnimation { duration: 2000 }
                 NumberAnimation {
                     target: padlockIcon; property: "glow";
@@ -308,6 +321,7 @@ Column {
 
             Notice {
                 id: urlCopyNotice
+
                 duration: Notice.Short
                 verticalOffset: -Theme.itemSizeMedium
                 //: Url copied to clipboard from toolbar (long press).
@@ -346,6 +360,7 @@ Column {
 
             Shared.ExpandingButton {
                 id: previousFindResult
+
                 active: showFindButtons
                 expandedWidth: (toolBarRow.width - menuButton.width - tabButton.width) / 2
                 icon {
@@ -375,6 +390,7 @@ Column {
 
         Shared.ExpandingButton {
             id: stopButton
+
             expandedWidth: toolBarRow.iconWidth
             icon.source: "image://theme/icon-m-reset"
             active: webView.contentItem && !findInPageActive
