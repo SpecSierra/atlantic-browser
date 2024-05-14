@@ -8,7 +8,7 @@
 
 import QtQuick 2.2
 import Sailfish.Silica 1.0
-import Sailfish.Silica.Background 1.0
+import Sailfish.Silica.Background 1.0 as Background
 import Sailfish.Silica.private 1.0 as Private
 
 SilicaControl {
@@ -17,10 +17,16 @@ SilicaControl {
     property var menuItem
     property var footer
     property alias active: menuLoader.active
-    property int margin: Theme.paddingMedium
+    property int horizontalMargin: Math.max(Theme.paddingMedium, _biggestCorner * 0.5)
+    property int verticalMargin: horizontalMargin
     readonly property int cornerRadius: 12
     readonly property int widthRatio: 18
     readonly property int heightRatio: 28
+
+    property int _biggestCorner: Math.max(Screen.topLeftCorner.radius,
+                                          Screen.topRightCorner.radius,
+                                          Screen.bottomLeftCorner.radius,
+                                          Screen.bottomRightCorner.radius)
 
     signal closed
 
@@ -68,9 +74,12 @@ SilicaControl {
 
             property real percentageClosed
             readonly property real menuTop: Math.max(0, headerItem.y - menuFlickable.contentY)
-            readonly property real topPadding: Math.max(0, footerLoader.y - headerItem.height - (Screen.sizeCategory > Screen.Medium
-                    ? contentLoader.height
-                    : Math.min(contentLoader.height, Theme.paddingLarge * popUpMenu.heightRatio)))
+            readonly property real topPadding: Math.max(0,
+                                                        footerLoader.y - headerItem.height
+                                                        - (Screen.sizeCategory > Screen.Medium
+                                                           ? contentLoader.height
+                                                           : Math.min(contentLoader.height,
+                                                                      Theme.paddingLarge * popUpMenu.heightRatio)))
 
             width: popUpMenu.width
             height: popUpMenu.height
@@ -80,18 +89,16 @@ SilicaControl {
             Flickable {
                 id: menuFlickable
 
-                x: popUpMenu.width - width - popUpMenu.margin
+                x: popUpMenu.width - width - popUpMenu.horizontalMargin
                 y: popUpMenu.height
                         - height
-                        - popUpMenu.margin
-                        + (menuItem.percentageClosed * (height - menuItem.menuTop + popUpMenu.margin))
+                        - popUpMenu.verticalMargin
+                        + (menuItem.percentageClosed * (height - menuItem.menuTop + popUpMenu.verticalMargin))
 
-                width: Math.max(
-                            Theme.paddingLarge * widthRatio,
-                            footerLoader.item ? footerLoader.item.implicitWidth : 0)
-                height: Math.min(
-                            popUpMenu.height - (2 * popUpMenu.margin),
-                            headerItem.height + contentLoader.height + footerLoader.height)
+                width: Math.max(Theme.paddingLarge * widthRatio,
+                                footerLoader.item ? footerLoader.item.implicitWidth : 0)
+                height: Math.min(popUpMenu.height - (2 * popUpMenu.verticalMargin),
+                                 headerItem.height + contentLoader.height + footerLoader.height)
 
                 contentHeight: menuItem.topPadding + headerItem.height + contentLoader.height + footerLoader.height
 
@@ -101,7 +108,7 @@ SilicaControl {
                 boundsBehavior: Flickable.DragOverBounds
 
                 onDragEnded: {
-                    if (contentY < -popUpMenu.margin - Theme.paddingLarge) {
+                    if (contentY < -popUpMenu.verticalMargin - Theme.paddingLarge) {
                         topMargin = -contentY
                         popUpMenu.closed()
                     }
@@ -220,18 +227,17 @@ SilicaControl {
                 visible: false
             }
 
-            Background {
+            Background.Background {
                 id: menuShaderItem
 
                 // The ShaderEffectSourceItem has its size fixed to the maximum open size of the
                 // menu, this is so each frame of animation doesn't have to allocate a new texture
                 // of a different size when the menu expands. This matrix transforms the normalized
                 // item rectangle coordinates to the visible sub rectangle of the source item.
-                readonly property matrix4x4 menuSourceMatrix: Qt.matrix4x4(
-                        1, 0, 0, 0,
-                        0, height / menuFlickable.height, 0, 0,
-                        0, 0, 1, 0,
-                        0, menuItem.menuTop / menuFlickable.height, 0, 1)
+                readonly property matrix4x4 menuSourceMatrix: Qt.matrix4x4(1, 0, 0, 0,
+                                                                           0, height / menuFlickable.height, 0, 0,
+                                                                           0, 0, 1, 0,
+                                                                           0, menuItem.menuTop / menuFlickable.height, 0, 1)
 
                 x: menuFlickable.x
                 y: menuFlickable.y + menuItem.menuTop - Math.min(0, menuFlickable.contentY)
@@ -240,9 +246,9 @@ SilicaControl {
 
                 radius: popUpMenu.cornerRadius
                 sourceItem: menuShaderSource
-                fillMode: Background.Stretch
+                fillMode: Background.Background.Stretch
 
-                material: Material {
+                material: Background.Material {
                     vertexShader: "
                         attribute highp vec4 position;
                         attribute highp vec2 normalizedPosition;

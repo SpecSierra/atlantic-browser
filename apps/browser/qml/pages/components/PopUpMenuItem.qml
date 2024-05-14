@@ -12,6 +12,7 @@ import Nemo.DBus 2.0
 
 Item {
     id: root
+
     property int horizontalOffset
     property int iconWidth
     property var desktopBookmarkWriter
@@ -21,6 +22,7 @@ Item {
 
     Column {
         id: content
+
         width: parent.width
         spacing: Theme.paddingLarge
         y: verticalPadding
@@ -235,6 +237,7 @@ Item {
 
     Notice {
         id: pdfPrintingNotice
+
         duration: 3000
         //% "Already saving pdf"
         text: qsTrId("sailfish_browser-la-already_printing_pdf")
@@ -243,6 +246,7 @@ Item {
 
     DBusInterface {
         id: settingsApp
+
         service: "com.jolla.settings"
         iface: "com.jolla.settings.ui"
         path: "/com/jolla/settings/ui"

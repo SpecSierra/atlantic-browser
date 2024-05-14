@@ -48,7 +48,6 @@ SilicaControl {
         }
 
         header: Private.TabBar {
-            id: headerTabs
             model: modeModel
             delegate: Private.TabButton {
                 id: tabButton
@@ -58,9 +57,9 @@ SilicaControl {
                         return "image://theme/icon-m-tabs"
                     } else if (tabView._emptyPrivateIcon) {
                         return "image://theme/icon-m-incognito"
-                    } else {
-                        "image://theme/icon-m-incognito-selected"
                     }
+
+                    return "image://theme/icon-m-incognito-selected"
                 }
                 icon.color: palette.primaryColor
 
@@ -76,11 +75,11 @@ SilicaControl {
                                     : Theme.lightPrimaryColor
                         } else if (highlighted || tabButton.isCurrentTab) {
                             return palette.highlightColor
-                        } else {
-                            return tabView.palette.colorScheme === Theme.LightOnDark
-                                    ? Theme.lightPrimaryColor
-                                    : Theme.darkPrimaryColor
                         }
+
+                        return tabView.palette.colorScheme === Theme.LightOnDark
+                                ? Theme.lightPrimaryColor
+                                : Theme.darkPrimaryColor
                     }
 
                     text: model.privateMode
@@ -104,7 +103,9 @@ SilicaControl {
         currentIndex: privateMode ? 1 : 0
         delegate: Private.TabItem {
             id: tabItem
+
             property bool privateMode: model.privateMode
+
             allowDeletion: false
             flickable: _tabView
 
@@ -169,6 +170,7 @@ SilicaControl {
 
     TabsToolBar {
         id: tabsToolBar
+
         anchors.bottom: parent.bottom
         onBack: pageStack.pop()
         onEnterNewTabUrl: tabView.enterNewTabUrl()
@@ -186,6 +188,7 @@ SilicaControl {
         menuItem: Component {
             Item {
                 id: menuItem_
+
                 readonly property int iconWidth: Theme.iconSizeMedium + Theme.paddingLarge
                 readonly property int verticalPadding: 3 * Theme.paddingSmall
 

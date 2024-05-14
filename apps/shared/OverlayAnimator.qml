@@ -20,9 +20,10 @@ Item {
     property bool atTop
     property bool atBottom: true
     property int transitionDuration: !_immediate ? (state === _certOverlay ? proportionalDuration : 250) : 0
-    readonly property bool allowContentUse: state === _chromeVisible || state === _fullscreenWebPage && state !== _doubleToolBar
+    readonly property bool allowContentUse: state === _chromeVisible
+                                            || state === _fullscreenWebPage && state !== _secondaryTools
     readonly property bool dragging: state === _draggingOverlay
-    readonly property bool secondaryTools: state === _doubleToolBar
+    readonly property bool secondaryTools: state === _secondaryTools
     readonly property bool certOverlay: state === _certOverlay
 
     property bool opened: isOpenedState()
@@ -30,7 +31,7 @@ Item {
     property bool _midPos
 
     readonly property string _fullscreenOverlay: "fullscreenOverlay"
-    readonly property string _doubleToolBar: "doubleToolBar"
+    readonly property string _secondaryTools: "secondaryTools"
     readonly property string _chromeVisible: "chromeVisible"
     readonly property string _fullscreenWebPage: "fullscreenWebPage"
     readonly property string _startPage: "startPage"
@@ -41,7 +42,7 @@ Item {
     property int proportionalDuration: 400
 
     function showSecondaryTools() {
-        updateState(_doubleToolBar)
+        updateState(_secondaryTools)
     }
 
     function showChrome(immediate) {
@@ -100,7 +101,7 @@ Item {
         var wasAtMiddle = (!atBottom && !atTop) || _midPos
         var goingUp = (atBottom || wasAtMiddle) && (state === _fullscreenOverlay || state === _startPage)
         var goingDown = (atTop || wasAtMiddle)
-                && (state === _chromeVisible || state === _fullscreenWebPage || state === _doubleToolBar
+                && (state === _chromeVisible || state === _fullscreenWebPage || state === _secondaryTools
                     || state === _noOverlay || state === _draggingOverlay || state === _certOverlay
                     || state === _startPage)
 
@@ -109,7 +110,7 @@ Item {
         } else if (state == _fullscreenOverlay || state == _startPage) {
             atTop = true
         }
-        if ((state !== _chromeVisible && state !== _fullscreenWebPage && state !== _doubleToolBar) || _midPos) {
+        if ((state !== _chromeVisible && state !== _fullscreenWebPage && state !== _secondaryTools) || _midPos) {
             atBottom = false
         }
         if (!isOpenedState()) {
@@ -235,7 +236,7 @@ Item {
         },
 
         State {
-            name: _doubleToolBar
+            name: _secondaryTools
             changes: [
                 PropertyChanges {
                     target: overlay
@@ -259,15 +260,20 @@ Item {
     transitions: [
         Transition {
             id: overlayTransition
-            to: "fullscreenWebPage,chromeVisible,loadProgressOverlay,fullscreenOverlay,noOverlay,doubleToolBar,certOverlay,startPage"
+
+            to: "fullscreenWebPage,chromeVisible,loadProgressOverlay,fullscreenOverlay,noOverlay,secondaryTools,certOverlay,startPage"
 
             SequentialAnimation {
                 NumberAnimation { target: webView; property: "height"; duration: transitionDuration; easing.type: Easing.InOutQuad }
                 ScriptAction {
                     script: {
-                        if (animator.state === _chromeVisible || animator.state === _fullscreenWebPage || animator.state === _doubleToolBar) {
+                        if (animator.state === _chromeVisible
+                                || animator.state === _fullscreenWebPage
+                                || animator.state === _secondaryTools) {
                             atBottom = true
-                        } else if (animator.state === _fullscreenOverlay || animator.state === _certOverlay || animator.state === _startPage) {
+                        } else if (animator.state === _fullscreenOverlay
+                                   || animator.state === _certOverlay
+                                   || animator.state === _startPage) {
                             atTop = true
                         }
 

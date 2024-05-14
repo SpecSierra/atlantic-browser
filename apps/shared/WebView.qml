@@ -24,7 +24,7 @@ import "." as Browser
 WebContainer {
     id: webView
 
-    readonly property bool moving: contentItem ? contentItem.moving : false
+    readonly property bool moving: contentItem && contentItem.moving
     property bool findInPageHasResult
     property bool canShowSelectionMarkers: true
 
@@ -104,14 +104,17 @@ WebContainer {
     }
 
     foreground: visibility >= QuickWindow.Window.Maximized && Qt.application.state === Qt.ApplicationActive
-    readyToPaint: resourceController.videoActive ? webView.visible && !resourceController.displayOff : webView.visible && webView.contentItem && (webView.contentItem.domContentLoaded || webView.contentItem.painted)
+    readyToPaint: resourceController.videoActive ? webView.visible && !resourceController.displayOff
+                                                 : webView.visible && webView.contentItem
+                                                   && (webView.contentItem.domContentLoaded
+                                                       || webView.contentItem.painted)
     allowHiding: !resourceController.videoActive && !resourceController.audioActive
     fullscreenMode: (contentItem && !contentItem.chrome) ||
                     (contentItem && contentItem.fullscreen)
 
     selectionActive: webView.contentItem && webView.contentItem.textSelectionActive
-    touchBlocked: contentItem && contentItem.popupOpener && contentItem.popupOpener.active ||
-                   !AccessPolicy.browserEnabled || false
+    touchBlocked: contentItem && contentItem.popupOpener && contentItem.popupOpener.active
+                  || !AccessPolicy.browserEnabled || false
     favicon: contentItem ? contentItem.favicon : ""
 
     onSelectionActiveChanged: {
@@ -213,7 +216,8 @@ WebContainer {
             }
 
             onUrlChanged: {
-                if (url == "about:blank") return
+                if (url == "about:blank")
+                    return
 
                 webView.findInPageHasResult = false
                 var modelUrl = tabModel.url(tabId)
