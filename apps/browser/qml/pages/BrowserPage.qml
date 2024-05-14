@@ -337,7 +337,7 @@ Page {
     }
 
     Browser.PopUpMenu {
-        id: secondaryBar
+        id: popupMenu
 
         width: parent.width
         height: parent.height
@@ -352,9 +352,10 @@ Page {
 
         footer: Component {
            Browser.PopUpMenuFooter {
-               height: (isPortrait
-                       ? overlay.toolBar.scaledPortraitHeight
-                       : overlay.toolBar.scaledLandscapeHeight) - secondaryBar.margin
+               height: Math.max(implicitHeight,
+                                (isPortrait ? overlay.toolBar.scaledPortraitHeight
+                                            : overlay.toolBar.scaledLandscapeHeight)
+                                - popupMenu.verticalMargin)
            }
         }
 

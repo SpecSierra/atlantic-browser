@@ -17,10 +17,16 @@ SilicaControl {
     property var menuItem
     property var footer
     property alias active: menuLoader.active
-    property int margin: Theme.paddingMedium
+    property int horizontalMargin: Math.max(Theme.paddingMedium, _biggestCorner * 0.5)
+    property int verticalMargin: horizontalMargin
     readonly property int cornerRadius: 12
     readonly property int widthRatio: 18
     readonly property int heightRatio: 28
+
+    property int _biggestCorner: Math.max(Screen.topLeftCorner.radius,
+                                          Screen.topRightCorner.radius,
+                                          Screen.bottomLeftCorner.radius,
+                                          Screen.bottomRightCorner.radius)
 
     signal closed
 
@@ -83,18 +89,16 @@ SilicaControl {
             Flickable {
                 id: menuFlickable
 
-                x: popUpMenu.width - width - popUpMenu.margin
+                x: popUpMenu.width - width - popUpMenu.horizontalMargin
                 y: popUpMenu.height
                         - height
-                        - popUpMenu.margin
-                        + (menuItem.percentageClosed * (height - menuItem.menuTop + popUpMenu.margin))
+                        - popUpMenu.verticalMargin
+                        + (menuItem.percentageClosed * (height - menuItem.menuTop + popUpMenu.verticalMargin))
 
-                width: Math.max(
-                            Theme.paddingLarge * widthRatio,
-                            footerLoader.item ? footerLoader.item.implicitWidth : 0)
-                height: Math.min(
-                            popUpMenu.height - (2 * popUpMenu.margin),
-                            headerItem.height + contentLoader.height + footerLoader.height)
+                width: Math.max(Theme.paddingLarge * widthRatio,
+                                footerLoader.item ? footerLoader.item.implicitWidth : 0)
+                height: Math.min(popUpMenu.height - (2 * popUpMenu.verticalMargin),
+                                 headerItem.height + contentLoader.height + footerLoader.height)
 
                 contentHeight: menuItem.topPadding + headerItem.height + contentLoader.height + footerLoader.height
 
@@ -104,7 +108,7 @@ SilicaControl {
                 boundsBehavior: Flickable.DragOverBounds
 
                 onDragEnded: {
-                    if (contentY < -popUpMenu.margin - Theme.paddingLarge) {
+                    if (contentY < -popUpMenu.verticalMargin - Theme.paddingLarge) {
                         topMargin = -contentY
                         popUpMenu.closed()
                     }

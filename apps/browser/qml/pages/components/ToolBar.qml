@@ -133,7 +133,13 @@ Column {
     Row {
         id: toolsRow
 
-        width: parent.width
+        property int biggestCorner: Math.max(Screen.topLeftCorner.radius,
+                                             Screen.topRightCorner.radius,
+                                             Screen.bottomLeftCorner.radius,
+                                             Screen.bottomRightCorner.radius)
+        // items have some padding of their own so don't mind a little overlap with the rounding
+        x: Math.round(biggestCorner * 0.4)
+        width: parent.width - 2*x
         height: browserPage.isPortrait ? scaledPortraitHeight : scaledLandscapeHeight
 
         // Container item for cross fading tabs, close, find in page button (and keep Row's width still).
@@ -297,7 +303,7 @@ Column {
             readonly property bool down: pressed && containsMouse
 
             height: parent.height
-            width: toolBarRow.width - (tabButton.width + stopButton.width + padlockIcon.width + backIcon.width + menuButton.width)
+            width: toolsRow.width - (tabButton.width + stopButton.width + padlockIcon.width + backIcon.width + menuButton.width)
             enabled: !showFindButtons
             _showPress: false
 
@@ -362,7 +368,7 @@ Column {
                 id: previousFindResult
 
                 active: showFindButtons
-                expandedWidth: (toolBarRow.width - menuButton.width - tabButton.width) / 2
+                expandedWidth: (toolsRow.width - menuButton.width - tabButton.width) / 2
                 icon {
                     source: "image://theme/icon-m-left"
                     anchors.horizontalCenterOffset: Theme.paddingLarge

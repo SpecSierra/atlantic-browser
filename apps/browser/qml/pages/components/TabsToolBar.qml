@@ -41,7 +41,12 @@ Item {
 
 
     Row {
-        width: parent.width
+        property int biggestCorner: Math.max(Screen.topLeftCorner.radius,
+                                             Screen.topRightCorner.radius,
+                                             Screen.bottomLeftCorner.radius,
+                                             Screen.bottomRightCorner.radius)
+        x: Math.round(biggestCorner * 0.4)
+        width: parent.width - 2*x
         height: parent.height
 
         Shared.IconButton {
