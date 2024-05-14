@@ -8,7 +8,7 @@
 
 import QtQuick 2.2
 import Sailfish.Silica 1.0
-import Sailfish.Silica.Background 1.0
+import Sailfish.Silica.Background 1.0 as Background
 import Sailfish.Silica.private 1.0 as Private
 
 SilicaControl {
@@ -223,7 +223,7 @@ SilicaControl {
                 visible: false
             }
 
-            Background {
+            Background.Background {
                 id: menuShaderItem
 
                 // The ShaderEffectSourceItem has its size fixed to the maximum open size of the
@@ -242,9 +242,9 @@ SilicaControl {
 
                 radius: popUpMenu.cornerRadius
                 sourceItem: menuShaderSource
-                fillMode: Background.Stretch
+                fillMode: Background.Background.Stretch
 
-                material: Material {
+                material: Background.Material {
                     vertexShader: "
                         attribute highp vec4 position;
                         attribute highp vec2 normalizedPosition;
