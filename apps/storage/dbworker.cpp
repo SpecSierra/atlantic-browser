@@ -509,7 +509,7 @@ void DBWorker::clearHistory(int period)
         }
 
         QSet<QString>::iterator iconIterator;
-        for (const QString iconToRemove : historyIconsToRemove) {
+        for (const QString &iconToRemove : historyIconsToRemove) {
             FaviconManager::instance()->remove(QStringLiteral("history"), iconToRemove);
         }
 
