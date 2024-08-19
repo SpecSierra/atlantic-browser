@@ -44,7 +44,8 @@ DeclarativeWebPage* WebPageFactory::createWebPage(DeclarativeWebContainer *webCo
             webPage->initialize();
             m_qmlComponent->completeCreate();
 #if DEBUG_LOGS
-            qDebug() << "New view id:" << webPage->uniqueId() << "parentId:" << webPage->parentId() << "tab id:" << webPage->tabId();
+            qDebug() << "New view id:" << webPage->uniqueId() << "parentId:" << webPage->parentId()
+                     << "tab id:" << webPage->tabId();
 #endif
             QQmlEngine::setObjectOwnership(webPage, QQmlEngine::CppOwnership);
             return webPage;

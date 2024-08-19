@@ -16,11 +16,13 @@ import Sailfish.WebView.Controls 1.0
 
 SilicaFlickable {
     id: root
+
     property QMozSecurity security
     readonly property bool _validCert: security && security.subjectDisplayName.length > 0
+    readonly property bool _secure: security && security.allGood
+
     contentHeight: certInfoColumn.height
     clip: contentHeight > height
-    readonly property bool _secure: security && security.allGood
 
     signal showCertDetail
     signal closeCertInfo
@@ -52,6 +54,7 @@ SilicaFlickable {
 
     Column {
         id: certInfoColumn
+
         width: parent.width
         spacing: Theme.paddingMedium
         topPadding: Theme.paddingLarge
@@ -140,19 +143,20 @@ SilicaFlickable {
 
             MouseArea {
                 id: permissionArea
+
                 width: parent.width
                 height: permissionColumn.height
                 onClicked: openSiteSettings()
 
                 Column {
                     id: permissionColumn
+
                     width: parent.width
                     spacing: Theme.paddingMedium
                     anchors.horizontalCenter: parent.horizontalCenter
                     visible: permissionIndicationRepeater.count > 0
 
                     Label {
-                        id: permissionLabel
                         width: parent.width - 2 * Theme.horizontalPageMargin
                         x: Theme.horizontalPageMargin
                         horizontalAlignment: Text.AlignHCenter

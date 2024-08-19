@@ -70,6 +70,7 @@ Dialog {
 
     SilicaListView {
         id: prefsList
+
         model: prefsListModel
         width: parent.width
         height: parent.height
@@ -96,7 +97,6 @@ Dialog {
         }
 
         delegate: Loader {
-            id: loader
             height: Theme.itemSizeMedium
             width: prefsList.width
             sourceComponent: model.type == WebEngineSettings.BoolPref ? textSwitch : textField

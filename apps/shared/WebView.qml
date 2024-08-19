@@ -16,7 +16,6 @@ import Sailfish.Browser 1.0
 import Sailfish.WebView.Pickers 1.0 as Pickers
 import Sailfish.WebView.Popups 1.0 as Popups
 import Sailfish.WebView.Controls 1.0
-import Qt5Mozilla 1.0
 import Sailfish.Policy 1.0
 import Sailfish.TextLinking 1.0
 import "." as Browser
@@ -109,8 +108,7 @@ WebContainer {
                                                    && (webView.contentItem.domContentLoaded
                                                        || webView.contentItem.painted)
     allowHiding: !resourceController.videoActive && !resourceController.audioActive
-    fullscreenMode: (contentItem && !contentItem.chrome) ||
-                    (contentItem && contentItem.fullscreen)
+    fullscreenMode: contentItem && (!contentItem.chrome || contentItem.fullscreen)
 
     selectionActive: webView.contentItem && webView.contentItem.textSelectionActive
     touchBlocked: contentItem && contentItem.popupOpener && contentItem.popupOpener.active
