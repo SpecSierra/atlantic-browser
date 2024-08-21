@@ -29,12 +29,12 @@
 #define FIND_MESSAGE "embed:find"
 #define OPEN_LINK "embed:OpenLink"
 
-bool isBlack(QRgb rgb)
+static bool isBlack(QRgb rgb)
 {
     return qRed(rgb) == 0 && qGreen(rgb) == 0 && qBlue(rgb) == 0;
 }
 
-bool allBlack(const QImage &image)
+static bool allBlack(const QImage &image)
 {
     int h = image.height();
     int w = image.width();
