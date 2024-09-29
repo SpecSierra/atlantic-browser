@@ -409,8 +409,8 @@ Page {
                 webView.load(url)
             } else {
                 webView.clearSelection()
-                webView.tabModel.newTab(url)
-                overlay.dismiss(true, !Qt.application.active /* immadiate */)
+                webView.tabModel.newTab(url, true)
+                overlay.dismiss(true, !Qt.application.active /* immediate */)
             }
             bringToForeground(webView.chromeWindow)
             window.activate()
@@ -418,7 +418,7 @@ Page {
         onActivateNewTabViewRequested: activateNewTabView()
         onShowChrome: {
             pageStack.pop(browserPage, PageStackAction.Immediate)
-            overlay.dismiss(true, !Qt.application.active /* immadiate */)
+            overlay.dismiss(true, !Qt.application.active /* immediate */)
             bringToForeground(webView.chromeWindow)
             window.activate()
         }

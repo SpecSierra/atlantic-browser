@@ -129,6 +129,12 @@ void DeclarativeWebUtils::updateWebEngineSettings()
     webEngineSettings->setPreference(QString("geo.wifi.scan"), QVariant(false));
     webEngineSettings->setPreference(QString("media.resource_handler_disabled"), QVariant(true));
 
+    // Ensure the renderer is configured correctly
+    webEngineSettings->setPreference(QStringLiteral("embedlite.compositor.external_gl_context"),
+                                     QVariant(true));
+    webEngineSettings->setPreference(QStringLiteral("embedlite.compositor.request_external_gl_context_early"),
+                                     QVariant(true));
+
     // subscribe to gecko messages
     std::vector<std::string> messages = { "clipboard:setdata",
                                           "media-decoder-info",
