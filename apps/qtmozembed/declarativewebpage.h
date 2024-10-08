@@ -14,7 +14,7 @@
 #include <QFutureWatcher>
 #include <QPointer>
 #include <QRgb>
-#include <qopenglwebpage.h>
+#include <qmozopenglwebpage.h>
 #include <qmozgrabresult.h>
 #include <qmozsecurity.h>
 
@@ -23,7 +23,7 @@
 class DeclarativeWebContainer;
 class Link;
 
-class DeclarativeWebPage : public QOpenGLWebPage
+class DeclarativeWebPage : public QMozOpenGLWebPage
 {
     Q_OBJECT
     Q_PROPERTY(DeclarativeWebContainer* container READ container NOTIFY containerChanged FINAL)
