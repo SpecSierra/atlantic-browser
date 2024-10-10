@@ -94,7 +94,7 @@ public:
 
     MOCK_METHOD1(setPrivateMode, void(bool));
 
-    MOCK_METHOD2(Q_INVOKABLE loadTab, void(const QString &newUrl, bool force));
+    MOCK_METHOD3(Q_INVOKABLE loadTab, void(const QString &newUrl, bool force, bool fromExternal));
 
     MOCK_CONST_METHOD0(securityState, uint());
     MOCK_CONST_METHOD0(securityStatus, QString());
