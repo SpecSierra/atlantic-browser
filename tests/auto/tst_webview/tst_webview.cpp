@@ -556,7 +556,7 @@ void tst_webview::forwardBackwardNavigation()
     waitSignals(urlChangedSpy, 3, 500);
     waitSignals(titleChangedSpy, 1, 500);
 
-    // Following url changes is somewhat unpredicable.
+    // Following url changes are somewhat unpredictable.
     // Hence, do not spy them. Url value is checked in any case.
     // QCOMPARE(urlChangedSpy.count(), 3);
     QCOMPARE(titleChangedSpy.count(), 1);
@@ -613,6 +613,8 @@ void tst_webview::forwardBackwardNavigation()
     waitSignals(urlChangedSpy, 3, 500);
     waitSignals(titleChangedSpy, 2, 500);
 
+    QVERIFY(webContainer->canGoBack());
+    QVERIFY(!webContainer->canGoForward());
     QCOMPARE(forwardSpy.count(), 2);
     QCOMPARE(backSpy.count(), 2);
     QCOMPARE(urlChangedSpy.count(), 3);
@@ -620,8 +622,6 @@ void tst_webview::forwardBackwardNavigation()
 
     QCOMPARE(webContainer->url(), url);
     QCOMPARE(webContainer->title(), title);
-    QVERIFY(webContainer->canGoBack());
-    QVERIFY(!webContainer->canGoForward());
 
     url = formatUrl("testuseragent.html");
     title = "TestUserAgent";
@@ -630,14 +630,14 @@ void tst_webview::forwardBackwardNavigation()
     waitSignals(urlChangedSpy, 5, 500);
     waitSignals(titleChangedSpy, 3, 500);
 
+    QVERIFY(webContainer->canGoBack());
+    QVERIFY(!webContainer->canGoForward());
     QCOMPARE(forwardSpy.count(), 2);
     QCOMPARE(backSpy.count(), 2);
     QCOMPARE(urlChangedSpy.count(), 5);
     QCOMPARE(titleChangedSpy.count(), 3);
     QCOMPARE(webContainer->url(), url);
     QCOMPARE(webContainer->title(), title);
-    QVERIFY(webContainer->canGoBack());
-    QVERIFY(!webContainer->canGoForward());
 
     // testwebprompts.html, testurlscheme.html, testuseragent.html
     // Navigate twice back.
@@ -646,14 +646,14 @@ void tst_webview::forwardBackwardNavigation()
     waitSignals(urlChangedSpy, 6, 500);
     waitSignals(titleChangedSpy, 4, 500);
 
-    QCOMPARE(forwardSpy.count(), 3);
-    QCOMPARE(backSpy.count(), 2);
-    QCOMPARE(urlChangedSpy.count(), 6);
-    QCOMPARE(titleChangedSpy.count(), 4);
     QCOMPARE(webContainer->url(), formatUrl("testurlscheme.html"));
     QCOMPARE(webContainer->title(), QString("TestUrlScheme"));
     QVERIFY(webContainer->canGoBack());
     QVERIFY(webContainer->canGoForward());
+    QCOMPARE(forwardSpy.count(), 3);
+    QCOMPARE(backSpy.count(), 2);
+    QCOMPARE(urlChangedSpy.count(), 6);
+    QCOMPARE(titleChangedSpy.count(), 4);
 
     // Back to first page.
     goBack();
@@ -661,14 +661,14 @@ void tst_webview::forwardBackwardNavigation()
     waitSignals(urlChangedSpy, 7, 500);
     waitSignals(titleChangedSpy, 5, 500);
 
-    QCOMPARE(forwardSpy.count(), 3);
-    QCOMPARE(backSpy.count(), 3);
-    QCOMPARE(urlChangedSpy.count(), 7);
-    QCOMPARE(titleChangedSpy.count(), 5);
     QCOMPARE(webContainer->url(), formatUrl("testwebprompts.html"));
     QCOMPARE(webContainer->title(), QString("Test Web Prompts"));
     QVERIFY(!webContainer->canGoBack());
     QVERIFY(webContainer->canGoForward());
+    QCOMPARE(forwardSpy.count(), 3);
+    QCOMPARE(backSpy.count(), 3);
+    QCOMPARE(urlChangedSpy.count(), 7);
+    QCOMPARE(titleChangedSpy.count(), 5);
 
     // Same as in previous case
     QCOMPARE(tabModel->count(), 7);

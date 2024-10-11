@@ -569,7 +569,7 @@ void tst_persistenttabmodel::data()
 
 void tst_persistenttabmodel::newTabRequested()
 {
-    QSignalSpy newTabRequestedSpy(tabModel, SIGNAL(newTabRequested(Tab)));
+    QSignalSpy newTabRequestedSpy(tabModel, SIGNAL(newTabRequested(Tab, bool)));
     tabModel->newTab(QLatin1String("http://example.com"), false);
     QCOMPARE(newTabRequestedSpy.count(), 1);
 }
