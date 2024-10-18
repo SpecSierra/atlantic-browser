@@ -29,12 +29,12 @@
 #define FIND_MESSAGE "embed:find"
 #define OPEN_LINK "embed:OpenLink"
 
-bool isBlack(QRgb rgb)
+static bool isBlack(QRgb rgb)
 {
     return qRed(rgb) == 0 && qGreen(rgb) == 0 && qBlue(rgb) == 0;
 }
 
-bool allBlack(const QImage &image)
+static bool allBlack(const QImage &image)
 {
     int h = image.height();
     int w = image.width();
@@ -50,7 +50,7 @@ bool allBlack(const QImage &image)
 }
 
 DeclarativeWebPage::DeclarativeWebPage(QObject *parent)
-    : QOpenGLWebPage(parent)
+    : QMozOpenGLWebPage(parent)
     , m_container(0)
     , m_userHasDraggedWhileLoading(false)
     , m_fullscreen(false)
@@ -82,8 +82,8 @@ DeclarativeWebPage::DeclarativeWebPage(QObject *parent)
             this, &DeclarativeWebPage::onRecvAsyncMessage);
     connect(&m_grabWritter, &QFutureWatcher<QString>::finished, this, &DeclarativeWebPage::grabWritten);
     connect(this, &DeclarativeWebPage::urlChanged, this, &DeclarativeWebPage::onUrlChanged);
-    connect(this, &QOpenGLWebPage::virtualKeyboardHeightChanged, this, &DeclarativeWebPage::updateViewMargins);
-    connect(this, &QOpenGLWebPage::domContentLoadedChanged, [this]() {
+    connect(this, &QMozOpenGLWebPage::virtualKeyboardHeightChanged, this, &DeclarativeWebPage::updateViewMargins);
+    connect(this, &QMozOpenGLWebPage::domContentLoadedChanged, [this]() {
         if (domContentLoaded()) {
             qCDebug(lcCoreLog) << "WebPage: loaded";
             updateViewMargins();
@@ -91,7 +91,7 @@ DeclarativeWebPage::DeclarativeWebPage(QObject *parent)
     });
 
     // When loading start reset state of chrome.
-    connect(this, &QOpenGLWebPage::loadingChanged, [this]() {
+    connect(this, &QMozOpenGLWebPage::loadingChanged, [this]() {
         if (loading()) {
             forceChrome(false);
             setChrome(true);

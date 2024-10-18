@@ -214,9 +214,9 @@ void DeclarativeWebContainer::setWebPage(DeclarativeWebPage *webPage, bool trigg
             // Wait for one frame to be rendered and schedule update if tab is ready to render.
             connect(m_mozWindow.data(), &QMozWindow::compositingFinished,
                     this, &DeclarativeWebContainer::updateActiveTabRendered, Qt::UniqueConnection);
-            connect(m_webPage.data(), &QOpenGLWebPage::domContentLoadedChanged,
+            connect(m_webPage.data(), &QMozOpenGLWebPage::domContentLoadedChanged,
                     this, &DeclarativeWebContainer::updateActiveTabRendered, Qt::UniqueConnection);
-            connect(m_webPage.data(), &QOpenGLWebPage::firstPaint,
+            connect(m_webPage.data(), &QMozOpenGLWebPage::firstPaint,
                     this, &DeclarativeWebContainer::updateActiveTabRendered, Qt::UniqueConnection);
 
             connect(m_webPage.data(), &DeclarativeWebPage::neterror, [this]() {
@@ -388,12 +388,12 @@ bool DeclarativeWebContainer::imOpened() const
 
 bool DeclarativeWebContainer::canGoForward() const
 {
-    return m_webPage ? m_webPage->canGoForward() : false;
+    return m_webPage && m_webPage->canGoForward();
 }
 
 bool DeclarativeWebContainer::canGoBack() const
 {
-    return m_webPage ? m_webPage->canGoBack() : false;
+    return m_webPage && m_webPage->canGoBack();
 }
 
 QObject *DeclarativeWebContainer::chromeWindow() const
@@ -562,7 +562,8 @@ void DeclarativeWebContainer::requestTabWithOwnerAsync(int tabId, const QString 
     } else {
         // The model has yet to load, so queue creation of the tab
         QMetaObject::Connection * const connection = new QMetaObject::Connection;
-        *connection = connect(m_model.data(), &DeclarativeTabModel::loadedChanged, [this, tabId, url, ownerPid, context, connection]() {
+        *connection = connect(m_model.data(), &DeclarativeTabModel::loadedChanged,
+                              this, [this, tabId, url, ownerPid, context, connection]() {
             // We assume that m_model->loaded() is now set to true
             int activatedTab = requestTabWithOwner(tabId, url, ownerPid);
             qCDebug(lcCoreLog) << "Delaying tab request created tabId:" << activatedTab;
@@ -638,7 +639,7 @@ void DeclarativeWebContainer::updateMode()
     if (m_model->count() > 0) {
         reload(false);
     } else {
-        setWebPage(NULL);
+        setWebPage(nullptr);
         emit contentItemChanged();
     }
 }
@@ -1061,8 +1062,9 @@ void DeclarativeWebContainer::initialize()
     }
 
     bool initialUrl = hasInitialUrl();
-    m_initialUrl = "";
+    m_initialUrl.clear();
     m_fromExternal = false;
+
     if (initialUrl) {
         emit hasInitialUrlChanged();
     }
@@ -1098,7 +1100,7 @@ void DeclarativeWebContainer::releasePage(int tabId)
         m_webPages->release(tabId);
         // Successfully destroyed. Emit relevant property changes.
         if (m_model->count() == 0) {
-            setWebPage(NULL, true);
+            setWebPage(nullptr, true);
             postClearWindowSurfaceTask();
         }
     }
