@@ -143,7 +143,8 @@ bool Tab::operator!=(const Tab &other) const
     return !(*this == other);
 }
 
-QDebug operator<<(QDebug dbg, const Tab *tab) {
+QDebug operator<<(QDebug dbg, const Tab *tab)
+{
     if (!tab) {
         return dbg << "Tab (this = 0x0)";
     }

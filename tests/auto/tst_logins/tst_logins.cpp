@@ -66,7 +66,8 @@ void tst_logins::initTestCase()
     }
 }
 
-void tst_logins::init() {
+void tst_logins::init()
+{
     removeAllLogins();
     if (loginModel) {
         delete loginModel;

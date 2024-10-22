@@ -96,12 +96,14 @@ void DeclarativeHistoryModel::search(const QString &filter)
     DBManager::instance()->getHistory(filter);
 }
 
-int DeclarativeHistoryModel::rowCount(const QModelIndex & parent) const {
+int DeclarativeHistoryModel::rowCount(const QModelIndex & parent) const
+{
     Q_UNUSED(parent);
     return m_links.count();
 }
 
-QVariant DeclarativeHistoryModel::data(const QModelIndex & index, int role) const {
+QVariant DeclarativeHistoryModel::data(const QModelIndex & index, int role) const
+{
     if (index.row() < 0 || index.row() >= m_links.count())
         return QVariant();
 

@@ -164,7 +164,8 @@ void DeclarativeWebPage::onTabHistoryAvailable(const int& historyTabId, const QL
 {
     if (historyTabId == tabId()) {
         m_restoredTabHistory = links;
-        m_restoredCurrentLinkId = currentLinkId; // FIXME: consider storing isCurrent flag in Link struct instead to reduce DeclarativeWebPage's state
+        // FIXME: consider storing isCurrent flag in Link struct instead to reduce DeclarativeWebPage's state
+        m_restoredCurrentLinkId = currentLinkId;
 
         std::reverse(m_restoredTabHistory.begin(), m_restoredTabHistory.end());
         DBManager::instance()->disconnect(this);
@@ -173,14 +174,16 @@ void DeclarativeWebPage::onTabHistoryAvailable(const int& historyTabId, const QL
     }
 }
 
-void DeclarativeWebPage::restoreHistory() {
+void DeclarativeWebPage::restoreHistory()
+{
     if (!m_urlReady || !m_tabHistoryReady || m_restoredTabHistory.count() == 0) {
         return;
     }
 
     QList<QString> urls;
-    int index(-1);
-    int i(0);
+    int index = -1;
+    int i = 0;
+
     for (const Link &link : m_restoredTabHistory) {
         urls << link.url();
         if (link.linkId() == m_restoredCurrentLinkId) {
