@@ -80,8 +80,8 @@ static const char *db_schema[] = {
 };
 static int db_schema_count = sizeof(db_schema) / sizeof(*db_schema);
 
-DBWorker::DBWorker(QObject *parent) :
-    QObject(parent)
+DBWorker::DBWorker(QObject *parent)
+    : QObject(parent)
 {
 }
 
@@ -140,10 +140,11 @@ void DBWorker::setUserVersion(int userVersion)
 }
 
 // This method migrates data from history table (introduced in 42dbd01d23bc90cf1f5e177ceeefc05c91aa19cd) to browser_history table
-void DBWorker::migrateTo_1() {
+void DBWorker::migrateTo_1()
+{
     // Check if browser_history table exists
     QSqlQuery browser_history_table_exists = prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='browser_history';");
-    if(execute(browser_history_table_exists)) {
+    if (execute(browser_history_table_exists)) {
         if (!browser_history_table_exists.first()) {
             // browser_history table does not exist, let's create it
             browser_history_table_exists.clear();
@@ -157,7 +158,7 @@ void DBWorker::migrateTo_1() {
     }
 
     QSqlQuery history_table_exists = prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='history';");
-    if(execute(history_table_exists)) {
+    if (execute(history_table_exists)) {
         if (history_table_exists.first()) {
             // history table exists, migrate all it's data to browser_history table and delete it
             history_table_exists.clear();
@@ -345,7 +346,8 @@ int DBWorker::integerQuery(const QString &statement)
     return 0;
 }
 
-void DBWorker::navigateTo(int tabId, const QString &url, const QString &title, const QString &path) {
+void DBWorker::navigateTo(int tabId, const QString &url, const QString &title, const QString &path)
+{
     // TODO: rollback in case of failure
     if (url.isEmpty()) {
         return;
@@ -374,8 +376,10 @@ void DBWorker::navigateTo(int tabId, const QString &url, const QString &title, c
 #endif
 }
 
-void DBWorker::goForward(int tabId) {
-    QSqlQuery query = prepare("SELECT id FROM tab_history WHERE tab_id = ? AND id > (SELECT tab_history_id FROM tab WHERE tab_id = ?) ORDER BY id ASC LIMIT 1;");
+void DBWorker::goForward(int tabId)
+{
+    QSqlQuery query = prepare("SELECT id FROM tab_history WHERE tab_id = ? "
+                              "AND id > (SELECT tab_history_id FROM tab WHERE tab_id = ?) ORDER BY id ASC LIMIT 1;");
     query.bindValue(0, tabId);
     query.bindValue(1, tabId);
     if (!execute(query)) {
@@ -392,8 +396,10 @@ void DBWorker::goForward(int tabId) {
     }
 }
 
-void DBWorker::goBack(int tabId) {
-    QSqlQuery query = prepare("SELECT id FROM tab_history WHERE tab_id = ? AND id < (SELECT tab_history_id FROM tab WHERE tab_id = ?) ORDER BY id DESC LIMIT 1;");
+void DBWorker::goBack(int tabId)
+{
+    QSqlQuery query = prepare("SELECT id FROM tab_history WHERE tab_id = ? "
+                              "AND id < (SELECT tab_history_id FROM tab WHERE tab_id = ?) ORDER BY id DESC LIMIT 1;");
     query.bindValue(0, tabId);
     query.bindValue(1, tabId);
     if (!execute(query)) {
@@ -429,7 +435,8 @@ Link DBWorker::getCurrentLink(int tabId)
     return Link();
 }
 
-void DBWorker::clearDeprecatedTabHistory(int tabId, int currentLinkId) {
+void DBWorker::clearDeprecatedTabHistory(int tabId, int currentLinkId)
+{
 #if DEBUG_LOGS
     qDebug() << "tab id:" << tabId << "current link id:" << currentLinkId;
 #endif
@@ -647,7 +654,8 @@ QList<Link> DBWorker::getHistoryQList()
 
 void DBWorker::getTabHistory(int tabId)
 {
-    QSqlQuery query = prepare("SELECT link.link_id, link.url, link.thumb_path, link.title, (tab_history.id == tab.tab_history_id) AS current "
+    QSqlQuery query = prepare("SELECT link.link_id, link.url, link.thumb_path, link.title, "
+                              " (tab_history.id == tab.tab_history_id) AS current "
                               "FROM tab_history "
                               "INNER JOIN tab ON tab.tab_id = tab_history.tab_id "
                               "INNER JOIN link ON tab_history.link_id = link.link_id "

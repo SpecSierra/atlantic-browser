@@ -25,7 +25,8 @@ LoginInfo::LoginInfo(const QVariantMap &data)
 
 // nsILoginInfo carefully distinguishes between null and emtpy strings
 // So we must be careful to capture the same distinction too
-QString LoginInfo::extractValue(QVariantMap const &data, QString const &key) {
+QString LoginInfo::extractValue(QVariantMap const &data, QString const &key)
+{
     QString result;
     if (data.contains(key) && data.value(key).isValid()) {
         result = data.value(key).toString();
@@ -33,11 +34,17 @@ QString LoginInfo::extractValue(QVariantMap const &data, QString const &key) {
     return result;
 }
 
-void LoginInfo::insertValue(QVariantMap &data, QString const &key, QString const &value) {
-    !value.isNull() ? data.insert(key, value) : data.insert(key, QVariant());
+void LoginInfo::insertValue(QVariantMap &data, QString const &key, QString const &value)
+{
+    if (!value.isNull()) {
+        data.insert(key, value);
+    } else {
+        data.insert(key, QVariant());
+    }
 }
 
-QVariantMap LoginInfo::toMap() {
+QVariantMap LoginInfo::toMap()
+{
     QVariantMap data;
     insertValue(data, QStringLiteral("hostname"), m_hostname);
     insertValue(data, QStringLiteral("formSubmitURL"), m_formSubmitURL);

@@ -50,7 +50,8 @@ void Bookmark::setUrl(const QString &url)
     }
 }
 
-QString Bookmark::favicon() const {
+QString Bookmark::favicon() const
+{
     return m_favicon;
 }
 
