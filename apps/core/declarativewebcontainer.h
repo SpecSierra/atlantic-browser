@@ -151,7 +151,7 @@ public:
     void requestTabWithOwnerAsync(int tabId, const QString &url, uint ownerPid, void *context);
     Q_INVOKABLE void releaseActiveTabOwnership();
 
-    Q_INVOKABLE void load(const QString &url = QString(), bool force = false, bool fromExternal = false);
+    Q_INVOKABLE void load(const QString &url, bool force = false, bool fromExternal = false);
     Q_INVOKABLE void reload(bool force = true);
     Q_INVOKABLE void goForward();
     Q_INVOKABLE void goBack();
