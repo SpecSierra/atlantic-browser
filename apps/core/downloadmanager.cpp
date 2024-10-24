@@ -264,7 +264,8 @@ void DownloadManager::setPreferences()
     DownloadMimetypeHandler::update();
 }
 
-void DownloadManager::setPdfPrinting(const bool pdfPrinting) {
+void DownloadManager::setPdfPrinting(const bool pdfPrinting)
+{
     if (m_pdfPrinting != pdfPrinting) {
         m_pdfPrinting = pdfPrinting;
         emit pdfPrintingChanged();

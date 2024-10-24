@@ -720,7 +720,7 @@ bool DeclarativeWebContainer::eventFilter(QObject *obj, QEvent *event)
             if (!m_closing) {
                 m_webPages->clear();
                 bool initialUrl = hasInitialUrl();
-                m_initialUrl = "";
+                m_initialUrl.clear();
                 m_fromExternal = false;
                 if (initialUrl) {
                     emit hasInitialUrlChanged();

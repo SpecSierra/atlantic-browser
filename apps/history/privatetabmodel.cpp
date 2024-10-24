@@ -27,7 +27,8 @@ PrivateTabModel::~PrivateTabModel()
 {
 }
 
-void PrivateTabModel::createTab(const Tab &tab) {
+void PrivateTabModel::createTab(const Tab &tab)
+{
     Q_UNUSED(tab);
 }
 
@@ -50,7 +51,8 @@ void PrivateTabModel::updateRequestedUrl(int tabId, const QString &requestedUrl,
     Q_UNUSED(resolvedUrl)
 }
 
-void PrivateTabModel::navigateTo(int tabId, const QString &url, const QString &title, const QString &path) {
+void PrivateTabModel::navigateTo(int tabId, const QString &url, const QString &title, const QString &path)
+{
     Q_UNUSED(tabId)
     Q_UNUSED(url)
     Q_UNUSED(title)

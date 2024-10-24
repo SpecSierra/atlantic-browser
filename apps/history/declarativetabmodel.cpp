@@ -28,10 +28,10 @@
 namespace  {
     bool isExternalUrl(const QUrl &url)
     {
-        return url.scheme() == QLatin1String("tel") ||
-                url.scheme() == QLatin1String("sms") ||
-                url.scheme() == QLatin1String("mailto") ||
-                url.scheme() == QLatin1String("geo");
+        return url.scheme() == QLatin1String("tel")
+                || url.scheme() == QLatin1String("sms")
+                || url.scheme() == QLatin1String("mailto")
+                || url.scheme() == QLatin1String("geo");
     }
 }
 
@@ -62,7 +62,8 @@ QHash<int, QByteArray> DeclarativeTabModel::roleNames() const
     return roles;
 }
 
-void DeclarativeTabModel::addTab(const Tab& tab, int index) {
+void DeclarativeTabModel::addTab(const Tab& tab, int index)
+{
     Q_ASSERT(index >= 0 && index <= m_tabs.count());
     createTab(tab);
 
@@ -88,7 +89,8 @@ int DeclarativeTabModel::nextTabId() const
     return m_nextTabId;
 }
 
-void DeclarativeTabModel::remove(int index) {
+void DeclarativeTabModel::remove(int index)
+{
     if (!m_tabs.isEmpty() && index >= 0 && index < m_tabs.count()) {
         bool removingActiveTab = activeTabIndex() == index;
         int newActiveIndex = 0;
@@ -265,12 +267,14 @@ int DeclarativeTabModel::count() const
     return m_tabs.count();
 }
 
-int DeclarativeTabModel::rowCount(const QModelIndex & parent) const {
+int DeclarativeTabModel::rowCount(const QModelIndex & parent) const
+{
     Q_UNUSED(parent);
     return m_tabs.count();
 }
 
-QVariant DeclarativeTabModel::data(const QModelIndex & index, int role) const {
+QVariant DeclarativeTabModel::data(const QModelIndex & index, int role) const
+{
     if (index.row() < 0 || index.row() >= m_tabs.count())
         return QVariant();
 

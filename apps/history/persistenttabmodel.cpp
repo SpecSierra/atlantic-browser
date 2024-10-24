@@ -77,7 +77,8 @@ void PersistentTabModel::tabsAvailable(const QList<Tab> &tabs)
             this, &PersistentTabModel::saveActiveTab, Qt::UniqueConnection);
 }
 
-void PersistentTabModel::createTab(const Tab &tab) {
+void PersistentTabModel::createTab(const Tab &tab)
+{
     DBManager::instance()->createTab(tab);
 }
 
@@ -96,7 +97,8 @@ void PersistentTabModel::updateRequestedUrl(int tabId, const QString &requestedU
     DBManager::instance()->updateUrl(tabId, requestedUrl, resolvedUrl);
 }
 
-void PersistentTabModel::navigateTo(int tabId, const QString &url, const QString &title, const QString &path) {
+void PersistentTabModel::navigateTo(int tabId, const QString &url, const QString &title, const QString &path)
+{
     Q_UNUSED(title)
     Q_UNUSED(path)
 
