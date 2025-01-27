@@ -13,7 +13,7 @@
 #include "opensearchconfigs.h"
 #include "faviconmanager.h"
 
-#include <MGConfItem>
+#include <MDConfItem>
 #include <QVariant>
 
 #include <webengine.h>
@@ -26,15 +26,15 @@ SettingManager::SettingManager(QObject *parent)
     , m_searchEnginesInitialized(false)
     , m_addedSearchEngines(0)
 {
-    m_searchEngineConfItem = new MGConfItem("/apps/sailfish-browser/settings/search_engine", this);
-    connect(m_searchEngineConfItem, &MGConfItem::valueChanged,
+    m_searchEngineConfItem = new MDConfItem("/apps/sailfish-browser/settings/search_engine", this);
+    connect(m_searchEngineConfItem, &MDConfItem::valueChanged,
             this, &SettingManager::setSearchEngine);
 
     // Look and feel related settings
-    m_toolbarSmall = new MGConfItem("/apps/sailfish-browser/settings/toolbar_small", this);
-    m_toolbarLarge = new MGConfItem("/apps/sailfish-browser/settings/toolbar_large", this);
-    connect(m_toolbarSmall, &MGConfItem::valueChanged, this, &SettingManager::toolbarSmallChanged);
-    connect(m_toolbarLarge, &MGConfItem::valueChanged, this, &SettingManager::toolbarLargeChanged);
+    m_toolbarSmall = new MDConfItem("/apps/sailfish-browser/settings/toolbar_small", this);
+    m_toolbarLarge = new MDConfItem("/apps/sailfish-browser/settings/toolbar_large", this);
+    connect(m_toolbarSmall, &MDConfItem::valueChanged, this, &SettingManager::toolbarSmallChanged);
+    connect(m_toolbarLarge, &MDConfItem::valueChanged, this, &SettingManager::toolbarLargeChanged);
 
     SailfishOS::WebEngine::instance()->addObserver(QStringLiteral("cache-size"));
     SailfishOS::WebEngine::instance()->addObserver(QStringLiteral("site-data-size"));

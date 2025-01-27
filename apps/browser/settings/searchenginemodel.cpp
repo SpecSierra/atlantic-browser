@@ -15,7 +15,7 @@
 #include <QString>
 #include <QFile>
 
-#include <MGConfItem>
+#include <MDConfItem>
 #include <webengine.h>
 
 const auto SEARCH_ENGINE_CONFIG = QStringLiteral("/apps/sailfish-browser/settings/search_engine");
@@ -41,7 +41,7 @@ SearchEngineModel::SearchEngineModel(QObject *parent)
     }
 
     // Get available searches from config
-    MGConfItem gconf(SEARCH_ENGINES_AVAILABLE_CONFIG);
+    MDConfItem gconf(SEARCH_ENGINES_AVAILABLE_CONFIG);
     QMap<QString, QVariant> engines = gconf.value().toMap();
 
     for (const QString &name : engines.keys()) {
@@ -108,7 +108,7 @@ void SearchEngineModel::add(const QString &title, const QString &url)
     endInsertRows();
     emit countChanged();
 
-    MGConfItem gconf(SEARCH_ENGINES_AVAILABLE_CONFIG);
+    MDConfItem gconf(SEARCH_ENGINES_AVAILABLE_CONFIG);
     QMap<QString, QVariant> engines = gconf.value().toMap();
     engines.insert(title, url);
     gconf.set(engines);
@@ -125,9 +125,9 @@ void SearchEngineModel::install(const QString &title)
                     m_searchEngines[i].status = Status::UserInstalled;
                     emit dataChanged(index(i), index(i), QVector<int>() << StatusRole);
 
-                    MGConfItem gconf(SEARCH_ENGINE_CONFIG);
+                    MDConfItem gconf(SEARCH_ENGINE_CONFIG);
                     gconf.set(m_searchEngines[i].title);
-                    MGConfItem available(SEARCH_ENGINES_AVAILABLE_CONFIG);
+                    MDConfItem available(SEARCH_ENGINES_AVAILABLE_CONFIG);
                     QMap<QString, QVariant> engines = available.value().toMap();
                     engines.remove(m_searchEngines[i].title);
                     available.set(engines);
@@ -148,7 +148,7 @@ void SearchEngineModel::install(const QString &title)
 
 void SearchEngineModel::remove(const QString &title)
 {
-    MGConfItem gconf(SEARCH_ENGINE_CONFIG);
+    MDConfItem gconf(SEARCH_ENGINE_CONFIG);
     if (gconf.value() == title)
         return;
 
@@ -156,7 +156,7 @@ void SearchEngineModel::remove(const QString &title)
         if (m_searchEngines[i].title == title && m_searchEngines[i].status != Status::System) {
             beginRemoveRows(QModelIndex(), i, i);
             if (m_searchEngines[i].status == Status::Available) {
-                MGConfItem gconf(SEARCH_ENGINES_AVAILABLE_CONFIG);
+                MDConfItem gconf(SEARCH_ENGINES_AVAILABLE_CONFIG);
                 QMap<QString, QVariant> engines = gconf.value().toMap();
                 engines.remove(title);
                 gconf.set(engines);

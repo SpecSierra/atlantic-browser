@@ -17,7 +17,7 @@
 #include <QUrl>
 #include <QColor>
 #include <QVariant>
-class MGConfItem;
+class MDConfItem;
 
 class DeclarativeWebUtils : public QObject
 {
@@ -66,7 +66,7 @@ private:
     ~DeclarativeWebUtils();
     void setRenderingPreferences();
 
-    MGConfItem *m_homePage;
+    MDConfItem *m_homePage;
     bool m_firstUseDone;
 };
 #endif // DECLARATIVEWEBUTILS_H

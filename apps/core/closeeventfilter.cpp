@@ -15,7 +15,7 @@
 #include "dbmanager.h"
 
 #include <QCoreApplication>
-#include <MGConfItem>
+#include <MDConfItem>
 
 CloseEventFilter::CloseEventFilter(DownloadManager *dlMgr, QObject *parent)
     : QObject(parent),
@@ -48,7 +48,7 @@ void CloseEventFilter::closeApplication()
         return;
     }
 
-    MGConfItem closeAllTabsConf("/apps/sailfish-browser/settings/close_all_tabs");
+    MDConfItem closeAllTabsConf("/apps/sailfish-browser/settings/close_all_tabs");
     if (closeAllTabsConf.value(false).toBool()) {
         DBManager::instance()->removeAllTabs();
     }

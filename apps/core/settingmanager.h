@@ -16,7 +16,7 @@
 #include <QScopedPointer>
 #include <QJSValue>
 
-class MGConfItem;
+class MDConfItem;
 
 class SettingManager : public QObject
 {
@@ -53,9 +53,9 @@ private slots:
 private:
     explicit SettingManager(QObject *parent = 0);
 
-    MGConfItem *m_searchEngineConfItem;
-    MGConfItem *m_toolbarSmall;
-    MGConfItem *m_toolbarLarge;
+    MDConfItem *m_searchEngineConfItem;
+    MDConfItem *m_toolbarSmall;
+    MDConfItem *m_toolbarLarge;
 
     bool m_searchEnginesInitialized;
 
