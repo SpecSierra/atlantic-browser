@@ -101,7 +101,6 @@ Unit tests and additional data needed for functional tests
 %qtc_make %{?_smp_mflags}
 
 %install
-rm -rf %{buildroot}
 %qmake5_install
 chmod +x %{buildroot}/%{_oneshotdir}/*
 
@@ -124,7 +123,6 @@ fi
 /sbin/ldconfig || :
 
 %files
-%defattr(-,root,root,-)
 %license LICENSE.txt
 %{_bindir}/%{name}
 %{_bindir}/%{captiveportal}
@@ -146,17 +144,14 @@ fi
 %{_datadir}/jolla-vault/units/Browser.json
 
 %files settings
-%defattr(-,root,root,-)
 %{_libdir}/qt5/qml/org/sailfishos/browser/settings
 %{_datadir}/jolla-settings/entries/browser.json
 %{_datadir}/jolla-settings/pages/browser
 %{_datadir}/translations/settings-%{name}_eng_en.qm
 
 %files ts-devel
-%defattr(-,root,root,-)
 %{_datadir}/translations/source/*.ts
 
 %files tests
-%defattr(-,root,root,-)
 %{_datadir}/applications/test-%{name}.desktop
 /opt/tests/%{name}
