@@ -102,6 +102,7 @@ Shared.Background {
 
     Private.VirtualKeyboardObserver {
         id: virtualKeyboardObserver
+
         active: overlay.active && !overlayAnimator.atBottom
         orientation: browserPage.orientation
     }
@@ -155,10 +156,8 @@ Shared.Background {
                 if (_showFindInPage || _showUrlEntry) {
                     toolBar.certOverlayActive = false
                 }
-            } else {
-                if (!toolBar.certOverlayActive) {
-                    dragArea.moved = true
-                }
+            } else if (!toolBar.certOverlayActive) {
+                dragArea.moved = true
             }
         }
     }
@@ -183,10 +182,11 @@ Shared.Background {
         id: dragArea
 
         property bool moved
-        property int dragThreshold: state === "fullscreenOverlay" ? toolBar.rowHeight * 1.5
-                                                                  : state === "certOverlay"
-                                                                    ? (overlayAnimator._infoHeight + toolBar.rowHeight * 0.5)
-                                                                    : (webView.fullscreenHeight - toolBar.rowHeight * 2)
+        property int dragThreshold: state === "fullscreenOverlay"
+                                    ? toolBar.rowHeight * 1.5
+                                    : state === "certOverlay"
+                                      ? (overlayAnimator._infoHeight + toolBar.rowHeight * 0.5)
+                                      : (webView.fullscreenHeight - toolBar.rowHeight * 2)
 
         width: parent.width
         height: historyContainer.height
@@ -233,10 +233,13 @@ Shared.Background {
         Item {
             id: historyContainer
 
-            readonly property bool showFavorites: !overlayAnimator.atBottom && !toolBar.findInPageActive && _showUrlEntry
-            readonly property bool showHistoryList: showFavorites && (searchField.edited
-                                                                      && searchField.text !== webView.url
-                                                                      && searchField.text)
+            readonly property bool showFavorites: !overlayAnimator.atBottom
+                                                  && !toolBar.findInPageActive
+                                                  && _showUrlEntry
+            readonly property bool showHistoryList: showFavorites
+                                                    && searchField.edited
+                                                    && searchField.text !== webView.url
+                                                    && searchField.text
             readonly property bool showHistoryButton: !toolBar.findInPageActive && (!searchField.edited
                                                                                     && searchField.text === webView.url
                                                                                     || !searchField.text)
@@ -248,7 +251,8 @@ Shared.Background {
                    || overlayAnimator.direction === "downwards"
                    || overlayAnimator.direction === "upwards"
                    || favoriteGrid.opacity != 0.0
-                   || historyList.opacity != 0.0) && searchField.y < 0
+                   || historyList.opacity != 0.0)
+                  && searchField.y < 0
 
             PrivateModeTexture {
                 opacity: toolBar.visible && webView.privateMode ? toolBar.opacity : 0.0
@@ -327,10 +331,11 @@ Shared.Background {
                 }
 
                 // Follow grid / list position.
-                y: -((!historyContainer.showHistoryList ? favoriteGrid.contentY
-                                                        : favoriteGrid.count > 0
-                                                          ? historyList.contentY + favoriteGrid.cellHeight + favoriteGrid.menuHeight
-                                                          : historyList.contentY)
+                y: -((historyContainer.showHistoryList
+                      ? (favoriteGrid.count > 0
+                         ? historyList.contentY + favoriteGrid.cellHeight + favoriteGrid.menuHeight
+                         : historyList.contentY)
+                      : favoriteGrid.contentY)
                      + favoriteGrid.headerItem.height + favoriteGrid.menuHeight)
 
                 // On top of HistoryList and FavoriteGrid
@@ -567,10 +572,10 @@ Shared.Background {
                 header: Browser.FavoriteGrid {
                     id: favoriteGrid
 
-                    height: !historyContainer.showHistoryList ? historyList.height
-                                                              : count > 0
+                    height: historyContainer.showHistoryList ? (count > 0
                                                                 ? cellHeight + headerItem.height + menuHeight
-                                                                : headerItem.height
+                                                                : headerItem.height)
+                                                             : historyList.height
                     opacity: visible && toolBar.opacity < 0.9 ? 1.0 : 0.0
                     enabled: overlayAnimator.atTop
                     visible: historyContainer.showFavorites

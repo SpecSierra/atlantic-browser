@@ -121,8 +121,9 @@ Page {
         visible: webView.contentItem
         page: browserPage
         fadeTarget: overlay.animator.allowContentUse ? overlay : overlay.dragArea
-        color: webView.contentItem ? (webView.resourceController.videoActive &&
-                                      webView.contentItem.fullscreen ? "black" : webView.contentItem.backgroundColor)
+        color: webView.contentItem ? (webView.resourceController.videoActive
+                                      && webView.contentItem.fullscreen
+                                      ? "black" : webView.contentItem.backgroundColor)
                                    : "white"
 
         onApplyContentOrientation: webView.applyContentOrientation(browserPage.orientation)
@@ -254,7 +255,8 @@ Page {
                        : 0.9 - (overlay.y / (webView.fullscreenHeight - overlay.toolBar.rowHeight)) * 0.9
 
         MouseArea {
-            property bool inEmptyPrivateMode: webView.privateMode && webView.privateTabModel.count === 0 && webView.persistentTabModel.count > 0
+            property bool inEmptyPrivateMode: webView.privateMode && webView.privateTabModel.count === 0
+                                              && webView.persistentTabModel.count > 0
 
             anchors.fill: parent
             enabled: overlay.animator.atTop && (webView.tabModel.count > 0 || inEmptyPrivateMode)
@@ -270,6 +272,7 @@ Page {
 
         Browser.PrivateModeTexture {
             id: privateModeTexture
+
             anchors.fill: contentDimmer
             visible: webView.privateMode && !overlay.animator.allowContentUse
         }
@@ -298,7 +301,7 @@ Page {
     Browser.Overlay {
         id: overlay
 
-        active: browserPage.status == PageStatus.Active &&  webView.tabModel.loaded
+        active: browserPage.status == PageStatus.Active && webView.tabModel.loaded
         webView: webView
         historyModel: historyModel
         browserPage: browserPage
@@ -312,7 +315,9 @@ Page {
         onActiveChanged: {
             var isFullScreen = webView.contentItem && webView.contentItem.fullscreen
             if (!isFullScreen && active && !overlay.enteringNewTabUrl) {
-                if (webView.hasInitialUrl || webView.tabModel.count !== 0 || (WebUtils.homePage !== "about:blank" && WebUtils.homePage.length > 0)) {
+                if (webView.hasInitialUrl
+                        || webView.tabModel.count !== 0
+                        || (WebUtils.homePage !== "about:blank" && WebUtils.homePage.length > 0)) {
                     overlay.animator.showChrome()
                 } else {
                     overlay.startPage()
@@ -351,12 +356,12 @@ Page {
         }
 
         footer: Component {
-           Browser.PopUpMenuFooter {
-               height: Math.max(implicitHeight,
-                                (isPortrait ? overlay.toolBar.scaledPortraitHeight
-                                            : overlay.toolBar.scaledLandscapeHeight)
-                                - popupMenu.verticalMargin)
-           }
+            Browser.PopUpMenuFooter {
+                height: Math.max(implicitHeight,
+                                 (isPortrait ? overlay.toolBar.scaledPortraitHeight
+                                             : overlay.toolBar.scaledLandscapeHeight)
+                                 - popupMenu.verticalMargin)
+            }
         }
 
         onClosed: overlay.dismiss(true)
