@@ -14,13 +14,6 @@ import Sailfish.Browser 1.0
 import "components"
 
 Page {
-    LoginFilterModel {
-        id: loginFilterModel
-        sourceModel: LoginModel {
-            id: loginModel
-        }
-    }
-
     function stripPrefix(hostname) {
         if (hostname.length < 7) {
             return hostname
@@ -207,6 +200,14 @@ Page {
         id: secureAction
         //% "Unlock access to browser passwords"
         message: qsTrId("sailfish_browser-me-login_unlock_password_access")
+    }
+
+    LoginFilterModel {
+        id: loginFilterModel
+
+        sourceModel: LoginModel {
+            id: loginModel
+        }
     }
 
     Component {
