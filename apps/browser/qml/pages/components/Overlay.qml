@@ -195,7 +195,7 @@ Shared.Background {
         drag.target: overlay
         drag.filterChildren: true
         drag.axis: Drag.YAxis
-        // Favorite grid first row offset is negative. So, increase minumumY drag by that.
+        // Favorite grid first row offset is negative. So, increase minimumY drag by that.
         drag.minimumY: _overlayHeight
         drag.maximumY: webView.fullscreenHeight - toolBar.rowHeight
 
@@ -330,6 +330,10 @@ Shared.Background {
                     edited = false
                 }
 
+                function hasMoved() {
+                    return y < -height && historyList.contentY !== favoriteGrid.contentY
+                }
+
                 // Follow grid / list position.
                 y: -((historyContainer.showHistoryList
                       ? (favoriteGrid.count > 0
@@ -383,8 +387,10 @@ Shared.Background {
                 visible: opacity > 0.0 && y >= -searchField.height
 
                 onYChanged: {
-                    if (y < -height && historyList.contentY !== favoriteGrid.contentY) {
-                        dragArea.moved = true
+                    if (hasMoved()) {
+                        // the binding evaluation order might result in unexpected temporary positions
+                        // redo the move check after all of them are handled
+                        moveCheckTimer.start()
                     }
                 }
 
@@ -417,6 +423,17 @@ Shared.Background {
                 onTextChanged: {
                     if (!edited && text !== webView.url) {
                         edited = true
+                    }
+                }
+
+                Timer {
+                    id: moveCheckTimer
+
+                    interval: 0
+                    onTriggered: {
+                        if (searchField.hasMoved()) {
+                            dragArea.moved = true
+                        }
                     }
                 }
             }
