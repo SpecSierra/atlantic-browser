@@ -513,7 +513,7 @@ void DeclarativeWebContainer::reload(bool force)
 
 void DeclarativeWebContainer::goForward()
 {
-    if (m_webPage &&  m_webPage->canGoForward()) {
+    if (m_webPage && m_webPage->canGoForward()) {
         DBManager::instance()->goForward(m_webPage->tabId());
         m_webPage->goForward();
     }

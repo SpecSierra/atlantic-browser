@@ -102,6 +102,7 @@ Shared.Background {
 
     Private.VirtualKeyboardObserver {
         id: virtualKeyboardObserver
+
         active: overlay.active && !overlayAnimator.atBottom
         orientation: browserPage.orientation
     }
@@ -155,10 +156,8 @@ Shared.Background {
                 if (_showFindInPage || _showUrlEntry) {
                     toolBar.certOverlayActive = false
                 }
-            } else {
-                if (!toolBar.certOverlayActive) {
-                    dragArea.moved = true
-                }
+            } else if (!toolBar.certOverlayActive) {
+                dragArea.moved = true
             }
         }
     }
@@ -183,10 +182,11 @@ Shared.Background {
         id: dragArea
 
         property bool moved
-        property int dragThreshold: state === "fullscreenOverlay" ? toolBar.rowHeight * 1.5
-                                                                  : state === "certOverlay"
-                                                                    ? (overlayAnimator._infoHeight + toolBar.rowHeight * 0.5)
-                                                                    : (webView.fullscreenHeight - toolBar.rowHeight * 2)
+        property int dragThreshold: state === "fullscreenOverlay"
+                                    ? toolBar.rowHeight * 1.5
+                                    : state === "certOverlay"
+                                      ? (overlayAnimator._infoHeight + toolBar.rowHeight * 0.5)
+                                      : (webView.fullscreenHeight - toolBar.rowHeight * 2)
 
         width: parent.width
         height: historyContainer.height
@@ -195,7 +195,7 @@ Shared.Background {
         drag.target: overlay
         drag.filterChildren: true
         drag.axis: Drag.YAxis
-        // Favorite grid first row offset is negative. So, increase minumumY drag by that.
+        // Favorite grid first row offset is negative. So, increase minimumY drag by that.
         drag.minimumY: _overlayHeight
         drag.maximumY: webView.fullscreenHeight - toolBar.rowHeight
 
@@ -233,10 +233,13 @@ Shared.Background {
         Item {
             id: historyContainer
 
-            readonly property bool showFavorites: !overlayAnimator.atBottom && !toolBar.findInPageActive && _showUrlEntry
-            readonly property bool showHistoryList: showFavorites && (searchField.edited
-                                                                      && searchField.text !== webView.url
-                                                                      && searchField.text)
+            readonly property bool showFavorites: !overlayAnimator.atBottom
+                                                  && !toolBar.findInPageActive
+                                                  && _showUrlEntry
+            readonly property bool showHistoryList: showFavorites
+                                                    && searchField.edited
+                                                    && searchField.text !== webView.url
+                                                    && searchField.text
             readonly property bool showHistoryButton: !toolBar.findInPageActive && (!searchField.edited
                                                                                     && searchField.text === webView.url
                                                                                     || !searchField.text)
@@ -248,7 +251,8 @@ Shared.Background {
                    || overlayAnimator.direction === "downwards"
                    || overlayAnimator.direction === "upwards"
                    || favoriteGrid.opacity != 0.0
-                   || historyList.opacity != 0.0) && searchField.y < 0
+                   || historyList.opacity != 0.0)
+                  && searchField.y < 0
 
             PrivateModeTexture {
                 opacity: toolBar.visible && webView.privateMode ? toolBar.opacity : 0.0
@@ -326,11 +330,16 @@ Shared.Background {
                     edited = false
                 }
 
+                function hasMoved() {
+                    return y < -height && historyList.contentY !== favoriteGrid.contentY
+                }
+
                 // Follow grid / list position.
-                y: -((!historyContainer.showHistoryList ? favoriteGrid.contentY
-                                                        : favoriteGrid.count > 0
-                                                          ? historyList.contentY + favoriteGrid.cellHeight + favoriteGrid.menuHeight
-                                                          : historyList.contentY)
+                y: -((historyContainer.showHistoryList
+                      ? (favoriteGrid.count > 0
+                         ? historyList.contentY + favoriteGrid.cellHeight + favoriteGrid.menuHeight
+                         : historyList.contentY)
+                      : favoriteGrid.contentY)
                      + favoriteGrid.headerItem.height + favoriteGrid.menuHeight)
 
                 // On top of HistoryList and FavoriteGrid
@@ -378,8 +387,10 @@ Shared.Background {
                 visible: opacity > 0.0 && y >= -searchField.height
 
                 onYChanged: {
-                    if (y < -height && historyList.contentY !== favoriteGrid.contentY) {
-                        dragArea.moved = true
+                    if (hasMoved()) {
+                        // the binding evaluation order might result in unexpected temporary positions
+                        // redo the move check after all of them are handled
+                        moveCheckTimer.start()
                     }
                 }
 
@@ -412,6 +423,17 @@ Shared.Background {
                 onTextChanged: {
                     if (!edited && text !== webView.url) {
                         edited = true
+                    }
+                }
+
+                Timer {
+                    id: moveCheckTimer
+
+                    interval: 0
+                    onTriggered: {
+                        if (searchField.hasMoved()) {
+                            dragArea.moved = true
+                        }
                     }
                 }
             }
@@ -567,10 +589,10 @@ Shared.Background {
                 header: Browser.FavoriteGrid {
                     id: favoriteGrid
 
-                    height: !historyContainer.showHistoryList ? historyList.height
-                                                              : count > 0
+                    height: historyContainer.showHistoryList ? (count > 0
                                                                 ? cellHeight + headerItem.height + menuHeight
-                                                                : headerItem.height
+                                                                : headerItem.height)
+                                                             : historyList.height
                     opacity: visible && toolBar.opacity < 0.9 ? 1.0 : 0.0
                     enabled: overlayAnimator.atTop
                     visible: historyContainer.showFavorites
