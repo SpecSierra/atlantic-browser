@@ -27,7 +27,8 @@ SilicaGridView {
                                         ? portrait ? 2 : 3
                                         : parent.width < 2 * parent.height
                                           ? parent.width <= height ? 1 : 2 : 3
-    readonly property real thumbnailWidth: (parent.width - Theme.horizontalPageMargin * 2 - (Theme.paddingLarge * (columns - 1))) / columns
+    readonly property real thumbnailWidth: (parent.width - Theme.horizontalPageMargin * 2
+                                            - (Theme.paddingLarge * (columns - 1))) / columns
 
     signal hide
     signal enterNewTabUrl
@@ -93,7 +94,6 @@ SilicaGridView {
             onClicked: hide()
         }
     ]
-
 
     Item {
         height: parent.height

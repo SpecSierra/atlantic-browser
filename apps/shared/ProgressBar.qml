@@ -20,6 +20,7 @@ Item {
 
     Rectangle {
         id: progressRect
+
         height: parent.height
         width: progressBar.progress * parent.width
         gradient: Gradient {

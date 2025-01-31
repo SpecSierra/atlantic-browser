@@ -52,6 +52,7 @@ ListItem {
 
     Column {
         id: column
+
         anchors {
             verticalCenter: parent.verticalCenter
             left: favoriteIcon.right

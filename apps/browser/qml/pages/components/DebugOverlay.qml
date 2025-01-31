@@ -24,6 +24,7 @@ Item {
 
     Rectangle {
         id: dumpOrange
+
         color: "orange"
         anchors.top: scaleIndicator.bottom
         width: dumpText.width + Theme.paddingLarge
@@ -35,6 +36,7 @@ Item {
 
         Text {
             id: dumpText
+
             anchors {
                 left: parent.left
                 leftMargin: Theme.paddingMedium
@@ -63,6 +65,7 @@ Item {
 
     Rectangle {
         id: cWidth
+
         color: "red"
         width: parent.width
         height: 50
@@ -78,6 +81,7 @@ Item {
 
     Rectangle {
         id: scaleIndicator
+
         color: "red"
         width: parent.width
         height: 50
@@ -95,6 +99,7 @@ Item {
 
     Timer {
         id: readTimer
+
         interval: 2000
         onTriggered: console.log("MEMORY DUMPPED")
     }

@@ -79,7 +79,6 @@ Dialog {
 
         header: Column {
             DialogHeader {
-                id: dialogHeader
                 dialog: configDialog
                 title: "about:config"
                 _glassOnly: true

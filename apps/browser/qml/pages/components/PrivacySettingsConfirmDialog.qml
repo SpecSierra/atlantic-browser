@@ -13,7 +13,6 @@ import Sailfish.Silica 1.0
 import Sailfish.Browser 1.0
 
 Dialog {
-
     property alias historyEnabled: historyItem.visible
     property alias cookieAndSiteDataEnabled: cookieAndSiteDataItem.visible
     property alias passwordsEnabled: passwordsItem.visible
@@ -36,7 +35,6 @@ Dialog {
             id: column
 
             width: parent.width
-
             spacing: Theme.paddingMedium
 
             DialogHeader {

@@ -16,12 +16,14 @@ import "../../shared" as Shared
 Shared.IconButton {
     property alias label: label
     property int horizontalOffset
+
     // Don't pass touch events through if opaque
     enabled: opacity === 1.0
     icon.anchors.horizontalCenterOffset: horizontalOffset
 
     Label {
         id: label
+
         anchors {
             centerIn: parent
             horizontalCenterOffset: horizontalOffset

@@ -47,17 +47,17 @@ Shared.Background {
     }
 
     y: webView.fullscreenHeight - toolBar.height
-
-    Private.VirtualKeyboardObserver {
-        id: virtualKeyboardObserver
-        active: overlay.active && !overlayAnimator.atBottom
-        orientation: containerPage.orientation
-    }
-
     width: parent.width
     height: toolBar.height + virtualKeyboardObserver.panelSize
     // `visible` is controlled by Browser.OverlayAnimator
     enabled: visible
+
+    Private.VirtualKeyboardObserver {
+        id: virtualKeyboardObserver
+
+        active: overlay.active && !overlayAnimator.atBottom
+        orientation: containerPage.orientation
+    }
 
     // This is an invisible object responsible to hide/show Overlay in an animated way
     Shared.OverlayAnimator {
@@ -74,6 +74,7 @@ Shared.Background {
 
     Shared.ProgressBar {
         id: progressBar
+
         width: parent.width
         height: toolBar.height
         opacity: webView.loading ? 1.0 : 0.0

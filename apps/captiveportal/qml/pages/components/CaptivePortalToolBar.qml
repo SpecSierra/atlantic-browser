@@ -21,10 +21,14 @@ Column {
     readonly property int maxRowCount: 1
 
     readonly property int horizontalOffset: largeScreen ? Theme.paddingLarge : Theme.paddingSmall
-    readonly property int buttonPadding: largeScreen || orientation === Orientation.Landscape || orientation === Orientation.LandscapeInverted
+    readonly property int buttonPadding: largeScreen
+                                         || orientation === Orientation.Landscape
+                                         || orientation === Orientation.LandscapeInverted
                                          ? Theme.paddingMedium : Theme.paddingSmall
-    readonly property int iconWidth: largeScreen ? (Theme.iconSizeLarge + 3 * buttonPadding) : (Theme.iconSizeMedium + 2 * buttonPadding)
-    readonly property int smallIconWidth: largeScreen ? (Theme.iconSizeMedium + 3 * buttonPadding) : (Theme.iconSizeSmall + 2 * buttonPadding)
+    readonly property int iconWidth: largeScreen ? (Theme.iconSizeLarge + 3 * buttonPadding)
+                                                 : (Theme.iconSizeMedium + 2 * buttonPadding)
+    readonly property int smallIconWidth: largeScreen ? (Theme.iconSizeMedium + 3 * buttonPadding)
+                                                      : (Theme.iconSizeSmall + 2 * buttonPadding)
     // Height of toolbar should be such that viewport height is
     // even number both chrome and fullscreen modes. For instance
     // height of 110px for toolbar would result 1px rounding
@@ -64,11 +68,13 @@ Column {
 
     Row {
         id: toolsRow
+
         width: parent.width
         height: browserPage.isPortrait ? scaledPortraitHeight : scaledLandscapeHeight
 
         Shared.ExpandingButton {
             id: backIcon
+
             expandedWidth: toolBarRow.iconWidth
             icon.source: "image://theme/icon-m-back"
             active: webView.canGoBack
@@ -96,6 +102,7 @@ Column {
 
         Shared.ExpandingButton {
             id: reloadButton
+
             expandedWidth: toolBarRow.iconWidth
             icon.source: webView.loading ? "image://theme/icon-m-reset" : "image://theme/icon-m-refresh"
             active: webView.contentItem

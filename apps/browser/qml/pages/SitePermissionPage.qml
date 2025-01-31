@@ -82,6 +82,7 @@ Page {
 
     PermissionFilterProxyModel {
         id: permissionFilterProxyModel
+
         sourceModel: permissionModel
         onlyPermanent: true
 
