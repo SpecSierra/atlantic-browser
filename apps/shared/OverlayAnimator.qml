@@ -70,7 +70,10 @@ Item {
     }
 
     function isOpenedState() {
-        return state !== _fullscreenOverlay && state !== _fullscreenWebPage && state !== _startPage && state !== _noOverlay
+        return state !== _fullscreenOverlay
+                && state !== _fullscreenWebPage
+                && state !== _startPage
+                && state !== _noOverlay
     }
 
     // Wrapper from updating the state. Handy for debugging.
@@ -259,12 +262,15 @@ Item {
 
     transitions: [
         Transition {
-            id: overlayTransition
-
             to: "fullscreenWebPage,chromeVisible,loadProgressOverlay,fullscreenOverlay,noOverlay,secondaryTools,certOverlay,startPage"
 
             SequentialAnimation {
-                NumberAnimation { target: webView; property: "height"; duration: transitionDuration; easing.type: Easing.InOutQuad }
+                NumberAnimation {
+                    target: webView
+                    property: "height"
+                    duration: transitionDuration
+                    easing.type: Easing.InOutQuad
+                }
                 ScriptAction {
                     script: {
                         if (animator.state === _chromeVisible
@@ -294,13 +300,28 @@ Item {
                     }
                 }
             }
-            NumberAnimation { target: overlay; property: "y"; duration: transitionDuration; easing.type: Easing.InOutQuad }
-            NumberAnimation { target: overlay.toolBar; property: "secondaryToolsHeight"; duration: transitionDuration; easing.type: Easing.InOutQuad }        
+            NumberAnimation {
+                target: overlay
+                property: "y"
+                duration: transitionDuration
+                easing.type: Easing.InOutQuad
+            }
+            NumberAnimation {
+                target: overlay.toolBar
+                property: "secondaryToolsHeight"
+                duration: transitionDuration
+                easing.type: Easing.InOutQuad
+            }
         }
         ,
         Transition {
             to: _draggingOverlay
-            NumberAnimation { target: overlay.toolBar; property: "secondaryToolsHeight"; duration: transitionDuration; easing.type: Easing.InOutQuad }
+            NumberAnimation {
+                target: overlay.toolBar
+                property: "secondaryToolsHeight"
+                duration: transitionDuration
+                easing.type: Easing.InOutQuad
+            }
         }
     ]
 }

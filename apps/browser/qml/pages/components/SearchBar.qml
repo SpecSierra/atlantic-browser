@@ -18,6 +18,7 @@ import QtQuick 2.0
 
 Item {
     id: searchBar
+
     width: parent.width
     height: isPortrait ? Settings.toolbarLarge : Settings.toolbarSmall
 
@@ -29,7 +30,6 @@ Item {
         spacing: Theme.paddingMedium
 
         Shared.IconButton {
-            id: backIcon
             width: Theme.iconSizeMedium + 2 * Theme.paddingMedium
             height: searchBar.height
             icon.source: "image://theme/icon-m-left"
@@ -41,6 +41,7 @@ Item {
 
         MouseArea {
             id: touchArea
+
             height: parent.height
             width: textLabel.width
             property bool down: pressed && containsMouse
@@ -56,7 +57,6 @@ Item {
         }
 
         Shared.IconButton {
-            id: forwardIcon
             width: Theme.iconSizeMedium + 2 * Theme.paddingMedium
             height: searchBar.height
             icon.source: "image://theme/icon-m-right"

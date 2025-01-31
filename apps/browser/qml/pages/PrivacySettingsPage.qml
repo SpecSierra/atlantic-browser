@@ -27,6 +27,7 @@ Page {
 
         Column {
             id: contentColumn
+
             width: parent.width
 
             PageHeader {
@@ -96,6 +97,7 @@ Page {
 
                 TextSwitch {
                     id: clearSavedPasswords
+
                     //% "Saved passwords"
                     text: qsTrId("settings_browser-la-clear_passwords")
                     checked: true
@@ -103,6 +105,7 @@ Page {
 
                 TextSwitch {
                     id: clearCache
+
                     //% "Cache"
                     text: qsTrId("settings_browser-la-clear_cache")
                     checked: true
@@ -110,6 +113,7 @@ Page {
 
                 TextSwitch {
                     id: clearBookmarks
+
                     //% "Bookmarks"
                     text: qsTrId("settings_browser-la-clear_bookmarks")
                     checked: true

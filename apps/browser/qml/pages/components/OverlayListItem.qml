@@ -60,6 +60,7 @@ BackgroundItem {
     }
     Switch {
         id: toggle
+
         anchors {
             right: parent.right
             verticalCenter: parent.verticalCenter

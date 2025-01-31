@@ -33,6 +33,7 @@ SilicaItem {
 
         MenuItem {
             id: title
+
             height: implicitHeight
             down: root.down
             highlighted: root.highlighted
@@ -40,6 +41,7 @@ SilicaItem {
 
         MenuItem {
             id: description
+
             height: text ? implicitHeight : 0
             font.pixelSize: Theme.fontSizeExtraSmall
             down: root.down

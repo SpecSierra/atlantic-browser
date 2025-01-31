@@ -114,6 +114,7 @@ Item {
 
     ConnectionHelper {
         id: connectionHelper
+
         readonly property bool connected: status >= ConnectionHelper.Connected
 
         function notifyOfflineStatus() {
@@ -162,6 +163,7 @@ Item {
 
     Timer {
         id: delayedSuspend
+
         property bool suspendIntention
 
         // 1000ms was not enough to always allow buffering start of next song via 3G

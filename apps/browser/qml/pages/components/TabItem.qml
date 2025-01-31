@@ -75,11 +75,13 @@ BackgroundItem {
 
             Item {
                 id: header
+
                 width: root.implicitWidth
                 height: iconHeader.height + Theme.paddingMedium * 2
 
                 Image {
                     id: iconHeader
+
                     anchors {
                         left: parent.left
                         leftMargin: Theme.paddingMedium
@@ -155,6 +157,7 @@ BackgroundItem {
         },
         Timer {
             id: removeTimer
+
             interval: 16
             onTriggered: view.closeTab(index)
         }

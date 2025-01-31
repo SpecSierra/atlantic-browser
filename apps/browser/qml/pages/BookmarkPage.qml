@@ -15,11 +15,11 @@ import "components"
 
 Page {
     property string searchText
-
     property BookmarkModel bookmarkModel
 
     BookmarkFilterModel {
         id: bookmarkFilterModel
+
         sourceModel: bookmarkModel
         search: searchText
     }

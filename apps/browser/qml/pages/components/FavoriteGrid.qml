@@ -19,13 +19,13 @@ IconGridViewBase {
 
     property real menuHeight: 0
 
-    pageHeight: Math.ceil(browserPage.height + pageStack.panelSize)
-    rows: Math.floor(pageHeight / minimumCellHeight)
-    columns: Math.floor(browserPage.width / minimumCellWidth)
-
     signal load(string url)
     signal newTab(string url)
     signal share(string url, string title)
+
+    pageHeight: Math.ceil(browserPage.height + pageStack.panelSize)
+    rows: Math.floor(pageHeight / minimumCellHeight)
+    columns: Math.floor(browserPage.width / minimumCellWidth)
 
     function fetchAndSaveBookmark() {
         var webPage = webView && webView.contentItem
@@ -60,7 +60,10 @@ IconGridViewBase {
         menu: favoriteContextMenu
         openMenuOnPressAndHold: false
 
-        onMenuOpenChanged: menuOpen && historyContainer.showHistoryList ? favoriteGrid.menuHeight = cellHeight : favoriteGrid.menuHeight = 0
+        onMenuOpenChanged: {
+            favoriteGrid.menuHeight = (menuOpen && historyContainer.showHistoryList)
+                                      ? cellHeight : 0
+        }
 
         onAddToLauncher: {
             // url, title, favicon
@@ -127,6 +130,7 @@ IconGridViewBase {
 
         DataFetcher {
             id: fetcher
+
             property url url
             property string title
             property var webPage

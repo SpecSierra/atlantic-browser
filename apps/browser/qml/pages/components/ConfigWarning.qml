@@ -18,7 +18,8 @@ ConfirmDialog {
     property Item browserPage
 
     //: Warning of changing browser configurations.
-    //% "Changing these advanced settings can cause issues with stability, security and performance of Sailfish Browser. Continue ?"
+    //% "Changing these advanced settings can cause issues with stability, "
+    //% "security and performance of Sailfish Browser. Continue ?"
     text: qsTrId("sailfish_browser-la-config-warning")
     acceptDestination: Component {
         ConfigDialog {

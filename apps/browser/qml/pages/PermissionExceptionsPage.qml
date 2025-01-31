@@ -22,10 +22,11 @@ Page {
     property string iconSource
 
     property var remorse
-    readonly property bool pendingRemorse: remorse ? remorse.pending : false
+    readonly property bool pendingRemorse: remorse && remorse.pending
 
     PermissionFilterProxyModel {
         id: proxyModel
+
         onlyPermanent: true
         sourceModel: page.model
     }

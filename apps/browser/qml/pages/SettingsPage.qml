@@ -54,7 +54,8 @@ Page {
                 //% "Home Page"
                 label: qsTrId("settings_browser-la-home_page")
                 //% "Start view"
-                value: _homePageBlank ? qsTrId("sailfish_browser-la-start_view") : removeProtocolTypeFromUri(homePageConfig.value)
+                value: _homePageBlank ? qsTrId("sailfish_browser-la-start_view")
+                                      : removeProtocolTypeFromUri(homePageConfig.value)
 
                 currentIndex: _homePageBlank
                               ? 0 // For start view (blank)
@@ -111,7 +112,8 @@ Page {
                             text: title
                             //: Shown on Settings -> Search engine for user installable search services
                             //% "Tap to install"
-                            description: status == SearchEngineModel.Available ? qsTrId("settings_browser-la-tap_to_install") : ""
+                            description: status == SearchEngineModel.Available
+                                         ? qsTrId("settings_browser-la-tap_to_install") : ""
                             onClicked: {
                                 if (title !== searchEngineConfig.value) {
                                     if (status == SearchEngineModel.Available) {
@@ -349,6 +351,7 @@ Page {
 
     ConfigurationValue {
         id: closeAllTabsConfig
+
         key: "/apps/sailfish-browser/settings/close_all_tabs"
         defaultValue: false
     }
@@ -369,6 +372,7 @@ Page {
 
     Notice {
         id: searchInstalledNotice
+
         duration: 3000
         verticalOffset: -Theme.paddingLarge
     }

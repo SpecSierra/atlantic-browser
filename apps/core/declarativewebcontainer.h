@@ -47,7 +47,7 @@ class DeclarativeWebContainer : public QWindow, public QQmlParserStatus, protect
     Q_PROPERTY(bool enabled MEMBER m_enabled NOTIFY enabledChanged FINAL)
     Q_PROPERTY(bool foreground READ foreground WRITE setForeground NOTIFY foregroundChanged FINAL)
     Q_PROPERTY(int maxLiveTabCount READ maxLiveTabCount WRITE setMaxLiveTabCount NOTIFY maxLiveTabCountChanged FINAL)
-    // This property should cover all possible popus
+    // This property should cover all possible popups
     Q_PROPERTY(bool touchBlocked MEMBER m_touchBlocked NOTIFY touchBlockedChanged FINAL)
     Q_PROPERTY(bool selectionActive MEMBER m_selectionActive NOTIFY selectionActiveChanged FINAL)
     Q_PROPERTY(bool portrait READ portrait WRITE setPortrait NOTIFY portraitChanged FINAL)

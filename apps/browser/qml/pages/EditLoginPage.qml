@@ -15,6 +15,7 @@ import "components"
 
 Dialog {
     id: page
+
     property int uid: -1
     property LoginModel loginModel
     property SecureAction secureAction
@@ -32,6 +33,7 @@ Dialog {
 
         Column {
             id: column
+
             width: parent.width
 
             DialogHeader {
@@ -41,6 +43,7 @@ Dialog {
 
             Label {
                 id: hostnameField
+
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 height: Theme.itemSizeSmall
@@ -51,6 +54,7 @@ Dialog {
 
             TextField {
                 id: usernameField
+
                 //% "Username"
                 label: qsTrId("sailfish_browser-me-login_edit_username")
                 inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
@@ -64,6 +68,7 @@ Dialog {
 
             PasswordField {
                 id: passwordField
+
                 EnterKey.onClicked: focus = false
                 showEchoModeToggle: secureAction.available
 
