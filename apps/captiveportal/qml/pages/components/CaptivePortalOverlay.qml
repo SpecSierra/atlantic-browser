@@ -67,9 +67,8 @@ Shared.Background {
         portrait: containerPage.isPortrait
         webView: overlay.webView
 
-        readonly property real _fullHeight: overlay.toolBar.height
-        // Referred from OverlayAnimator
-        readonly property real _infoHeight: 0
+        fullscreenGap: overlay.toolBar.height
+        infoHeight: 0
     }
 
     Shared.ProgressBar {
