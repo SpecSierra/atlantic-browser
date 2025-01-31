@@ -20,6 +20,7 @@ BackgroundItem {
     property bool checkable
     property int horizontalOffset
     property int iconWidth
+    property alias leftMargin: iconContainer.x
 
     width: parent.width
 

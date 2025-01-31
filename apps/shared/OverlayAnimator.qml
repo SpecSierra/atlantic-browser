@@ -40,6 +40,8 @@ Item {
     readonly property string _noOverlay: "noOverlay"
     property var _previousYs
     property int proportionalDuration: 400
+    property real fullscreenGap
+    property real infoHeight
 
     function showSecondaryTools() {
         updateState(_secondaryTools)
@@ -89,7 +91,7 @@ Item {
         // Update the animation time to suit the type of overlay
         if ((newState !== _noOverlay) && (newState !== _chromeVisible)) {
             if (newState === _certOverlay) {
-                proportionalDuration = 600 * (1.0 - (_infoHeight / webView.fullscreenHeight))
+                proportionalDuration = 600 * (1.0 - (infoHeight / webView.fullscreenHeight))
             } else {
                 proportionalDuration = 400
             }
@@ -217,7 +219,7 @@ Item {
             changes: [
                 PropertyChanges {
                     target: overlay
-                    y: _fullHeight
+                    y: fullscreenGap
                 }
             ]
         },
@@ -227,8 +229,7 @@ Item {
             changes: [
                 PropertyChanges {
                     target: overlay
-                    y: webView.privateMode ? _fullHeight : 0
-                    height: webView.fullscreenHeight
+                    y: fullscreenGap
                 },
                 PropertyChanges {
                     target: overlay.toolBar
@@ -254,7 +255,7 @@ Item {
             changes: [
                 PropertyChanges {
                     target: overlay
-                    y: _infoHeight
+                    y: infoHeight
                 }
             ]
         }

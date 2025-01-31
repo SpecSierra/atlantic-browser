@@ -15,6 +15,7 @@ import Sailfish.Browser 1.0
 ListItem {
     id: root
 
+    property alias horizontalMargin: row.x
     property string search
     property bool showDeleteButton
 
@@ -78,7 +79,7 @@ ListItem {
         id: row
 
         x: Theme.horizontalPageMargin
-        width: parent.width  - Theme.horizontalPageMargin * 2
+        width: parent.width - 2*x
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.paddingMedium
 

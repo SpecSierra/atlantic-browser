@@ -21,6 +21,7 @@ SilicaListView {
     property string search
     property bool showDeleteButton
     property bool menuClosed
+    property real horizontalMargin: Theme.horizontalPageMargin
 
     signal load(string url, string title, bool newTab)
     signal saveBookmark(string url, string title, string favicon)
@@ -38,6 +39,7 @@ SilicaListView {
     delegate: HistoryItem {
         id: historyDelegate
 
+        horizontalMargin: view.horizontalMargin
         search: view.search
         showDeleteButton: view.showDeleteButton
         onMenuOpenChanged: view.menuClosed = !menuOpen
