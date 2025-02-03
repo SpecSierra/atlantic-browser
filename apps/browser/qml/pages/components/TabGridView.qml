@@ -19,6 +19,7 @@ SilicaGridView {
     property bool closingAllTabs
 
     property var remorsePopup
+    property int horizontalMargin: Theme.horizontalPageMargin
     readonly property bool largeScreen: Screen.sizeCategory > Screen.Medium
     readonly property real thumbnailHeight: largeScreen
                                             ? Screen.width / 3
@@ -27,7 +28,7 @@ SilicaGridView {
                                         ? portrait ? 2 : 3
                                         : parent.width < 2 * parent.height
                                           ? parent.width <= height ? 1 : 2 : 3
-    readonly property real thumbnailWidth: (parent.width - Theme.horizontalPageMargin * 2
+    readonly property real thumbnailWidth: (parent.width - horizontalMargin * 2
                                             - (Theme.paddingLarge * (columns - 1))) / columns
 
     signal hide
@@ -60,9 +61,9 @@ SilicaGridView {
     onCountChanged: if (count > 0) closingAllTabs = false
     onClosingAllTabsChanged: if (closingAllTabs) closeAllPending()
 
-    width: parent.width - Theme.horizontalPageMargin
+    width: parent.width - x
     height: parent.height
-    x: Theme.horizontalPageMargin
+    x: tabGridView.horizontalMargin
     currentIndex: model.activeTabIndex
     cellWidth: thumbnailWidth + Theme.paddingLarge
     cellHeight: thumbnailHeight + Theme.paddingLarge

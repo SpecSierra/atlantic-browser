@@ -662,6 +662,7 @@ Shared.Background {
             id: tabPage
 
             onStatusChanged: browserPage.tabPageActive = (status == PageStatus.Active)
+            cutoutMode: CutoutMode.FullScreen
 
             Browser.TabView {
                 id: tabViewItem
@@ -672,6 +673,8 @@ Shared.Background {
 
                 scaledPortraitHeight: toolBar.scaledPortraitHeight
                 scaledLandscapeHeight: toolBar.scaledLandscapeHeight
+                horizontalMargin: Math.max(Theme.horizontalPageMargin,
+                                           tabPage.isLandscape ? (Screen.topCutout.height + Theme.paddingSmall) : 0)
 
                 onHide: pageStack.pop()
 
