@@ -67,7 +67,6 @@ Rectangle {
         }
 
         Shared.IconButton {
-            id: reloadButton
             width: Theme.itemSizeLarge
             icon.source: webView.loading ? "image://theme/icon-m-reset" : "image://theme/icon-m-refresh"
             icon.opacity: enabled ? 1.0 : Theme.opacityLow

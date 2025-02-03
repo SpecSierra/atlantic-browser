@@ -87,8 +87,8 @@ Page {
 
                 FavoriteIcon {
                     id: loginsIcon
-                    anchors.verticalCenter: parent.verticalCenter
 
+                    anchors.verticalCenter: parent.verticalCenter
                     icon: model.favicon
 
                     sourceSize.width: Theme.iconSizeMedium
@@ -99,6 +99,7 @@ Page {
 
                 Column {
                     id: column
+
                     anchors.verticalCenter: parent.verticalCenter
                     width: parent.width - parent.spacing - loginsIcon.width
                     Label {
@@ -120,6 +121,7 @@ Page {
             menu: Component {
                 ContextMenu {
                     id: contextMenu
+
                     MenuItem {
                         visible: !secureAction.available
                         //% "Copy username"
@@ -191,7 +193,9 @@ Page {
 
     Notice {
         id: notification
+
         property bool published
+
         duration: Notice.Short
         verticalOffset: -Theme.itemSizeMedium
     }
@@ -215,6 +219,7 @@ Page {
 
         Item {
             id: _copyOptions
+
             property Item menu
             property string username
             property string password

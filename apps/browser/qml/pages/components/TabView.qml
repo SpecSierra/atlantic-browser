@@ -23,6 +23,7 @@ SilicaControl {
     property var tabModel
     property alias scaledPortraitHeight: tabsToolBar.scaledPortraitHeight
     property alias scaledLandscapeHeight: tabsToolBar.scaledLandscapeHeight
+    property int horizontalMargin: Theme.horizontalPageMargin
 
     signal hide
     signal enterNewTabUrl
@@ -112,6 +113,7 @@ SilicaControl {
             TabGridView {
                 id: _tabView
 
+                horizontalMargin: tabView.horizontalMargin
                 portrait: tabView.portrait
                 model: TabFilterModel {
                     sourceModel: tabItem.privateMode ? webView.privateTabModel : webView.persistentTabModel
@@ -260,6 +262,7 @@ SilicaControl {
 
     ConfigurationValue {
         id: showCloseAllAction
+
         key: "/apps/sailfish-browser/settings/show_close_all"
         defaultValue: true
     }

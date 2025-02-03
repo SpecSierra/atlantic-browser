@@ -40,6 +40,8 @@ Item {
     readonly property string _noOverlay: "noOverlay"
     property var _previousYs
     property int proportionalDuration: 400
+    property real fullscreenGap
+    property real infoHeight
 
     function showSecondaryTools() {
         updateState(_secondaryTools)
@@ -70,7 +72,10 @@ Item {
     }
 
     function isOpenedState() {
-        return state !== _fullscreenOverlay && state !== _fullscreenWebPage && state !== _startPage && state !== _noOverlay
+        return state !== _fullscreenOverlay
+                && state !== _fullscreenWebPage
+                && state !== _startPage
+                && state !== _noOverlay
     }
 
     // Wrapper from updating the state. Handy for debugging.
@@ -86,7 +91,7 @@ Item {
         // Update the animation time to suit the type of overlay
         if ((newState !== _noOverlay) && (newState !== _chromeVisible)) {
             if (newState === _certOverlay) {
-                proportionalDuration = 600 * (1.0 - (_infoHeight / webView.fullscreenHeight))
+                proportionalDuration = 600 * (1.0 - (infoHeight / webView.fullscreenHeight))
             } else {
                 proportionalDuration = 400
             }
@@ -214,7 +219,7 @@ Item {
             changes: [
                 PropertyChanges {
                     target: overlay
-                    y: _fullHeight
+                    y: fullscreenGap
                 }
             ]
         },
@@ -224,8 +229,7 @@ Item {
             changes: [
                 PropertyChanges {
                     target: overlay
-                    y: webView.privateMode ? _fullHeight : 0
-                    height: webView.fullscreenHeight
+                    y: fullscreenGap
                 },
                 PropertyChanges {
                     target: overlay.toolBar
@@ -251,7 +255,7 @@ Item {
             changes: [
                 PropertyChanges {
                     target: overlay
-                    y: _infoHeight
+                    y: infoHeight
                 }
             ]
         }
@@ -259,12 +263,15 @@ Item {
 
     transitions: [
         Transition {
-            id: overlayTransition
-
             to: "fullscreenWebPage,chromeVisible,loadProgressOverlay,fullscreenOverlay,noOverlay,secondaryTools,certOverlay,startPage"
 
             SequentialAnimation {
-                NumberAnimation { target: webView; property: "height"; duration: transitionDuration; easing.type: Easing.InOutQuad }
+                NumberAnimation {
+                    target: webView
+                    property: "height"
+                    duration: transitionDuration
+                    easing.type: Easing.InOutQuad
+                }
                 ScriptAction {
                     script: {
                         if (animator.state === _chromeVisible
@@ -294,13 +301,28 @@ Item {
                     }
                 }
             }
-            NumberAnimation { target: overlay; property: "y"; duration: transitionDuration; easing.type: Easing.InOutQuad }
-            NumberAnimation { target: overlay.toolBar; property: "secondaryToolsHeight"; duration: transitionDuration; easing.type: Easing.InOutQuad }        
+            NumberAnimation {
+                target: overlay
+                property: "y"
+                duration: transitionDuration
+                easing.type: Easing.InOutQuad
+            }
+            NumberAnimation {
+                target: overlay.toolBar
+                property: "secondaryToolsHeight"
+                duration: transitionDuration
+                easing.type: Easing.InOutQuad
+            }
         }
         ,
         Transition {
             to: _draggingOverlay
-            NumberAnimation { target: overlay.toolBar; property: "secondaryToolsHeight"; duration: transitionDuration; easing.type: Easing.InOutQuad }
+            NumberAnimation {
+                target: overlay.toolBar
+                property: "secondaryToolsHeight"
+                duration: transitionDuration
+                easing.type: Easing.InOutQuad
+            }
         }
     ]
 }

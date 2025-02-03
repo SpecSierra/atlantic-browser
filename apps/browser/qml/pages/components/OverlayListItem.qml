@@ -20,6 +20,7 @@ BackgroundItem {
     property bool checkable
     property int horizontalOffset
     property int iconWidth
+    property alias leftMargin: iconContainer.x
 
     width: parent.width
 
@@ -60,6 +61,7 @@ BackgroundItem {
     }
     Switch {
         id: toggle
+
         anchors {
             right: parent.right
             verticalCenter: parent.verticalCenter

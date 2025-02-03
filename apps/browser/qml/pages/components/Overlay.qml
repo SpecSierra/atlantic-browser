@@ -37,10 +37,19 @@ Shared.Background {
     property var favoriteGrid: historyList.headerItem
     property string enteredUrl
 
-    property real _overlayHeight: browserPage.isPortrait ? toolBar.rowHeight : 0
+    property real _overlayGap: browserPage.isPortrait ? toolBar.rowHeight : 0
     property bool _showFindInPage
     property bool _showUrlEntry
     readonly property bool _topGap: _showUrlEntry || _showFindInPage
+    property int _biggestCorner: Math.max(Screen.topLeftCorner.radius,
+                                          Screen.topRightCorner.radius,
+                                          Screen.bottomLeftCorner.radius,
+                                          Screen.bottomRightCorner.radius)
+    property int horizontalMargin: Math.max(Theme.paddingLarge,
+                                            _biggestCorner * 0.7,
+                                            browserPage.isLandscape
+                                            ? (Screen.topCutout.height + Theme.paddingSmall)
+                                            : 0)
 
     function loadPage(url, newTab) {
         if (url == "about:config") {
@@ -72,7 +81,7 @@ Shared.Background {
     function enterNewTabUrl(action) {
         searchField.enteringNewTabUrl = true
         _showUrlEntry = true
-        _overlayHeight = Qt.binding(function () { return overlayAnimator._fullHeight })
+        _overlayGap = Qt.binding(function () { return overlayAnimator.fullscreenGap })
         searchField.resetUrl("")
         overlayAnimator.showOverlay(action === PageStackAction.Immediate)
     }
@@ -80,7 +89,7 @@ Shared.Background {
     function startPage(action) {
         searchField.enteringNewTabUrl = true
         _showUrlEntry = true
-        _overlayHeight = Qt.binding(function () { return overlayAnimator._fullHeight })
+        _overlayGap = Qt.binding(function () { return overlayAnimator.fullscreenGap })
         searchField.resetUrl("")
         overlayAnimator.showStartPage(action !== PageStackAction.Animated)
     }
@@ -119,12 +128,10 @@ Shared.Background {
         overlay: overlay
         portrait: browserPage.isPortrait
         webView: overlay.webView
-
-        readonly property real _fullHeight: isPortrait ? overlay.toolBar.rowHeight : 0
-        readonly property real _infoHeight: Math.max(webView.fullscreenHeight
-                                                     - overlay.toolBar.certOverlayPreferedHeight
-                                                     - overlay.toolBar.rowHeight,
-                                                     0)
+        fullscreenGap: isPortrait ? (overlay.toolBar.rowHeight + Screen.topCutout.height) : 0
+        infoHeight: Math.max(0,
+                             webView.fullscreenHeight
+                             - overlay.toolBar.certOverlayPreferedHeight - overlay.toolBar.rowHeight)
 
         onAtBottomChanged: {
             if (atBottom) {
@@ -185,7 +192,7 @@ Shared.Background {
         property int dragThreshold: state === "fullscreenOverlay"
                                     ? toolBar.rowHeight * 1.5
                                     : state === "certOverlay"
-                                      ? (overlayAnimator._infoHeight + toolBar.rowHeight * 0.5)
+                                      ? (overlayAnimator.infoHeight + toolBar.rowHeight * 0.5)
                                       : (webView.fullscreenHeight - toolBar.rowHeight * 2)
 
         width: parent.width
@@ -196,7 +203,7 @@ Shared.Background {
         drag.filterChildren: true
         drag.axis: Drag.YAxis
         // Favorite grid first row offset is negative. So, increase minimumY drag by that.
-        drag.minimumY: _overlayHeight
+        drag.minimumY: _overlayGap
         drag.maximumY: webView.fullscreenHeight - toolBar.rowHeight
 
         drag.onActiveChanged: {
@@ -240,9 +247,9 @@ Shared.Background {
                                                     && searchField.edited
                                                     && searchField.text !== webView.url
                                                     && searchField.text
-            readonly property bool showHistoryButton: !toolBar.findInPageActive && (!searchField.edited
-                                                                                    && searchField.text === webView.url
-                                                                                    || !searchField.text)
+            readonly property bool showHistoryButton: !toolBar.findInPageActive
+                                                      && (!searchField.edited && searchField.text === webView.url
+                                                          || !searchField.text)
 
             width: parent.width
             height: toolBar.rowHeight + historyList.height
@@ -345,8 +352,8 @@ Shared.Background {
                 // On top of HistoryList and FavoriteGrid
                 z: 1
                 height: toolBar.rowHeight
-                textLeftMargin: Theme.paddingLarge
-                textRightMargin: Theme.paddingLarge
+                textLeftMargin: overlay.horizontalMargin
+                textRightMargin: overlay.horizontalMargin
                 focusOutBehavior: FocusBehavior.ClearPageFocus
                 font {
                     pixelSize: Theme.fontSizeLarge
@@ -443,9 +450,8 @@ Shared.Background {
 
                 height: historyContainer.showHistoryButton ? toolBar.rowHeight : 0
                 iconWidth: toolBar.iconWidth
-                horizontalOffset: toolBar.horizontalOffset
-                // Follow grid / list position.
-                y: -((historyContainer.showHistoryButton ? -searchField.y : historyList.contentY) - height)
+                leftMargin: overlay.horizontalMargin
+                anchors.top: searchField.bottom
                 // On top of HistoryList and FavoriteGrid
                 z: 1
 
@@ -517,12 +523,12 @@ Shared.Background {
                                               - overlay.toolBar.secondaryToolsHeight, 0)
 
                 certOverlayAnimPos: Math.min(Math.max((webView.fullscreenHeight - overlay.y - overlay.toolBar.rowHeight)
-                                                      / (webView.fullscreenHeight - overlayAnimator._infoHeight
+                                                      / (webView.fullscreenHeight - overlayAnimator.infoHeight
                                                          - overlay.toolBar.rowHeight), 0.0), 1.0)
 
                 onShowOverlay: {
                     _showUrlEntry = true
-                    _overlayHeight = Qt.binding(function() { return overlayAnimator._fullHeight })
+                    _overlayGap = Qt.binding(function() { return overlayAnimator.fullscreenGap })
                     searchField.resetUrl(webView.url)
                     overlayAnimator.showOverlay()
                 }
@@ -535,7 +541,7 @@ Shared.Background {
                 onShowSecondaryTools: overlayAnimator.showSecondaryTools()
                 onShowInfoOverlay: {
                     toolBar.certOverlayActive = true
-                    _overlayHeight = Qt.binding(function() { return overlayAnimator._infoHeight })
+                    _overlayGap = Qt.binding(function() { return overlayAnimator.infoHeight })
                     overlayAnimator.showInfoOverlay(false)
                 }
                 onShowChrome: overlayAnimator.showChrome()
@@ -545,7 +551,7 @@ Shared.Background {
                 onFindInPage: {
                     _showFindInPage = true
                     searchField.resetUrl("")
-                    _overlayHeight = Qt.binding(function () { return overlayAnimator._fullHeight })
+                    _overlayGap = Qt.binding(function () { return overlayAnimator.fullscreenGap })
                     overlayAnimator.showOverlay()
                 }
                 onShareActivePage: webShareAction.shareLink(webView.url, webView.title)
@@ -583,16 +589,17 @@ Shared.Background {
                                         ? 0 : virtualKeyboardObserver.panelSize
 
                 width: parent.width
-                height: webView.tabModel.count !== 0 || webView.privateMode ? browserPage.height - _overlayHeight - panelSize
-                                                                            : browserPage.height - panelSize
+                height: browserPage.height - _overlayGap - panelSize
+                horizontalMargin: overlay.horizontalMargin
 
                 header: Browser.FavoriteGrid {
                     id: favoriteGrid
 
+                    // horizontalMargin omitted, favoriteGrid has it internally good enough
                     height: historyContainer.showHistoryList ? (count > 0
                                                                 ? cellHeight + headerItem.height + menuHeight
                                                                 : headerItem.height)
-                                                             : historyList.height
+                                                             : (historyList.height - historyList.footerItem.height)
                     opacity: visible && toolBar.opacity < 0.9 ? 1.0 : 0.0
                     enabled: overlayAnimator.atTop
                     visible: historyContainer.showFavorites
@@ -655,6 +662,7 @@ Shared.Background {
             id: tabPage
 
             onStatusChanged: browserPage.tabPageActive = (status == PageStatus.Active)
+            cutoutMode: CutoutMode.FullScreen
 
             Browser.TabView {
                 id: tabViewItem
@@ -665,6 +673,8 @@ Shared.Background {
 
                 scaledPortraitHeight: toolBar.scaledPortraitHeight
                 scaledLandscapeHeight: toolBar.scaledLandscapeHeight
+                horizontalMargin: Math.max(Theme.horizontalPageMargin,
+                                           tabPage.isLandscape ? (Screen.topCutout.height + Theme.paddingSmall) : 0)
 
                 onHide: pageStack.pop()
 

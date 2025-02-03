@@ -15,6 +15,7 @@ import Sailfish.Browser 1.0
 ListItem {
     id: root
 
+    property alias horizontalMargin: row.x
     property string search
     property bool showDeleteButton
 
@@ -60,7 +61,7 @@ ListItem {
                 //: Delete history entry
                 //% "Delete"
                 text: qsTrId("sailfish_browser-me-delete")
-                onClicked: historyDelegate.remove(model.url)
+                onClicked: root.remove(model.url)
             }
         }
     }
@@ -76,13 +77,15 @@ ListItem {
 
     Row {
         id: row
+
         x: Theme.horizontalPageMargin
-        width: parent.width  - Theme.horizontalPageMargin * 2
+        width: parent.width - 2*x
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.paddingMedium
 
         FavoriteIcon {
             id: websiteIcon
+
             icon: model.favicon
             sourceSize.width: Theme.iconSizeMedium
             sourceSize.height: Theme.iconSizeMedium
@@ -92,6 +95,7 @@ ListItem {
 
         Column {
             id: column
+
             width: parent.width - websiteIcon.width - (deleteButton.visible ? deleteButton.width : 0)
             Label {
                 text: Theme.highlightText(model.title, search, Theme.highlightColor)
@@ -114,6 +118,7 @@ ListItem {
 
         IconButton {
             id: deleteButton
+
             visible: showDeleteButton
             icon.source: "image://theme/icon-m-clear"
             onClicked: remove(model.url)

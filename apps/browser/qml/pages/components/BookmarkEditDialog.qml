@@ -15,6 +15,7 @@ import Sailfish.WebView.Popups 1.0
 
 UserPromptDialog {
     id: root
+
     property string url
     property string title
     property int index
@@ -48,6 +49,7 @@ UserPromptDialog {
 
         Column {
             id: contentColumn
+
             width: parent.width
             spacing: Theme.paddingMedium
 
@@ -81,8 +83,8 @@ UserPromptDialog {
 
             TextField {
                 id: urlField
-                text: url
 
+                text: url
                 onActiveFocusChanged: if (!activeFocus) errorHighlight = !acceptableInput
                 onAcceptableInputChanged: if (acceptableInput) errorHighlight = false
 
@@ -96,7 +98,8 @@ UserPromptDialog {
                         var scheme = root.url.match(/^(https?):\/\/.+/)
 
                         //% "URL scheme (%1) missing"
-                        return qsTrId("sailfish_browser-la-missing_url_scheme").arg(scheme && scheme.length > 1 ? scheme[1] : "https")
+                        return qsTrId("sailfish_browser-la-missing_url_scheme").arg(scheme && scheme.length > 1
+                                                                                    ? scheme[1] : "https")
                     } else {
                         //% "URL is required"
                         return qsTrId("sailfish_browser-la-url_editor_error")

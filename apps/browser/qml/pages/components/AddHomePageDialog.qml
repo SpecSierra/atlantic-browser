@@ -17,6 +17,7 @@ Dialog {
     id: dialog
 
     property ConfigurationValue homePageConfig
+
     canAccept: textField.text !== ""
     onAccepted: {
         homePageConfig.value = textField.text.trim() || "about:blank"
@@ -24,6 +25,7 @@ Dialog {
 
     DialogHeader {
         id: header
+
         //: Accept button text for adding a home page adress
         //% "OK"
         acceptText: qsTrId("sailfish_browser-he-ok")
@@ -31,6 +33,7 @@ Dialog {
 
     TextField {
         id: textField
+
         anchors.top: header.bottom
         text: homePageConfig.value === "about:blank" ? "" : homePageConfig.value
         //% "Shown when the browser is opened with no tabs to load."

@@ -33,6 +33,7 @@ GridItem {
 
     FavoriteIcon {
         id: favoriteIcon
+
         icon: favicon
         visible: hasTouchIcon
         anchors {
@@ -43,6 +44,7 @@ GridItem {
 
     Image {
         id: mask
+
         source: "icon_browser_favorites_mask00.png"
         anchors.fill: favoriteIcon
         visible: false
@@ -50,6 +52,7 @@ GridItem {
 
     ShaderEffect {
         id: shaderItem
+
         property variant source: favoriteIcon
         property variant maskSource: mask
 
