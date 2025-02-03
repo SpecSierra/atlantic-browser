@@ -37,8 +37,6 @@ SilicaListView {
     }
 
     delegate: HistoryItem {
-        id: historyDelegate
-
         horizontalMargin: view.horizontalMargin
         search: view.search
         showDeleteButton: view.showDeleteButton
