@@ -867,18 +867,10 @@ void DeclarativeWebContainer::touchEvent(QTouchEvent *event)
     }
 }
 
-QVariant DeclarativeWebContainer::inputMethodQuery(Qt::InputMethodQuery property) const
+void DeclarativeWebContainer::wheelEvent(QWheelEvent *event)
 {
     if (m_webPage && m_enabled) {
-        return m_webPage->inputMethodQuery(property);
-    }
-    return QVariant();
-}
-
-void DeclarativeWebContainer::inputMethodEvent(QInputMethodEvent *event)
-{
-    if (m_webPage && m_enabled) {
-        m_webPage->inputMethodEvent(event);
+        m_webPage->wheelEvent(event);
     }
 }
 
