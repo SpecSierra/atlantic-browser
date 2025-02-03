@@ -867,6 +867,13 @@ void DeclarativeWebContainer::touchEvent(QTouchEvent *event)
     }
 }
 
+void DeclarativeWebContainer::wheelEvent(QWheelEvent *event)
+{
+    if (m_webPage && m_enabled) {
+        m_webPage->wheelEvent(event);
+    }
+}
+
 void DeclarativeWebContainer::keyPressEvent(QKeyEvent *event)
 {
     if (m_webPage && m_enabled) {
