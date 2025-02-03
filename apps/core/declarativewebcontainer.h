@@ -220,6 +220,7 @@ protected:
     bool eventFilter(QObject *obj, QEvent *event);
     void exposeEvent(QExposeEvent *event) override;
     void touchEvent(QTouchEvent *event) override;
+    void wheelEvent(QWheelEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void keyReleaseEvent(QKeyEvent *event) override;
     void focusInEvent(QFocusEvent *event) override;
