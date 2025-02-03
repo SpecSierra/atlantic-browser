@@ -61,7 +61,7 @@ ListItem {
                 //: Delete history entry
                 //% "Delete"
                 text: qsTrId("sailfish_browser-me-delete")
-                onClicked: historyDelegate.remove(model.url)
+                onClicked: root.remove(model.url)
             }
         }
     }
