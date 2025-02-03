@@ -54,8 +54,6 @@ public:
     MOCK_METHOD0(stop, void());
     MOCK_METHOD0(bgcolor, QColor());
     MOCK_METHOD1(touchEvent, void(QTouchEvent *));
-    MOCK_CONST_METHOD1(inputMethodQuery, QVariant(Qt::InputMethodQuery));
-    MOCK_METHOD1(inputMethodEvent, void(QInputMethodEvent *));
     MOCK_METHOD1(keyPressEvent, void(QKeyEvent *));
     MOCK_METHOD1(keyReleaseEvent, void(QKeyEvent *));
     MOCK_METHOD1(focusInEvent, void(QFocusEvent *));

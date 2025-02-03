@@ -218,17 +218,15 @@ signals:
 
 protected:
     bool eventFilter(QObject *obj, QEvent *event);
-    virtual void exposeEvent(QExposeEvent *event);
-    virtual void touchEvent(QTouchEvent *event);
-    virtual QVariant inputMethodQuery(Qt::InputMethodQuery property) const;
-    virtual void inputMethodEvent(QInputMethodEvent *event);
-    virtual void keyPressEvent(QKeyEvent *event);
-    virtual void keyReleaseEvent(QKeyEvent *event);
-    virtual void focusInEvent(QFocusEvent *event);
-    virtual void focusOutEvent(QFocusEvent *event);
-    virtual void timerEvent(QTimerEvent *event);
-    virtual void classBegin();
-    virtual void componentComplete();
+    void exposeEvent(QExposeEvent *event) override;
+    void touchEvent(QTouchEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
+    void keyReleaseEvent(QKeyEvent *event) override;
+    void focusInEvent(QFocusEvent *event) override;
+    void focusOutEvent(QFocusEvent *event) override;
+    void timerEvent(QTimerEvent *event) override;
+    void classBegin() override;
+    void componentComplete() override;
 
 public slots:
     void updateContentOrientation(Qt::ScreenOrientation orientation);
