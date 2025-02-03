@@ -599,7 +599,7 @@ Shared.Background {
                     height: historyContainer.showHistoryList ? (count > 0
                                                                 ? cellHeight + headerItem.height + menuHeight
                                                                 : headerItem.height)
-                                                             : historyList.height
+                                                             : (historyList.height - historyList.footerItem.height)
                     opacity: visible && toolBar.opacity < 0.9 ? 1.0 : 0.0
                     enabled: overlayAnimator.atTop
                     visible: historyContainer.showFavorites
