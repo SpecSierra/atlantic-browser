@@ -53,7 +53,8 @@ public:
     void registerTypes(const char *uri)
     {
         Q_ASSERT(QLatin1String(uri) == QLatin1String("org.sailfishos.browser.settings"));
-        qmlRegisterUncreatableType<AppTranslator>(uri, 1, 0, "BrowserSettingsTranslations", "Browser settings translations loaded by import");
+        qmlRegisterUncreatableType<AppTranslator>(uri, 1, 0, "BrowserSettingsTranslations",
+                                                  "Browser settings translations loaded by import");
 
     }
 };

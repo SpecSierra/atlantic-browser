@@ -108,6 +108,10 @@ Shared.Background {
     }
 
     y: webView.fullscreenHeight - toolBar.rowHeight
+    width: parent.width
+    height: historyContainer.height + virtualKeyboardObserver.panelSize
+    // `visible` is controlled by Browser.OverlayAnimator
+    enabled: visible
 
     Private.VirtualKeyboardObserver {
         id: virtualKeyboardObserver
@@ -115,11 +119,6 @@ Shared.Background {
         active: overlay.active && !overlayAnimator.atBottom
         orientation: browserPage.orientation
     }
-
-    width: parent.width
-    height: historyContainer.height + virtualKeyboardObserver.panelSize
-    // `visible` is controlled by Browser.OverlayAnimator
-    enabled: visible
 
     // This is an invisible object responsible to hide/show Overlay in an animated way
     Shared.OverlayAnimator {

@@ -236,15 +236,17 @@ void WebPages::handleMemNotify(const QString &memoryLevel)
 
     if (m_memoryLevel == MemWarning || m_memoryLevel == MemCritical) {
 
-        if (!m_activePages.virtualizeInactive() && m_activePages.activeWebPage() && !m_activePages.activeWebPage()->completed()) {
+        if (!m_activePages.virtualizeInactive()
+                && m_activePages.activeWebPage()
+                && !m_activePages.activeWebPage()->completed()) {
             connect(m_activePages.activeWebPage(), &DeclarativeWebPage::completedChanged,
                     this, &WebPages::delayVirtualization, Qt::UniqueConnection);
         }
 
         SailfishOS::WebEngine *webEngine = SailfishOS::WebEngine::instance();
         webEngine->notifyObservers(QString("memory-pressure"), QString("low-memory"));
-        if (!m_webContainer->foreground() &&
-                (QDateTime::currentMSecsSinceEpoch() - m_backgroundTimestamp) > gMemoryPressureTimeout) {
+        if (!m_webContainer->foreground()
+                && (QDateTime::currentMSecsSinceEpoch() - m_backgroundTimestamp) > gMemoryPressureTimeout) {
             m_backgroundTimestamp = QDateTime::currentMSecsSinceEpoch();
             webEngine->notifyObservers(QString("memory-pressure"), QString("heap-minimize"));
         }

@@ -41,9 +41,6 @@ Page {
     property alias webView: webView
     property alias inputRegion: inputRegion
 
-    // for time being make this fullscreen. TODO: avoid drawing over cutout and corner areas.
-    cutoutMode: CutoutMode.FullScreen
-
     function load(url, title) {
         webView.load(url, title)
     }
@@ -95,8 +92,9 @@ Page {
         return mask
     }
 
+    // for time being make this fullscreen. TODO: avoid drawing over cutout and corner areas.
+    cutoutMode: CutoutMode.FullScreen
     background: null
-
     onStatusChanged: {
         if (overlay.enteringNewTabUrl || webView.tabModel.count === 0) {
             return
