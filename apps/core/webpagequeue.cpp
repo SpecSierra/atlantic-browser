@@ -112,7 +112,6 @@ void WebPageQueue::release(int tabId, bool virtualize)
 #endif
 }
 
-
 void WebPageQueue::prepend(int tabId, DeclarativeWebPage *webPage)
 {
     int index = -1;

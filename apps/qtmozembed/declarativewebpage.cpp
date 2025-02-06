@@ -16,9 +16,10 @@
 
 #include <webenginesettings.h>
 #include <qmozwindow.h>
+#include <qmozsecurity.h>
+
 #include <QGuiApplication>
 #include <QtConcurrent>
-#include <qmozsecurity.h>
 
 #define FULLSCREEN_MESSAGE "embed:fullscreenchanged"
 #define DOM_CONTENT_LOADED_MESSAGE "chrome:contentloaded"
@@ -61,7 +62,6 @@ DeclarativeWebPage::DeclarativeWebPage(QObject *parent)
     , m_fullScreenHeight(0.f)
     , m_toolbarHeight(0.f)
 {
-
     // subscribe to gecko messages
     std::vector<std::string> messages = { FULLSCREEN_MESSAGE,
                                           DOM_CONTENT_LOADED_MESSAGE,
@@ -418,7 +418,8 @@ QDebug operator<<(QDebug dbg, const DeclarativeWebPage *page)
     }
 
     QSize size = page->mozWindow()->size();
-    dbg.nospace() << "DeclarativeWebPage(tabId = " << page->tabId() << " url = " << page->url() << ", title = " << page->title() << ", width = " << size.width()
+    dbg.nospace() << "DeclarativeWebPage(tabId = " << page->tabId() << " url = " << page->url()
+                  << ", title = " << page->title() << ", width = " << size.width()
                   << ", height = " << size.height() << ", completed = " << page->completed()
                   << ", active = " << page->active() << ", enabled = " << page->enabled() << ")";
     return dbg.space();
