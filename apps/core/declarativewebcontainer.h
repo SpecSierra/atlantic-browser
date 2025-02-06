@@ -50,14 +50,6 @@ class DeclarativeWebContainer : public QWindow, public QQmlParserStatus, protect
     // This property should cover all possible popups
     Q_PROPERTY(bool touchBlocked MEMBER m_touchBlocked NOTIFY touchBlockedChanged FINAL)
     Q_PROPERTY(bool selectionActive MEMBER m_selectionActive NOTIFY selectionActiveChanged FINAL)
-    Q_PROPERTY(bool portrait READ portrait WRITE setPortrait NOTIFY portraitChanged FINAL)
-    Q_PROPERTY(bool fullscreenMode MEMBER m_fullScreenMode NOTIFY fullscreenModeChanged FINAL)
-    Q_PROPERTY(qreal fullscreenHeight MEMBER m_fullScreenHeight NOTIFY fullscreenHeightChanged FINAL)
-    Q_PROPERTY(bool imOpened MEMBER m_imOpened NOTIFY imOpenedChanged FINAL)
-    Q_PROPERTY(qreal toolbarHeight MEMBER m_toolbarHeight NOTIFY toolbarHeightChanged FINAL)
-    Q_PROPERTY(bool allowHiding MEMBER m_allowHiding NOTIFY allowHidingChanged FINAL)
-
-    Q_PROPERTY(QString favicon MEMBER m_favicon NOTIFY faviconChanged)
 
     Q_PROPERTY(bool loading READ loading NOTIFY loadingChanged FINAL)
     Q_PROPERTY(int loadProgress READ loadProgress NOTIFY loadProgressChanged FINAL)
@@ -105,9 +97,6 @@ public:
     int maxLiveTabCount() const;
     void setMaxLiveTabCount(int count);
 
-    bool portrait() const;
-    void setPortrait(bool portrait);
-
     QQmlComponent* webPageComponent() const;
     void setWebPageComponent(QQmlComponent* qmlComponent);
 
@@ -120,8 +109,6 @@ public:
 
     int loadProgress() const;
     void setLoadProgress(int loadProgress);
-
-    bool imOpened() const;
 
     bool canGoForward() const;
     bool canGoBack() const;
@@ -178,17 +165,10 @@ signals:
     void completedChanged();
     void enabledChanged();
     void foregroundChanged();
-    void allowHidingChanged();
     void maxLiveTabCountChanged();
     void touchBlockedChanged();
     void selectionActiveChanged();
-    void portraitChanged();
-    void fullscreenModeChanged();
-    void fullscreenHeightChanged();
-    void imOpenedChanged();
-    void toolbarHeightChanged();
 
-    void faviconChanged();
     void loadingChanged();
     void loadProgressChanged();
 
@@ -291,16 +271,8 @@ private:
 
     bool m_enabled;
     bool m_foreground;
-    bool m_allowHiding;
     bool m_touchBlocked;
     bool m_selectionActive;
-    bool m_portrait;
-    bool m_fullScreenMode;
-    qreal m_fullScreenHeight;
-    bool m_imOpened;
-    qreal m_toolbarHeight;
-
-    QString m_favicon;
 
     // See DeclarativeWebContainer::load (line 283) as load need to "work" even if engine, model,
     // or qml component is not yet completed (completed property is still false). So cache url/title for later use.
