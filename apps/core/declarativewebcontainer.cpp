@@ -65,7 +65,6 @@ DeclarativeWebContainer::DeclarativeWebContainer(QWindow *parent)
     , m_fullScreenHeight(0.0)
     , m_imOpened(false)
     , m_toolbarHeight(0.0)
-    , m_loading(false)
     , m_loadProgress(0)
     , m_completed(false)
     , m_initialized(false)
@@ -479,7 +478,7 @@ void DeclarativeWebContainer::load(const QString &url, bool force, bool fromExte
         m_initialUrl = tmpUrl;
         m_fromExternal = fromExternal;
     } else if (m_webPage && m_webPage->completed()) {
-        if (m_loading) {
+        if (loading()) {
             m_webPage->stop();
         }
         m_webPage->loadTab(tmpUrl, force, fromExternal);

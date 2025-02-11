@@ -311,7 +311,6 @@ private:
     QString m_initialUrl;
     bool m_fromExternal;
 
-    bool m_loading;
     int m_loadProgress;
 
     bool m_completed;
