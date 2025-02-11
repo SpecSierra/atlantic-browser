@@ -63,6 +63,10 @@ Item {
         updateState(_certOverlay, immediate || false)
     }
 
+    function showFullscreen() {
+        updateState(_fullscreenWebPage)
+    }
+
     function drag() {
         updateState(_draggingOverlay)
     }
