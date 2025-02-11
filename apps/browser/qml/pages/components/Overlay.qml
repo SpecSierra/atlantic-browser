@@ -98,7 +98,7 @@ Shared.Background {
         toolBar.resetFind()
         if (webView.contentItem && webView.contentItem.fullscreen) {
             // Web content is in fullscreen mode thus we don't show chrome
-            overlay.animator.updateState("fullscreenWebPage")
+            overlay.animator.showFullscreen()
         } else if (canShowChrome) {
             overlay.animator.showChrome(immediate)
         } else {
