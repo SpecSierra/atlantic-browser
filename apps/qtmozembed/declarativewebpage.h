@@ -31,7 +31,7 @@ class DeclarativeWebPage : public QMozOpenGLWebPage
     Q_PROPERTY(bool fullscreen READ fullscreen NOTIFY fullscreenChanged FINAL)
     Q_PROPERTY(bool forcedChrome READ forcedChrome NOTIFY forcedChromeChanged FINAL)
     Q_PROPERTY(QVariant resurrectedContentRect READ resurrectedContentRect WRITE setResurrectedContentRect NOTIFY resurrectedContentRectChanged)
-
+    Q_PROPERTY(int virtualKeyboardHeight READ virtualKeyboardHeight WRITE setVirtualKeyboardHeight NOTIFY virtualKeyboardHeightChanged FINAL)
     Q_PROPERTY(qreal toolbarHeight READ toolbarHeight WRITE setToolbarHeight NOTIFY toolbarHeightChanged FINAL)
 
 public:
@@ -46,6 +46,9 @@ public:
 
     QVariant resurrectedContentRect() const;
     void setResurrectedContentRect(QVariant resurrectedContentRect);
+
+    int virtualKeyboardHeight() const;
+    void setVirtualKeyboardHeight(int height);
 
     qreal toolbarHeight() const;
     void setToolbarHeight(qreal);
@@ -68,6 +71,7 @@ signals:
     void grabResult(const QString &fileName);
     void thumbnailResult(const QString &data);
 
+    void virtualKeyboardHeightChanged();
     void toolbarHeightChanged();
     void securityChanged();
     void neterror();
@@ -102,6 +106,7 @@ private:
     QList<Link> m_restoredTabHistory;
     int m_restoredCurrentLinkId;
 
+    int m_virtualKeyboardHeight = 0;
     qreal m_toolbarHeight;
 
     QMozSecurity m_security;
