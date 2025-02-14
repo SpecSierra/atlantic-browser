@@ -53,13 +53,11 @@ static bool allBlack(const QImage &image)
 DeclarativeWebPage::DeclarativeWebPage(QObject *parent)
     : QMozOpenGLWebPage(parent)
     , m_container(0)
-    , m_userHasDraggedWhileLoading(false)
     , m_fullscreen(false)
     , m_forcedChrome(false)
     , m_tabHistoryReady(false)
     , m_urlReady(false)
     , m_restoredCurrentLinkId(-1)
-    , m_fullScreenHeight(0.f)
     , m_toolbarHeight(0.f)
 {
     // subscribe to gecko messages
