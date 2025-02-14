@@ -136,6 +136,8 @@ WebContainer {
             readonly property bool textSelectionActive: textSelectionController && textSelectionController.active
             property Item textSelectionController: null
             readonly property bool activeWebPage: container.tabId == tabId
+            property bool userHasDraggedWhileLoading
+            property string favicon
 
             property QtObject pickerOpener: Pickers.PickerOpener {
                 pageStack: window.pageStack
@@ -191,7 +193,6 @@ WebContainer {
                 }
             }
 
-            fullscreenHeight: container.fullscreenHeight
             toolbarHeight: container.toolbarHeight
             throttlePainting: !foreground && !resourceController.videoActive && webView.visible || !webView.visible
             enabled: webView.enabled
