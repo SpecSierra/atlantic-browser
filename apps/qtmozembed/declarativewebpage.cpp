@@ -80,7 +80,6 @@ DeclarativeWebPage::DeclarativeWebPage(QObject *parent)
             this, &DeclarativeWebPage::onRecvAsyncMessage);
     connect(&m_grabWritter, &QFutureWatcher<QString>::finished, this, &DeclarativeWebPage::grabWritten);
     connect(this, &DeclarativeWebPage::urlChanged, this, &DeclarativeWebPage::onUrlChanged);
-    connect(this, &QMozOpenGLWebPage::virtualKeyboardHeightChanged, this, &DeclarativeWebPage::updateViewMargins);
     connect(this, &QMozOpenGLWebPage::domContentLoadedChanged, [this]() {
         if (domContentLoaded()) {
             qCDebug(lcCoreLog) << "WebPage: loaded";
@@ -228,6 +227,20 @@ void DeclarativeWebPage::setResurrectedContentRect(QVariant resurrectedContentRe
 qreal DeclarativeWebPage::toolbarHeight() const
 {
     return m_toolbarHeight;
+}
+
+int DeclarativeWebPage::virtualKeyboardHeight() const
+{
+    return m_virtualKeyboardHeight;
+}
+
+void DeclarativeWebPage::setVirtualKeyboardHeight(int height)
+{
+    if (m_virtualKeyboardHeight != height) {
+        m_virtualKeyboardHeight = height;
+        updateViewMargins();
+        emit virtualKeyboardHeightChanged();
+    }
 }
 
 void DeclarativeWebPage::setToolbarHeight(qreal toolbarHeight)
