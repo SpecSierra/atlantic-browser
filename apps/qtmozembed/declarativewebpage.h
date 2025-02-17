@@ -73,7 +73,6 @@ signals:
 
     void virtualKeyboardHeightChanged();
     void toolbarHeightChanged();
-    void securityChanged();
     void neterror();
 
     void updateUrl();
