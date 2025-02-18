@@ -108,8 +108,8 @@ void tst_webview::initTestCase()
 {
     init(QUrl("qrc:///tst_webview.qml"));
     webContainer = TestObject::qmlObject<DeclarativeWebContainer>("webView");
-    QQmlEngine::setObjectOwnership(webContainer, QQmlEngine::CppOwnership);
     QVERIFY(webContainer);
+    QQmlEngine::setObjectOwnership(webContainer, QQmlEngine::CppOwnership);
     QSignalSpy completedChanged(webContainer, SIGNAL(completedChanged()));
     QSignalSpy loadingChanged(webContainer, SIGNAL(loadingChanged()));
     QSignalSpy urlChanged(webContainer, SIGNAL(urlChanged()));
@@ -117,8 +117,8 @@ void tst_webview::initTestCase()
     QSignalSpy testSetupReadyChanged(rootObject(), SIGNAL(testSetupReadyChanged()));
 
     tabModel = TestObject::qmlObject<DeclarativeTabModel>("tabModel");
-    tabModel->m_unittestMode = true;
     QVERIFY(tabModel);
+    tabModel->m_unittestMode = true;
     tabModel->clear();
     QSignalSpy tabAddedSpy(tabModel, SIGNAL(tabAdded(int)));
 
