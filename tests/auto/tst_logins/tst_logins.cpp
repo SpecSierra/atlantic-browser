@@ -69,10 +69,8 @@ void tst_logins::initTestCase()
 void tst_logins::init()
 {
     removeAllLogins();
-    if (loginModel) {
-        delete loginModel;
-        loginModel = nullptr;
-    }
+    delete loginModel;
+    loginModel = nullptr;
 }
 
 void tst_logins::cleanupTestCase()

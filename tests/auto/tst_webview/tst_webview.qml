@@ -47,9 +47,7 @@ ApplicationWindow {
         WebView {
             id: webView
 
-            portrait: true
             toolbarHeight: 0
-            fullscreenHeight: Screen.height
             width: window.width
             height: window.height
             privateMode: false

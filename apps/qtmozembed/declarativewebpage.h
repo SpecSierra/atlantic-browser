@@ -28,13 +28,10 @@ class DeclarativeWebPage : public QMozOpenGLWebPage
     Q_OBJECT
     Q_PROPERTY(DeclarativeWebContainer* container READ container NOTIFY containerChanged FINAL)
     Q_PROPERTY(int tabId READ tabId NOTIFY tabIdChanged FINAL)
-    Q_PROPERTY(bool userHasDraggedWhileLoading MEMBER m_userHasDraggedWhileLoading NOTIFY userHasDraggedWhileLoadingChanged FINAL)
     Q_PROPERTY(bool fullscreen READ fullscreen NOTIFY fullscreenChanged FINAL)
     Q_PROPERTY(bool forcedChrome READ forcedChrome NOTIFY forcedChromeChanged FINAL)
-    Q_PROPERTY(QString favicon MEMBER m_favicon NOTIFY faviconChanged FINAL)
     Q_PROPERTY(QVariant resurrectedContentRect READ resurrectedContentRect WRITE setResurrectedContentRect NOTIFY resurrectedContentRectChanged)
-
-    Q_PROPERTY(qreal fullscreenHeight MEMBER m_fullScreenHeight NOTIFY fullscreenHeightChanged FINAL)
+    Q_PROPERTY(int virtualKeyboardHeight READ virtualKeyboardHeight WRITE setVirtualKeyboardHeight NOTIFY virtualKeyboardHeightChanged FINAL)
     Q_PROPERTY(qreal toolbarHeight READ toolbarHeight WRITE setToolbarHeight NOTIFY toolbarHeightChanged FINAL)
 
 public:
@@ -49,6 +46,9 @@ public:
 
     QVariant resurrectedContentRect() const;
     void setResurrectedContentRect(QVariant resurrectedContentRect);
+
+    int virtualKeyboardHeight() const;
+    void setVirtualKeyboardHeight(int height);
 
     qreal toolbarHeight() const;
     void setToolbarHeight(qreal);
@@ -65,17 +65,14 @@ signals:
     void contentOrientationChanged(Qt::ScreenOrientation orientation);
     void containerChanged();
     void tabIdChanged();
-    void userHasDraggedWhileLoadingChanged();
     void fullscreenChanged();
     void forcedChromeChanged();
-    void faviconChanged();
     void resurrectedContentRectChanged();
     void grabResult(const QString &fileName);
     void thumbnailResult(const QString &data);
 
-    void fullscreenHeightChanged();
+    void virtualKeyboardHeightChanged();
     void toolbarHeightChanged();
-    void securityChanged();
     void neterror();
 
     void updateUrl();
@@ -97,12 +94,10 @@ private:
     QPointer<DeclarativeWebContainer> m_container;
     // Tab data fetched upon web page initialization. It never changes afterwards.
     Tab m_initialTab;
-    bool m_userHasDraggedWhileLoading;
     bool m_fullscreen;
     bool m_forcedChrome;
     bool m_tabHistoryReady;
     bool m_urlReady;
-    QString m_favicon;
     QVariant m_resurrectedContentRect;
     QSharedPointer<QMozGrabResult> m_grabResult;
     QSharedPointer<QMozGrabResult> m_thumbnailResult;
@@ -110,7 +105,7 @@ private:
     QList<Link> m_restoredTabHistory;
     int m_restoredCurrentLinkId;
 
-    qreal m_fullScreenHeight;
+    int m_virtualKeyboardHeight = 0;
     qreal m_toolbarHeight;
 
     QMozSecurity m_security;

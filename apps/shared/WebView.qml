@@ -24,6 +24,12 @@ WebContainer {
     id: webView
 
     readonly property bool moving: contentItem && contentItem.moving
+    property bool portrait: true
+    property bool fullscreenMode: contentItem && (!contentItem.chrome || contentItem.fullscreen)
+    property real fullscreenHeight
+    property bool imOpened
+    property real toolbarHeight
+    property string favicon: contentItem ? contentItem.favicon : ""
     property bool findInPageHasResult
     property bool canShowSelectionMarkers: true
 
@@ -107,13 +113,10 @@ WebContainer {
                                                  : webView.visible && webView.contentItem
                                                    && (webView.contentItem.domContentLoaded
                                                        || webView.contentItem.painted)
-    allowHiding: !resourceController.videoActive && !resourceController.audioActive
-    fullscreenMode: contentItem && (!contentItem.chrome || contentItem.fullscreen)
 
     selectionActive: webView.contentItem && webView.contentItem.textSelectionActive
     touchBlocked: contentItem && contentItem.popupOpener && contentItem.popupOpener.active
                   || !AccessPolicy.browserEnabled || false
-    favicon: contentItem ? contentItem.favicon : ""
 
     onSelectionActiveChanged: {
         if (!selectionActive && webView.contentItem && webView.contentItem.textSelectionController) {
@@ -133,6 +136,8 @@ WebContainer {
             readonly property bool textSelectionActive: textSelectionController && textSelectionController.active
             property Item textSelectionController: null
             readonly property bool activeWebPage: container.tabId == tabId
+            property bool userHasDraggedWhileLoading
+            property string favicon
 
             property QtObject pickerOpener: Pickers.PickerOpener {
                 pageStack: window.pageStack
@@ -188,7 +193,6 @@ WebContainer {
                 }
             }
 
-            fullscreenHeight: container.fullscreenHeight
             toolbarHeight: container.toolbarHeight
             throttlePainting: !foreground && !resourceController.videoActive && webView.visible || !webView.visible
             enabled: webView.enabled

@@ -63,6 +63,10 @@ Item {
         updateState(_certOverlay, immediate || false)
     }
 
+    function showFullscreen() {
+        updateState(_fullscreenWebPage)
+    }
+
     function drag() {
         updateState(_draggingOverlay)
     }
@@ -133,10 +137,11 @@ Item {
                 _previousYs = []
 
             if (_previousYs.length > 0) {
-                var lastPos = _previousYs[_previousYs.length-1]
+                var lastPos = _previousYs[_previousYs.length - 1]
                 // Filter out movement a bit, padding medium as a hysteresis
                 var hasMoved = Math.abs(lastPos - overlay.y) > Theme.paddingMedium
-                if (hasMoved) _previousYs.push(overlay.y)
+                if (hasMoved)
+                    _previousYs.push(overlay.y)
             } else {
                 _previousYs.push(overlay.y)
             }
@@ -147,7 +152,7 @@ Item {
             var tmpDirection = ""
             var directionChanged = false
             for (var i = 1; i < _previousYs.length && _previousYs.length > 2; ++i) {
-                var dir = _previousYs[i-1] > _previousYs[i] ? "upwards" : "downwards"
+                var dir = _previousYs[i - 1] > _previousYs[i] ? "upwards" : "downwards"
                 if (tmpDirection !== "" && dir !== tmpDirection) {
                     directionChanged = true
                     break

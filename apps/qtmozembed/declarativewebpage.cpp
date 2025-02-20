@@ -16,9 +16,10 @@
 
 #include <webenginesettings.h>
 #include <qmozwindow.h>
+#include <qmozsecurity.h>
+
 #include <QGuiApplication>
 #include <QtConcurrent>
-#include <qmozsecurity.h>
 
 #define FULLSCREEN_MESSAGE "embed:fullscreenchanged"
 #define DOM_CONTENT_LOADED_MESSAGE "chrome:contentloaded"
@@ -52,16 +53,13 @@ static bool allBlack(const QImage &image)
 DeclarativeWebPage::DeclarativeWebPage(QObject *parent)
     : QMozOpenGLWebPage(parent)
     , m_container(0)
-    , m_userHasDraggedWhileLoading(false)
     , m_fullscreen(false)
     , m_forcedChrome(false)
     , m_tabHistoryReady(false)
     , m_urlReady(false)
     , m_restoredCurrentLinkId(-1)
-    , m_fullScreenHeight(0.f)
     , m_toolbarHeight(0.f)
 {
-
     // subscribe to gecko messages
     std::vector<std::string> messages = { FULLSCREEN_MESSAGE,
                                           DOM_CONTENT_LOADED_MESSAGE,
@@ -82,7 +80,6 @@ DeclarativeWebPage::DeclarativeWebPage(QObject *parent)
             this, &DeclarativeWebPage::onRecvAsyncMessage);
     connect(&m_grabWritter, &QFutureWatcher<QString>::finished, this, &DeclarativeWebPage::grabWritten);
     connect(this, &DeclarativeWebPage::urlChanged, this, &DeclarativeWebPage::onUrlChanged);
-    connect(this, &QMozOpenGLWebPage::virtualKeyboardHeightChanged, this, &DeclarativeWebPage::updateViewMargins);
     connect(this, &QMozOpenGLWebPage::domContentLoadedChanged, [this]() {
         if (domContentLoaded()) {
             qCDebug(lcCoreLog) << "WebPage: loaded";
@@ -230,6 +227,20 @@ void DeclarativeWebPage::setResurrectedContentRect(QVariant resurrectedContentRe
 qreal DeclarativeWebPage::toolbarHeight() const
 {
     return m_toolbarHeight;
+}
+
+int DeclarativeWebPage::virtualKeyboardHeight() const
+{
+    return m_virtualKeyboardHeight;
+}
+
+void DeclarativeWebPage::setVirtualKeyboardHeight(int height)
+{
+    if (m_virtualKeyboardHeight != height) {
+        m_virtualKeyboardHeight = height;
+        updateViewMargins();
+        emit virtualKeyboardHeightChanged();
+    }
 }
 
 void DeclarativeWebPage::setToolbarHeight(qreal toolbarHeight)
@@ -418,7 +429,8 @@ QDebug operator<<(QDebug dbg, const DeclarativeWebPage *page)
     }
 
     QSize size = page->mozWindow()->size();
-    dbg.nospace() << "DeclarativeWebPage(tabId = " << page->tabId() << " url = " << page->url() << ", title = " << page->title() << ", width = " << size.width()
+    dbg.nospace() << "DeclarativeWebPage(tabId = " << page->tabId() << " url = " << page->url()
+                  << ", title = " << page->title() << ", width = " << size.width()
                   << ", height = " << size.height() << ", completed = " << page->completed()
                   << ", active = " << page->active() << ", enabled = " << page->enabled() << ")";
     return dbg.space();
