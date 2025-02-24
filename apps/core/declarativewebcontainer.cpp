@@ -1154,19 +1154,6 @@ void DeclarativeWebContainer::updateWindowFlags()
     }
 }
 
-void DeclarativeWebContainer::updatePageFocus(bool focus)
-{
-    if (m_webPage) {
-        if (focus) {
-            QFocusEvent focusEvent(QEvent::FocusIn);
-            m_webPage->focusInEvent(&focusEvent);
-        } else {
-            QFocusEvent focusEvent(QEvent::FocusOut);
-            m_webPage->focusOutEvent(&focusEvent);
-        }
-    }
-}
-
 bool DeclarativeWebContainer::canInitialize() const
 {
     return SailfishOS::WebEngine::instance()->isInitialized() && m_model && m_model->loaded();

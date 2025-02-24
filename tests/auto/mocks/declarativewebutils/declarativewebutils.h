@@ -26,7 +26,6 @@ class DeclarativeWebUtils : public QObject
 public:
     explicit DeclarativeWebUtils(QObject *parent = 0);
 
-    Q_INVOKABLE int getLightness(const QColor &color) const;
     Q_INVOKABLE QString displayableUrl(const QString &fullUrl) const;
 
     static DeclarativeWebUtils *instance();
