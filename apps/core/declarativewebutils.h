@@ -22,7 +22,6 @@ class MGConfItem;
 class DeclarativeWebUtils : public QObject
 {
     Q_OBJECT
-
     Q_PROPERTY(QString homePage READ homePage NOTIFY homePageChanged FINAL)
     Q_PROPERTY(bool firstUseDone READ firstUseDone WRITE setFirstUseDone NOTIFY firstUseDoneChanged)
     Q_PROPERTY(qreal cssPixelRatio READ cssPixelRatio NOTIFY cssPixelRatioChanged)
@@ -34,7 +33,6 @@ public:
     void setFirstUseDone(bool firstUseDone);
     qreal cssPixelRatio() const;
 
-    Q_INVOKABLE int getLightness(const QColor &color) const;
     Q_INVOKABLE QString displayableUrl(const QString &fullUrl) const;
     Q_INVOKABLE QString pageName(const QString &fullUrl) const;
 

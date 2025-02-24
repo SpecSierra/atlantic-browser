@@ -68,11 +68,6 @@ DeclarativeWebUtils::~DeclarativeWebUtils()
     gSingleton = 0;
 }
 
-int DeclarativeWebUtils::getLightness(const QColor &color) const
-{
-    return color.lightness();
-}
-
 void DeclarativeWebUtils::handleDumpMemoryInfoRequest(const QString &fileName)
 {
     if (qApp->arguments().contains("-debugMode")) {

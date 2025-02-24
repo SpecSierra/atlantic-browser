@@ -24,11 +24,6 @@ DeclarativeWebUtils::DeclarativeWebUtils(QObject *parent)
             this, &DeclarativeWebUtils::updateWebEngineSettings);
 }
 
-int DeclarativeWebUtils::getLightness(const QColor &color) const
-{
-    return color.lightness();
-}
-
 QString DeclarativeWebUtils::displayableUrl(const QString &fullUrl) const
 {
     return fullUrl;
