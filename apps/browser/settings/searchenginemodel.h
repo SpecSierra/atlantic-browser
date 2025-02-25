@@ -20,9 +20,7 @@ class SearchEngineModel : public QAbstractListModel, public QQmlParserStatus
 {
     Q_OBJECT
     Q_INTERFACES(QQmlParserStatus)
-
     Q_ENUMS(Status)
-
     Q_PROPERTY(int count READ rowCount NOTIFY countChanged)
 
 public:

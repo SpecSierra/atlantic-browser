@@ -23,9 +23,9 @@ class DeclarativeLoginModel : public QAbstractListModel, public QQmlParserStatus
 {
     Q_OBJECT
     Q_INTERFACES(QQmlParserStatus)
-
     Q_PROPERTY(int count READ rowCount NOTIFY countChanged)
     Q_PROPERTY(bool populated READ populated NOTIFY populatedChanged)
+
 public:
     enum Roles {
         UidRole = Qt::UserRole,
