@@ -15,6 +15,7 @@
 #include <QMap>
 
 class DeclarativeWebPage;
+
 class FaviconManager : public QObject
 {
     Q_OBJECT
