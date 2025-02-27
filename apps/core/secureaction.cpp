@@ -199,7 +199,8 @@ void SecureAction::perform(const QJSValue &resolve)
             m_registered = systemBus.registerObject(m_replyPath, this);
 
             if (!m_registered) {
-                qmlInfo(this) << "DBus adaptor registration error " << systemBus.lastError().name() << " " << systemBus.lastError().message();
+                qmlInfo(this) << "DBus adaptor registration error " << systemBus.lastError().name()
+                              << " " << systemBus.lastError().message();
                 return;
             }
         }

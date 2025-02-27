@@ -17,6 +17,7 @@ class LoginFilterModel : public QSortFilterProxyModel
 {
     Q_OBJECT
     Q_PROPERTY(QString search READ search WRITE setSearch NOTIFY searchChanged)
+
 public:
     LoginFilterModel(QObject *parent = nullptr);
 

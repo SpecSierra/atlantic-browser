@@ -24,10 +24,9 @@ class TransferEngineInterface;
 class DownloadManager : public QObject
 {
     Q_OBJECT
-
     Q_PROPERTY(bool pdfPrinting READ pdfPrinting NOTIFY pdfPrintingChanged FINAL)
-
     Q_ENUMS(DownloadStatus::Status)
+
 public:
     static DownloadManager *instance();
 

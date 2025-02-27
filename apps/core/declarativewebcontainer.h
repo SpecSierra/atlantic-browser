@@ -12,18 +12,16 @@
 
 #include <qmozcontext.h>
 #include <qmozsecurity.h>
+
 #include <QtGui/QWindow>
 #include <QtGui/QOpenGLFunctions>
 #include <QPointer>
-#include <QFutureWatcher>
 #include <QQmlComponent>
 #include <QQuickView>
 #include <QQuickItem>
 #include <QMutex>
-#include <QWaitCondition>
 #include <QTimer>
 
-class QInputMethodEvent;
 class QMozWindow;
 class QTimerEvent;
 class DeclarativeTabModel;
@@ -136,6 +134,7 @@ public:
     uint tabOwner(int tabId) const;
     int requestTabWithOwner(int tabId, const QString &url, uint ownerPid);
     void requestTabWithOwnerAsync(int tabId, const QString &url, uint ownerPid, void *context);
+
     Q_INVOKABLE void releaseActiveTabOwnership();
 
     Q_INVOKABLE void load(const QString &url, bool force = false, bool fromExternal = false);
@@ -146,7 +145,6 @@ public:
     Q_INVOKABLE int activateTab(int tabId, const QString &url);
     Q_INVOKABLE void closeTab(int tabId);
 
-    Q_INVOKABLE void updatePageFocus(bool focus);
     Q_INVOKABLE void dumpPages() const;
 
     QObject *focusObject() const;
