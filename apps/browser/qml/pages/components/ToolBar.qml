@@ -57,7 +57,6 @@ Column {
                                                      / WebUtils.cssPixelRatio)
                                         * WebUtils.cssPixelRatio
 
-
     signal showTabs
     signal showOverlay
     signal showSecondaryTools
