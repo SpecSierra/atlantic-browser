@@ -33,6 +33,7 @@ class DeclarativeWebPage : public QMozOpenGLWebPage
     Q_PROPERTY(QVariant resurrectedContentRect READ resurrectedContentRect WRITE setResurrectedContentRect NOTIFY resurrectedContentRectChanged)
     Q_PROPERTY(int virtualKeyboardHeight READ virtualKeyboardHeight WRITE setVirtualKeyboardHeight NOTIFY virtualKeyboardHeightChanged FINAL)
     Q_PROPERTY(qreal toolbarHeight READ toolbarHeight WRITE setToolbarHeight NOTIFY toolbarHeightChanged FINAL)
+    Q_PROPERTY(bool fixedToolbar READ fixedToolbar WRITE setFixedToolbar NOTIFY fixedToolbarChanged)
 
 public:
     DeclarativeWebPage(QObject *parent = 0);
@@ -52,6 +53,9 @@ public:
 
     qreal toolbarHeight() const;
     void setToolbarHeight(qreal);
+
+    bool fixedToolbar() const;
+    void setFixedToolbar(bool enable);
 
     bool fullscreen() const;
     bool forcedChrome() const;
@@ -73,6 +77,7 @@ signals:
 
     void virtualKeyboardHeightChanged();
     void toolbarHeightChanged();
+    void fixedToolbarChanged();
     void neterror();
 
     void updateUrl();
@@ -89,7 +94,9 @@ private slots:
 
 private:
     static QString saveToFile(const QImage &image, const QString &path);
+
     void restoreHistory();
+    void updateChromeState();
 
     QPointer<DeclarativeWebContainer> m_container;
     // Tab data fetched upon web page initialization. It never changes afterwards.
@@ -107,6 +114,7 @@ private:
 
     int m_virtualKeyboardHeight = 0;
     qreal m_toolbarHeight;
+    bool m_fixedToolbar = false;
 
     QMozSecurity m_security;
 };
