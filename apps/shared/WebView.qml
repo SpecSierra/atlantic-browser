@@ -38,10 +38,6 @@ WebContainer {
         background: !webView.visible
     }
 
-    property Timer auxTimer: Timer {
-        interval: 1000
-    }
-
     property var _webPageCreator: WebPageCreator {
         activeWebPage: contentItem
         model: tabModel
