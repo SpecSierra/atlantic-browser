@@ -314,6 +314,7 @@ void DeclarativeWebPage::forceChrome(bool forcedChrome)
         m_forcedChrome = forcedChrome;
         emit forcedChromeChanged();
     }
+    updateViewMargins();
 }
 
 void DeclarativeWebPage::grabResultReady()
@@ -353,12 +354,13 @@ void DeclarativeWebPage::thumbnailReady()
 
 void DeclarativeWebPage::updateViewMargins()
 {
-    qreal toolbarHeight = virtualKeyboardHeight() ? 0.0 : m_toolbarHeight;
+    qreal toolbarHeight = virtualKeyboardHeight() || m_forcedChrome ? 0.0
+                                                                    : m_toolbarHeight;
     qCDebug(lcCoreLog) << "WebPage: set dynamic toolbar height:" << toolbarHeight;
     setDynamicToolbarHeight(toolbarHeight);
 
     QMargins margins;
-    margins.setBottom(virtualKeyboardHeight());
+    margins.setBottom(qMax(virtualKeyboardHeight(), m_forcedChrome ? static_cast<int>(m_toolbarHeight) : 0));
 
     qCDebug(lcCoreLog) << "WebPage: set margins:" << margins;
     setMargins(margins);
@@ -435,4 +437,3 @@ QDebug operator<<(QDebug dbg, const DeclarativeWebPage *page)
                   << ", active = " << page->active() << ", enabled = " << page->enabled() << ")";
     return dbg.space();
 }
-
