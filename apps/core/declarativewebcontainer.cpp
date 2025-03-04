@@ -832,6 +832,8 @@ void DeclarativeWebContainer::wheelEvent(QWheelEvent *event)
 
 void DeclarativeWebContainer::keyPressEvent(QKeyEvent *event)
 {
+    emit keyPressed(event->key());
+
     if (m_webPage && m_enabled) {
         m_webPage->keyPressEvent(event);
     }

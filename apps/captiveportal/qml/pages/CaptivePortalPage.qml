@@ -84,6 +84,10 @@ Page {
 
     background: null
 
+    Keys.onPressed: {
+        webView.handleKeyPress(event.key)
+    }
+
     Shared.OrientationFader {
         id: orientationFader
 

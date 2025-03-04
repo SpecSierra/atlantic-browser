@@ -193,6 +193,7 @@ signals:
 
     void hasInitialUrlChanged();
     void requestTabWithOwnerAsyncResult(int tabId, void *context);
+    void keyPressed(int key);
 
 protected:
     bool eventFilter(QObject *obj, QEvent *event);
