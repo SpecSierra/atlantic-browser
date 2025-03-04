@@ -279,7 +279,7 @@ private:
     // back to the active tab and load it. In case we did not have tabs open when downloading was
     // triggered we just clear these.
     QString m_initialUrl;
-    bool m_fromExternal;
+    bool m_fromExternal = false;
 
     int m_loadProgress;
 
@@ -295,7 +295,7 @@ private:
     bool m_closing;
 
     QHash<int, uint> m_tabOwners;
-    DeclarativeHistoryModel *m_historyModel;
+    DeclarativeHistoryModel *m_historyModel = nullptr;
 
     CloseEventFilter *m_closeEventFilter;
 
