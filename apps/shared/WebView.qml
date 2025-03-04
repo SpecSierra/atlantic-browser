@@ -110,6 +110,12 @@ WebContainer {
         }
     }
 
+    function handleKeyPress(key) {
+        if (key == Qt.Key_F5) {
+            reload()
+        }
+    }
+
     foreground: visibility >= QuickWindow.Window.Maximized && Qt.application.state === Qt.ApplicationActive
     readyToPaint: resourceController.videoActive ? webView.visible && !resourceController.displayOff
                                                  : webView.visible && webView.contentItem
@@ -127,6 +133,8 @@ WebContainer {
             browserPage.inputRegion.selectionEndHandleMask = Qt.rect(0, 0, 0, 0)
         }
     }
+
+    onKeyPressed: handleKeyPress(key)
 
     webPageComponent: Component {
         WebPage {
