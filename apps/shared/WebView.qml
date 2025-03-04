@@ -210,7 +210,7 @@ WebContainer {
             chromeGestureThreshold: toolbarHeight / 3
             chromeGestureEnabled: !forcedChrome && enabled && !webView.imOpened && !fixedToolbar
 
-            onGrabResult: tabModel.updateThumbnailPath(tabId, fileName)
+            onFileGrabWritten: tabModel.updateThumbnailPath(tabId, fileName)
 
             // Image data is base64 encoded which can be directly used as source in Image element
             onThumbnailResult: tabModel.updateThumbnailPath(tabId, data)

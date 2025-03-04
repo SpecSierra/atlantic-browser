@@ -78,7 +78,7 @@ DeclarativeWebPage::DeclarativeWebPage(QObject *parent)
 
     connect(this, &DeclarativeWebPage::recvAsyncMessage,
             this, &DeclarativeWebPage::onRecvAsyncMessage);
-    connect(&m_grabWritter, &QFutureWatcher<QString>::finished, this, &DeclarativeWebPage::grabWritten);
+    connect(&m_grabWriter, &QFutureWatcher<QString>::finished, this, &DeclarativeWebPage::handleFileGrabFile);
     connect(this, &DeclarativeWebPage::urlChanged, this, &DeclarativeWebPage::onUrlChanged);
     connect(this, &QMozOpenGLWebPage::domContentLoadedChanged, [this]() {
         if (domContentLoaded()) {
@@ -98,8 +98,8 @@ DeclarativeWebPage::DeclarativeWebPage(QObject *parent)
 
 DeclarativeWebPage::~DeclarativeWebPage()
 {
-    m_grabWritter.cancel();
-    m_grabWritter.waitForFinished();
+    m_grabWriter.cancel();
+    m_grabWriter.waitForFinished();
     m_grabResult.clear();
     m_thumbnailResult.clear();
 }
@@ -293,15 +293,14 @@ void DeclarativeWebPage::grabToFile(const QSize &size)
     if (m_grabResult && active()) {
         if (!m_grabResult->isReady()) {
             connect(m_grabResult.data(), &QMozGrabResult::ready,
-                    this, &DeclarativeWebPage::grabResultReady);
+                    this, &DeclarativeWebPage::handleFileGrabImage);
         } else {
-            grabResultReady();
+            handleFileGrabImage();
         }
     } else {
         m_grabResult.clear();
     }
 }
-
 
 void DeclarativeWebPage::grabThumbnail(const QSize &size)
 {
@@ -334,11 +333,11 @@ void DeclarativeWebPage::forceChrome(bool forcedChrome)
     }
 }
 
-void DeclarativeWebPage::grabResultReady()
+void DeclarativeWebPage::handleFileGrabImage()
 {
     QImage image = m_grabResult->image();
     if (!image.isNull() && active()) {
-        m_grabWritter.setFuture(QtConcurrent::run(
+        m_grabWriter.setFuture(QtConcurrent::run(
                 &DeclarativeWebPage::saveToFile,
                 image,
                 QStringLiteral("%1/tab-%2-thumb.jpg").arg(BrowserPaths::cacheLocation()).arg(tabId())));
@@ -346,10 +345,10 @@ void DeclarativeWebPage::grabResultReady()
     m_grabResult.clear();
 }
 
-void DeclarativeWebPage::grabWritten()
+void DeclarativeWebPage::handleFileGrabFile()
 {
-    QString path = m_grabWritter.result();
-    emit grabResult(path);
+    QString path = m_grabWriter.result();
+    emit fileGrabWritten(path);
 }
 
 void DeclarativeWebPage::thumbnailReady()
