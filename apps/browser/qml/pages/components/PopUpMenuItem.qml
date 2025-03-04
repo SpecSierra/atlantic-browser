@@ -85,9 +85,11 @@ Item {
                 onClicked: {
                     overlay.animator.showChrome()
                     var page = webView.contentItem
-                    var writer = desktopBookmarkWriter
-                    var stack = pageStack
+
                     if (!page.favicon) {
+                        var stack = pageStack
+                        var writer = desktopBookmarkWriter
+
                         // Empty favicon, grab icon from the page
                         function handleThumbnailResult(data) {
                             stack.animatorPush("AddToAppGridDialog.qml", {

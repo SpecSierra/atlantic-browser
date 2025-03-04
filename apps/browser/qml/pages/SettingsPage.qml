@@ -150,8 +150,9 @@ Page {
                 // Margins adjusted to align with other items on the page
                 leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
                 _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
+                automaticCheck: false
 
-                onCheckedChanged: closeAllTabsConfig.value = checked
+                onClicked: closeAllTabsConfig.value = !closeAllTabsConfig.value
             }
 
             TextSwitch {
@@ -166,8 +167,9 @@ Page {
                 // Margins adjusted to align with other items on the page
                 leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
                 _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
+                automaticCheck: false
 
-                onCheckedChanged: WebEngineSettings.doNotTrack = checked
+                onClicked: WebEngineSettings.doNotTrack = !WebEngineSettings.doNotTrack
             }
 
             TextSwitch {
@@ -183,8 +185,9 @@ Page {
                 // Margins adjusted to align with other items on the page
                 leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
                 _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
+                automaticCheck: false
 
-                onCheckedChanged: WebEngineSettings.javascriptEnabled = checked
+                onClicked: WebEngineSettings.javascriptEnabled = !WebEngineSettings.javascriptEnabled
             }
 
             BackgroundItem {
@@ -346,6 +349,20 @@ Page {
                     }
                 }
             }
+
+            TextSwitch {
+                //: Setting for fixed or dynamically shown/hidden toolbar
+                //% "Fixed toolbar"
+                text: qsTrId("settings_browser-la-fixed_toolbar")
+                //% "Always show the bottom toolbar"
+                description: qsTrId("settings_browser-la-fixed_toolbar_description")
+                checked: fixedToolbarConfig.value
+                // Margins adjusted to align with other items on the page
+                leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
+                _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
+                automaticCheck: false
+                onClicked: fixedToolbarConfig.value = !fixedToolbarConfig.value
+            }
         }
     }
 
@@ -368,6 +385,13 @@ Page {
 
         key: "/apps/sailfish-browser/settings/home_page"
         defaultValue: "http://jolla.com/"
+    }
+
+    ConfigurationValue {
+        id: fixedToolbarConfig
+
+        key: "/apps/sailfish-browser/settings/fixed_toolbar"
+        defaultValue: false
     }
 
     Notice {

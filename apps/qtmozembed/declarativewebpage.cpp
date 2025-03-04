@@ -252,6 +252,30 @@ void DeclarativeWebPage::setToolbarHeight(qreal toolbarHeight)
     }
 }
 
+bool DeclarativeWebPage::fixedToolbar() const
+{
+    return m_fixedToolbar;
+}
+
+void DeclarativeWebPage::setFixedToolbar(bool enable)
+{
+    if (enable != m_fixedToolbar) {
+        m_fixedToolbar = enable;
+        updateChromeState();
+
+        emit fixedToolbarChanged();
+    }
+}
+
+void DeclarativeWebPage::updateChromeState()
+{
+    if (m_forcedChrome || m_fixedToolbar) {
+        setChrome(true);
+    }
+
+    updateViewMargins();
+}
+
 void DeclarativeWebPage::loadTab(const QString &newUrl, bool force, bool fromExternal)
 {
     // Always enable chrome when load is called.
@@ -291,12 +315,9 @@ void DeclarativeWebPage::grabThumbnail(const QSize &size)
 }
 
 /**
- * Use this to lock to chrome mode. This disables the gesture
- * that normally enables fullscreen mode. The chromeGestureEnabled property
- * is bound to this so that contentHeight changes do not re-enable the
- * gesture.
+ * Use this to temporarily force chrome visible.
  *
- * When gesture is allowed to be used again, unlock call by forceChrome(false).
+ * When chrome hiding gesture is allowed to be used again, unlock call by forceChrome(false).
  *
  * Used for instance when find-in-page view is active that is part of
  * the new browser user interface.
@@ -305,13 +326,10 @@ void DeclarativeWebPage::forceChrome(bool forcedChrome)
 {
     qCDebug(lcCoreLog) << "WebPage: force chrome:" << forcedChrome;
 
-    // This way we don't break chromeGestureEnabled and chrome bindings.
-    setChromeGestureEnabled(!forcedChrome);
-    if (forcedChrome) {
-        setChrome(forcedChrome);
-    }
     if (m_forcedChrome != forcedChrome) {
         m_forcedChrome = forcedChrome;
+
+        updateChromeState();
         emit forcedChromeChanged();
     }
 }
@@ -353,12 +371,14 @@ void DeclarativeWebPage::thumbnailReady()
 
 void DeclarativeWebPage::updateViewMargins()
 {
-    qreal toolbarHeight = virtualKeyboardHeight() ? 0.0 : m_toolbarHeight;
+    qreal toolbarHeight = virtualKeyboardHeight() || m_forcedChrome || m_fixedToolbar ? 0.0
+                                                                                      : m_toolbarHeight;
     qCDebug(lcCoreLog) << "WebPage: set dynamic toolbar height:" << toolbarHeight;
     setDynamicToolbarHeight(toolbarHeight);
 
     QMargins margins;
-    margins.setBottom(virtualKeyboardHeight());
+    margins.setBottom(qMax(virtualKeyboardHeight(),
+                           m_forcedChrome || m_fixedToolbar ? static_cast<int>(m_toolbarHeight) : 0));
 
     qCDebug(lcCoreLog) << "WebPage: set margins:" << margins;
     setMargins(margins);
@@ -435,4 +455,3 @@ QDebug operator<<(QDebug dbg, const DeclarativeWebPage *page)
                   << ", active = " << page->active() << ", enabled = " << page->enabled() << ")";
     return dbg.space();
 }
-

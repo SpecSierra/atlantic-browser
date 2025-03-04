@@ -11,6 +11,7 @@
 
 import QtQuick 2.2
 import QtQuick.Window 2.2 as QuickWindow
+import Nemo.Configuration 1.0
 import Sailfish.Silica 1.0
 import Sailfish.Browser 1.0
 import Sailfish.WebView.Pickers 1.0 as Pickers
@@ -38,10 +39,6 @@ WebContainer {
         background: !webView.visible
     }
 
-    property Timer auxTimer: Timer {
-        interval: 1000
-    }
-
     property var _webPageCreator: WebPageCreator {
         activeWebPage: contentItem
         model: tabModel
@@ -67,6 +64,11 @@ WebContainer {
     }
 
     property var linkHandler: LinkHandler {}
+
+    property ConfigurationValue fixedToolbarConfig: ConfigurationValue {
+        key: "/apps/sailfish-browser/settings/fixed_toolbar"
+        defaultValue: false
+    }
 
     function stop() {
         if (contentItem) {
@@ -193,11 +195,12 @@ WebContainer {
                 }
             }
 
+            fixedToolbar: fixedToolbarConfig.value
             toolbarHeight: container.toolbarHeight
             throttlePainting: !foreground && !resourceController.videoActive && webView.visible || !webView.visible
             enabled: webView.enabled
             chromeGestureThreshold: toolbarHeight / 3
-            chromeGestureEnabled: !forcedChrome && enabled && !webView.imOpened
+            chromeGestureEnabled: !forcedChrome && enabled && !webView.imOpened && !fixedToolbar
 
             onGrabResult: tabModel.updateThumbnailPath(tabId, fileName)
 
@@ -211,8 +214,9 @@ WebContainer {
             }
 
             onAtYEndChanged: {
-                // Don't hide chrome if content lenght is short e.i. forcedChrome is enabled.
-                if (!atYBeginning && atYEnd && !forcedChrome && chrome && activeWebPage && domContentLoaded) {
+                // Don't hide chrome if content length is short i.e. forcedChrome is enabled.
+                if (!atYBeginning && atYEnd && !forcedChrome && !fixedToolbar && chrome
+                        && activeWebPage && domContentLoaded) {
                     chrome = false
                 }
             }
@@ -314,8 +318,7 @@ WebContainer {
                 case "Content:SelectionRange": {
                     if (textSelectionController === null) {
                         textSelectionController = textSelectionControllerComponent.createObject(browserPage,
-                                                                                                {"contentItem" : webPage}
-                                                                                                )
+                                                                                                {"contentItem": webPage})
                     }
                     textSelectionController.selectionRangeUpdated(data)
                     break
