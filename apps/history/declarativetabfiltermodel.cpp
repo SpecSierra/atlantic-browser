@@ -30,14 +30,18 @@ void DeclarativeTabFilterModel::setSourceModel(QAbstractItemModel *sourceModel)
         DeclarativeTabModel *oldModel = static_cast<DeclarativeTabModel*>(this->sourceModel());
         DeclarativeTabModel *newModel = static_cast<DeclarativeTabModel*>(sourceModel);
         if (oldModel) {
-            disconnect(oldModel, &DeclarativeTabModel::activeTabIndexChanged, this, &DeclarativeTabFilterModel::activeTabIndexChanged);
-            disconnect(oldModel, &DeclarativeTabModel::countChanged, this, &DeclarativeTabFilterModel::countChanged);
+            disconnect(oldModel, &DeclarativeTabModel::activeTabIndexChanged,
+                       this, &DeclarativeTabFilterModel::activeTabIndexChanged);
+            disconnect(oldModel, &DeclarativeTabModel::countChanged,
+                       this, &DeclarativeTabFilterModel::countChanged);
         }
         beginResetModel();
         QSortFilterProxyModel::setSourceModel(sourceModel);
         endResetModel();
-        connect(newModel, &DeclarativeTabModel::activeTabIndexChanged, this, &DeclarativeTabFilterModel::activeTabIndexChanged);
-        connect(newModel, &DeclarativeTabModel::countChanged, this, &DeclarativeTabFilterModel::countChanged);
+        connect(newModel, &DeclarativeTabModel::activeTabIndexChanged,
+                this, &DeclarativeTabFilterModel::activeTabIndexChanged);
+        connect(newModel, &DeclarativeTabModel::countChanged,
+                this, &DeclarativeTabFilterModel::countChanged);
     }
 }
 
@@ -46,7 +50,7 @@ bool DeclarativeTabFilterModel::showHidden() const
     return m_showHidden;
 }
 
-void DeclarativeTabFilterModel::setShowHidden(const bool showHidden)
+void DeclarativeTabFilterModel::setShowHidden(bool showHidden)
 {
     if (m_showHidden == showHidden) {
         return;

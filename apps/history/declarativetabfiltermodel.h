@@ -23,7 +23,7 @@ public:
     void setSourceModel(QAbstractItemModel *sourceModel) override;
 
     bool showHidden() const;
-    void setShowHidden(const bool showHidden);
+    void setShowHidden(bool showHidden);
 
     int activeTabIndex() const;
     int count() const;
@@ -34,7 +34,7 @@ signals:
     void countChanged();
 
 private:
-    bool m_showHidden;
+    bool m_showHidden = false;
 };
 
 #endif // DECLARATIVETABFILTERMODEL_H
