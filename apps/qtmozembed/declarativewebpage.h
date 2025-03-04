@@ -72,7 +72,7 @@ signals:
     void fullscreenChanged();
     void forcedChromeChanged();
     void resurrectedContentRectChanged();
-    void grabResult(const QString &fileName);
+    void fileGrabWritten(const QString &fileName);
     void thumbnailResult(const QString &data);
 
     void virtualKeyboardHeightChanged();
@@ -87,8 +87,8 @@ private slots:
     void onRecvAsyncMessage(const QString& message, const QVariant& data);
     void onTabHistoryAvailable(const int& historyTabId, const QList<Link>& links, int currentLinkId);
     void onUrlChanged();
-    void grabResultReady();
-    void grabWritten();
+    void handleFileGrabImage();
+    void handleFileGrabFile();
     void thumbnailReady();
     void updateViewMargins();
 
@@ -108,7 +108,7 @@ private:
     QVariant m_resurrectedContentRect;
     QSharedPointer<QMozGrabResult> m_grabResult;
     QSharedPointer<QMozGrabResult> m_thumbnailResult;
-    QFutureWatcher<QString> m_grabWritter;
+    QFutureWatcher<QString> m_grabWriter;
     QList<Link> m_restoredTabHistory;
     int m_restoredCurrentLinkId;
 
