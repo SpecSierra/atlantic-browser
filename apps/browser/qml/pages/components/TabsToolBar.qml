@@ -52,6 +52,7 @@ Item {
         Shared.IconButton {
             id: returnIcon
 
+            height: parent.height
             width: iconWidth
             icon.anchors.horizontalCenterOffset: root.horizontalOffset
             icon.source: "image://theme/icon-m-tab-return"
@@ -68,6 +69,7 @@ Item {
             id: newTabIcon
 
             width: iconWidth
+            height: parent.height
             icon.source: webView.privateMode ? "image://theme/icon-m-incognito-new" : "image://theme/icon-m-tab-new"
             onTapped: root.enterNewTabUrl()
         }
@@ -81,6 +83,7 @@ Item {
         Shared.IconButton {
             id: menuIcon
 
+            height: parent.height
             width: iconWidth
             icon.source: "image://theme/icon-m-menu"
             icon.anchors.horizontalCenterOffset: - root.horizontalOffset
