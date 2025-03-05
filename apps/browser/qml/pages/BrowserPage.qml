@@ -116,6 +116,10 @@ Page {
 
     orientationTransitions: orientationFader.orientationTransition
 
+    Keys.onPressed: {
+        webView.handleKeyPress(event.key)
+    }
+
     Shared.OrientationFader {
         id: orientationFader
 

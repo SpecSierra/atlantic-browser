@@ -49,25 +49,6 @@ static DeclarativeWebContainer *s_instance = nullptr;
 
 DeclarativeWebContainer::DeclarativeWebContainer(QWindow *parent)
     : QWindow(parent)
-    , m_mozWindow(nullptr)
-    , m_rotationHandler(0)
-    , m_webPage(0)
-    , m_context(0)
-    , m_model(0)
-    , m_webPageComponent(0)
-    , m_enabled(true)
-    , m_foreground(true)
-    , m_touchBlocked(false)
-    , m_selectionActive(false)
-    , m_loadProgress(0)
-    , m_completed(false)
-    , m_initialized(false)
-    , m_privateMode(false)
-    , m_activeTabRendered(false)
-    , m_clearSurfaceTask(0)
-    , m_closing(false)
-    , m_closeEventFilter(nullptr)
-    , m_PreviousTabWhenHidden(-1)
 {
     Q_ASSERT(!s_instance);
 
@@ -851,6 +832,8 @@ void DeclarativeWebContainer::wheelEvent(QWheelEvent *event)
 
 void DeclarativeWebContainer::keyPressEvent(QKeyEvent *event)
 {
+    emit keyPressed(event->key());
+
     if (m_webPage && m_enabled) {
         m_webPage->keyPressEvent(event);
     }
