@@ -258,7 +258,7 @@ private:
     QPointer<QQuickItem> m_rotationHandler;
     QPointer<DeclarativeWebPage> m_webPage;
     QPointer<QQuickView> m_chromeWindow;
-    QOpenGLContext *m_context;
+    QOpenGLContext *m_context = nullptr;
     QMutex m_contextMutex;
 
     QPointer<DeclarativeTabModel> m_model;
@@ -267,10 +267,10 @@ private:
     QPointer<DeclarativeTabModel> m_persistentTabModel;
     QPointer<DeclarativeTabModel> m_privateTabModel;
 
-    bool m_enabled;
-    bool m_foreground;
-    bool m_touchBlocked;
-    bool m_selectionActive;
+    bool m_enabled = true;
+    bool m_foreground = true;
+    bool m_touchBlocked = false;
+    bool m_selectionActive = false;
 
     // See DeclarativeWebContainer::load (line 283) as load need to "work" even if engine, model,
     // or qml component is not yet completed (completed property is still false). So cache url/title for later use.
@@ -281,25 +281,25 @@ private:
     QString m_initialUrl;
     bool m_fromExternal = false;
 
-    int m_loadProgress;
+    int m_loadProgress = 0;
 
-    bool m_completed;
-    bool m_initialized;
+    bool m_completed = false;
+    bool m_initialized = false;
 
-    bool m_privateMode;
-    bool m_activeTabRendered;
+    bool m_privateMode = false;
+    bool m_activeTabRendered = false;
 
     QMutex m_clearSurfaceTaskMutex;
-    QMozContext::TaskHandle m_clearSurfaceTask;
+    QMozContext::TaskHandle m_clearSurfaceTask = nullptr;
 
-    bool m_closing;
+    bool m_closing = false;
 
     QHash<int, uint> m_tabOwners;
     DeclarativeHistoryModel *m_historyModel = nullptr;
 
-    CloseEventFilter *m_closeEventFilter;
+    CloseEventFilter *m_closeEventFilter = nullptr;
 
-    int m_PreviousTabWhenHidden;
+    int m_PreviousTabWhenHidden = -1;
     QTimer m_hiddenTabTimer;
 
     friend class tst_webview;
