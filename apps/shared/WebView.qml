@@ -136,6 +136,10 @@ WebContainer {
 
     onKeyPressed: handleKeyPress(key)
 
+    onBackButtonPressed: webView.goBack()
+
+    onForwardButtonPressed: webView.goForward()
+
     webPageComponent: Component {
         WebPage {
             id: webPage
