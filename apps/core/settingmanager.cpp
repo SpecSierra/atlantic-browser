@@ -178,7 +178,8 @@ void SettingManager::handleObserve(const QString &message, const QVariant &data)
             int errorCode = dataMap.value(QLatin1String("errorCode")).toInt();
             bool firstStart = m_addedSearchEngines && !m_addedSearchEngines->isEmpty();
             if (errorCode != 0) {
-                qWarning() << "An error occurred while adding a search engine, error code: " << errorCode << ", see nsIBrowserSearchService for more details.";
+                qWarning() << "An error occurred while adding a search engine, error code: " << errorCode
+                           << ", see nsIBrowserSearchService for more details.";
             } else if (m_addedSearchEngines) {
                 QString engine = dataMap.value(QLatin1String("engine")).toString();
                 m_addedSearchEngines->removeAll(engine);
