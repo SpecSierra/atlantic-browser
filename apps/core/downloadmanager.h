@@ -52,11 +52,6 @@ private:
     ~DownloadManager();
 
     void checkAllTransfers();
-    bool moveMyAppPackage(const QString &path) const;
-
-    bool isMyApp(const QString &targetPath) const;
-    bool needPlatformTransfersUpdate(const QString &targetPath) const;
-    void finishMyAppDownload(const QString &targetPath) const;
 
     void cancelTransfer(int transferId);
     void restartTransfer(int transferId);
