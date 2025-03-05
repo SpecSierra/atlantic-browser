@@ -10,19 +10,36 @@
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "inputregion.h"
-#include "inputregion_p.h"
 
 #include <QGuiApplication>
+#include <QRegion>
+#include <QWindow>
+
 #include <qpa/qplatformnativeinterface.h>
 
 // Hold off actual update to reduce context switches during animations
 const int INPUT_REGION_UPDATE_DELAY = 50; // ms
 
+class InputRegionPrivate
+{
+public:
+    InputRegionPrivate(InputRegion *q);
+
+    void scheduleUpdate();
+    void update();
+
+    QRect overlayMask;
+    QRect selectionStartHandleMask;
+    QRect selectionEndHandleMask;
+    QWindow *window;
+    InputRegion *q_ptr;
+    int updateTimerId;
+
+    Q_DECLARE_PUBLIC(InputRegion)
+};
+
 InputRegionPrivate::InputRegionPrivate(InputRegion *q)
-    : x(0.0)
-    , y(0.0)
-    , width(0.0)
-    , height(0.0)
+    : overlayMask(0.0, 0.0, 0.0, 0.0)
     , selectionStartHandleMask(0.0, 0.0, 0.0, 0.0)
     , selectionEndHandleMask(0.0, 0.0, 0.0, 0.0)
     , window(0)
@@ -41,7 +58,7 @@ void InputRegionPrivate::update()
         QRect rects[3];
         rects[0] = selectionStartHandleMask;
         rects[1] = selectionEndHandleMask;
-        rects[2].setRect(x, y, width, height);
+        rects[2] = overlayMask;
         QRegion mask;
         mask.setRects(rects, 3);
         window->setMask(mask);
@@ -70,67 +87,19 @@ InputRegion::InputRegion(QObject *parent)
 {
 }
 
-qreal InputRegion::x() const
+const QRect& InputRegion::overlayMask() const
 {
     Q_D(const InputRegion);
-    return d->x;
+    return d->overlayMask;
 }
 
-void InputRegion::setX(qreal x)
+void InputRegion::setOverlayMask(const QRect& rect)
 {
     Q_D(InputRegion);
-    if (d->x != x) {
-        d->x = x;
+    if (d->overlayMask != rect) {
+        d->overlayMask = rect;
         d->scheduleUpdate();
-        emit xChanged();
-    }
-}
-
-qreal InputRegion::y() const
-{
-    Q_D(const InputRegion);
-    return d->y;
-}
-
-void InputRegion::setY(qreal y)
-{
-    Q_D(InputRegion);
-    if (d->y != y) {
-        d->y = y;
-        d->scheduleUpdate();
-        emit yChanged();
-    }
-}
-
-qreal InputRegion::width() const
-{
-    Q_D(const InputRegion);
-    return d->width;
-}
-
-void InputRegion::setWidth(qreal width)
-{
-    Q_D(InputRegion);
-    if (d->width != width) {
-        d->width = width;
-        d->scheduleUpdate();
-        emit widthChanged();
-    }
-}
-
-qreal InputRegion::height() const
-{
-    Q_D(const InputRegion);
-    return d->height;
-}
-
-void InputRegion::setHeight(qreal height)
-{
-    Q_D(InputRegion);
-    if (d->height != height) {
-        d->height = height;
-        d->scheduleUpdate();
-        emit heightChanged();
+        emit overlayMaskChanged();
     }
 }
 

@@ -23,7 +23,6 @@ import "../shared" as Shared
 Page {
     id: browserPage
 
-    readonly property rect inputMask: inputMaskForOrientation(orientation)
     readonly property bool active: status == PageStatus.Active
     property bool tabPageActive
     readonly property size thumbnailSize: Qt.size(width - Theme.horizontalPageMargin * 2,
@@ -243,10 +242,7 @@ Page {
         id: inputRegion
 
         window: webView.chromeWindow
-        x: inputMask.x
-        y: inputMask.y
-        width: inputMask.width
-        height: inputMask.height
+        overlayMask: inputMaskForOrientation(orientation)
     }
 
     Browser.DimmerEffect {
