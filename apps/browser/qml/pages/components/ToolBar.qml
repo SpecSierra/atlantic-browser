@@ -151,6 +151,8 @@ Column {
             Browser.TabButton {
                 id: tabs
 
+                width: parent.width
+                height: parent.height
                 icon.source: {
                     if (webView.privateMode) {
                         return webView.tabModel.count > 0 ? "image://theme/icon-m-incognito-selected"
@@ -201,6 +203,8 @@ Column {
             }
 
             Shared.IconButton {
+                width: parent.width
+                height: parent.height
                 opacity: !secondaryToolsActive && findInPageActive ? 1.0 : 0.0
                 icon.source: "image://theme/icon-m-search"
                 icon.anchors.horizontalCenterOffset: toolBarRow.horizontalOffset
@@ -214,6 +218,7 @@ Column {
         Shared.ExpandingButton {
             id: backIcon
 
+            height: parent.height
             expandedWidth: toolBarRow.iconWidth
             icon {
                 source: {
@@ -250,6 +255,7 @@ Column {
             property bool danger: webView.security && webView.security.validState && !webView.security.allGood
             property real glow
 
+            height: parent.height
             expandedWidth: toolBarRow.smallIconWidth
             icon.source: danger ? "image://theme/icon-s-filled-warning" : "image://theme/icon-s-outline-secure"
             active: webView.security && webView.security.validState && !findInPageActive
@@ -367,6 +373,7 @@ Column {
                 id: previousFindResult
 
                 active: showFindButtons
+                height: parent.height
                 expandedWidth: (toolsRow.width - menuButton.width - tabButton.width) / 2
                 icon {
                     source: "image://theme/icon-m-left"
@@ -380,6 +387,7 @@ Column {
 
             Shared.ExpandingButton {
                 active: showFindButtons
+                height: parent.height
                 expandedWidth: previousFindResult.width
                 anchors.left: previousFindResult.right
                 icon {
@@ -396,6 +404,7 @@ Column {
         Shared.ExpandingButton {
             id: stopButton
 
+            height: parent.height
             expandedWidth: toolBarRow.iconWidth
             icon.source: "image://theme/icon-m-reset"
             active: webView.contentItem && !findInPageActive
@@ -418,6 +427,7 @@ Column {
             Shared.IconButton {
                 icon.source: "image://theme/icon-m-menu"
                 icon.anchors.horizontalCenterOffset: - toolBarRow.horizontalOffset
+                height: parent.height
                 width: parent.width
                 opacity: findInPageActive ? 0.0 : 1.0
                 onTapped: showSecondaryTools()
@@ -426,6 +436,7 @@ Column {
             Shared.IconButton {
                 icon.source: "image://theme/icon-m-reset"
                 icon.anchors.horizontalCenterOffset: - toolBarRow.horizontalOffset
+                height: parent.height
                 width: parent.width
                 opacity: findInPageActive ? 1.0 : 0.0
                 onTapped: {

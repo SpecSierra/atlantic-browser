@@ -75,6 +75,7 @@ Column {
         Shared.ExpandingButton {
             id: backIcon
 
+            height: parent.height
             expandedWidth: toolBarRow.iconWidth
             icon.source: "image://theme/icon-m-back"
             active: webView.canGoBack
@@ -103,6 +104,7 @@ Column {
         Shared.ExpandingButton {
             id: reloadButton
 
+            height: parent.height
             expandedWidth: toolBarRow.iconWidth
             icon.source: webView.loading ? "image://theme/icon-m-reset" : "image://theme/icon-m-refresh"
             active: webView.contentItem
