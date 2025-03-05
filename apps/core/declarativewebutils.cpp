@@ -190,11 +190,11 @@ QString DeclarativeWebUtils::displayableUrl(const QString &fullUrl) const
 {
     QUrl url(fullUrl);
     // Leaving only the scheme, host address, and port (if present).
-    QString returnUrl = url.toDisplayString(QUrl::RemoveUserInfo |
-                                         QUrl::RemovePath |
-                                         QUrl::RemoveQuery |
-                                         QUrl::RemoveFragment |
-                                         QUrl::StripTrailingSlash);
+    QString returnUrl = url.toDisplayString(QUrl::RemoveUserInfo
+                                            | QUrl::RemovePath
+                                            | QUrl::RemoveQuery
+                                            | QUrl::RemoveFragment
+                                            | QUrl::StripTrailingSlash);
     returnUrl.remove(0, returnUrl.lastIndexOf("/") + 1);
     if (returnUrl.indexOf("www.") == 0) {
         return returnUrl.remove(0, 4);
@@ -212,10 +212,10 @@ QString DeclarativeWebUtils::pageName(const QString &fullUrl) const
     QUrl url(fullUrl);
 
     // Leaving only the path (if present).
-    QString returnPageName = url.toDisplayString(QUrl::RemoveScheme |
-                                                 QUrl::RemoveAuthority |
-                                                 QUrl::RemoveQuery |
-                                                 QUrl::StripTrailingSlash);
+    QString returnPageName = url.toDisplayString(QUrl::RemoveScheme
+                                                 | QUrl::RemoveAuthority
+                                                 | QUrl::RemoveQuery
+                                                 | QUrl::StripTrailingSlash);
 
     return returnPageName.remove(0, returnPageName.lastIndexOf("/") + 1);
 }
