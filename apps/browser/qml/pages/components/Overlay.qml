@@ -291,6 +291,7 @@ Shared.Background {
 
                 sourceComponent: Component {
                     TextSelectionToolbar {
+                        portrait: browserPage.isPortrait
                         controller: webView && webView.contentItem && webView.contentItem.textSelectionController
                         width: textSelectionToolbar.width
                         height: textSelectionToolbar.height
