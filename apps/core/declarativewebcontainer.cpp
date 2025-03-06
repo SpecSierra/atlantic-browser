@@ -823,6 +823,22 @@ void DeclarativeWebContainer::touchEvent(QTouchEvent *event)
     }
 }
 
+void DeclarativeWebContainer::mousePressEvent(QMouseEvent *event)
+{
+    switch (event->button()) {
+    case Qt::BackButton:
+        event->accept();
+        emit backButtonPressed();
+        break;
+    case Qt::ForwardButton:
+        event->accept();
+        emit forwardButtonPressed();
+        break;
+    default:
+        QWindow::mousePressEvent(event);
+    }
+}
+
 void DeclarativeWebContainer::wheelEvent(QWheelEvent *event)
 {
     if (m_webPage && m_enabled) {
