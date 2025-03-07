@@ -35,7 +35,6 @@ HEADERS += \
     $$PWD/downloadstatus.h \
     $$PWD/faviconmanager.h \
     $$PWD/inputregion.h \
-    $$PWD/inputregion_p.h \
     $$PWD/logging.h \
     $$PWD/secureaction.h \
     $$PWD/settingmanager.h \

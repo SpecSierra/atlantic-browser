@@ -21,8 +21,6 @@ IconButton {
     // Don't pass touch events through in the middle FadeAnimation
     enabled: opacity === 1.0
 
-    width: parent.width
-    height: parent.height
     icon.opacity: active ? 1.0 : Theme.opacityLow
     icon.highlighted: active && down
 

@@ -243,7 +243,7 @@ WebContainer {
                 rendered = false
                 frameCounter = 0
 
-                // If url has changed or url doesn't exists in the model,
+                // If url has changed or url doesn't exist in the model,
                 // clear the thumbnail. Preserve the thumbnails in the model
                 // if it has the same url (restarting browser / resurrecting a tab).
                 if (!modelUrl || modelUrl != url) {

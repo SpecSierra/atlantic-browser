@@ -21,7 +21,6 @@ import "../shared" as Shared
 Page {
     id: browserPage
 
-    readonly property rect inputMask: inputMaskForOrientation(orientation)
     readonly property bool active: status == PageStatus.Active
 
     property alias overlay: overlay
@@ -40,36 +39,6 @@ Page {
         if ((webView.visibility < QuickWindow.Window.Maximized) && window) {
             window.raise()
         }
-    }
-
-    function inputMaskForOrientation(orientation) {
-        // mask is in portrait window coordinates
-        var portraitScreen = window.QuickWindow.Screen.primaryOrientation === Qt.PortraitOrientation
-        var mask = Qt.rect(0, 0,
-                           portraitScreen ? Screen.width : Screen.height,
-                           portraitScreen ? Screen.height : Screen.width)
-        if (webView.enabled && browserPage.active && !webView.touchBlocked) {
-            var overlayVisibleHeight = browserPage.height - overlay.y
-
-            switch (window.QuickWindow.Screen.angleBetween(orientation, window.QuickWindow.Screen.primaryOrientation)) {
-            case 0:
-            case 360:
-                mask.y = overlay.y
-                // fallthrough
-            case 180:
-            case -180:
-                mask.height = overlayVisibleHeight
-                break
-            case 270:
-            case -90:
-                mask.x = overlay.y
-                // fallthrough
-            case 90:
-            case -270:
-                mask.width = overlayVisibleHeight
-            }
-        }
-        return mask
     }
 
     property int pageOrientation: pageStack.currentPage._windowOrientation
@@ -170,10 +139,10 @@ Page {
 
     InputRegion {
         window: webView.chromeWindow
-        x: inputMask.x
-        y: inputMask.y
-        width: inputMask.width
-        height: inputMask.height
+        orientation: browserPage.orientation // Qt and Silica orientations match
+        overlayMask: (webView.enabled && browserPage.active && !webView.touchBlocked)
+                     ? Qt.rect(0, overlay.y, browserPage.width, browserPage.height - overlay.y)
+                     : Qt.rect(0, 0, browserPage.width, browserPage.height)
     }
 
     Browser.CaptivePortalOverlay {

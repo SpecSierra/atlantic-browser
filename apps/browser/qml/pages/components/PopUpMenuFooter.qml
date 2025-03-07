@@ -28,6 +28,7 @@ Rectangle {
         height: root.height
 
         Shared.IconButton {
+            height: parent.height
             width: Theme.itemSizeLarge
             icon.source: "image://theme/icon-m-tab-close"
             icon.opacity: enabled ? 1.0 : Theme.opacityLow
@@ -41,6 +42,7 @@ Rectangle {
         }
 
         Shared.IconButton {
+            height: parent.height
             width: Theme.itemSizeLarge
             icon.source: "image://theme/icon-m-forward"
             icon.opacity: enabled ? 1.0 : Theme.opacityLow
@@ -52,6 +54,7 @@ Rectangle {
         }
 
         Shared.IconButton {
+            height: parent.height
             width: Theme.itemSizeLarge
             icon.source: overlay.toolBar.bookmarked ? "image://theme/icon-m-favorite-selected"
                                                     : "image://theme/icon-m-favorite"
@@ -67,6 +70,7 @@ Rectangle {
         }
 
         Shared.IconButton {
+            height: parent.height
             width: Theme.itemSizeLarge
             icon.source: webView.loading ? "image://theme/icon-m-reset" : "image://theme/icon-m-refresh"
             icon.opacity: enabled ? 1.0 : Theme.opacityLow
