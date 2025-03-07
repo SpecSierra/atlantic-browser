@@ -26,6 +26,7 @@ class InputRegion : public QObject
     Q_PROPERTY(QRect selectionStartHandleMask READ selectionStartHandleMask WRITE setSelectionStartHandleMask NOTIFY selectionStartHandleMaskChanged FINAL)
     Q_PROPERTY(QRect selectionEndHandleMask READ selectionEndHandleMask WRITE setSelectionEndHandleMask NOTIFY selectionEndHandleMaskChanged FINAL)
     Q_PROPERTY(QWindow *window READ window WRITE setWindow NOTIFY windowChanged FINAL)
+    Q_PROPERTY(int orientation READ orientation WRITE setOrientation NOTIFY orientationChanged)
 
 public:
     InputRegion(QObject *parent = 0);
@@ -40,11 +41,15 @@ public:
     QWindow *window() const;
     void setWindow(QWindow *window);
 
+    int orientation() const;
+    void setOrientation(int orientation);
+
 signals:
     void overlayMaskChanged();
     void selectionStartHandleMaskChanged();
     void selectionEndHandleMaskChanged();
     void windowChanged();
+    void orientationChanged();
 
 protected:
     void timerEvent(QTimerEvent *);
