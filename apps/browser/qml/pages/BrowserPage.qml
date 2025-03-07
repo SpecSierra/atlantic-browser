@@ -61,36 +61,6 @@ Page {
         window.activate()
     }
 
-    function inputMaskForOrientation(orientation) {
-        // mask is in portrait window coordinates
-        var portraitScreen = window.QuickWindow.Screen.primaryOrientation === Qt.PortraitOrientation
-        var mask = Qt.rect(0, 0,
-                           portraitScreen ? Screen.width : Screen.height,
-                           portraitScreen ? Screen.height : Screen.width)
-        if (webView.enabled && browserPage.active && !webView.touchBlocked && !downloadPopup.visible) {
-            var overlayVisibleHeight = browserPage.height - overlay.y
-
-            switch (window.QuickWindow.Screen.angleBetween(orientation, window.QuickWindow.Screen.primaryOrientation)) {
-            case 0:
-            case 360:
-                mask.y = overlay.y
-                // fallthrough
-            case 180:
-            case -180:
-                mask.height = overlayVisibleHeight
-                break
-            case 270:
-            case -90:
-                mask.x = overlay.y
-                // fallthrough
-            case 90:
-            case -270:
-                mask.width = overlayVisibleHeight
-            }
-        }
-        return mask
-    }
-
     // for time being make this fullscreen. TODO: avoid drawing over cutout and corner areas.
     cutoutMode: CutoutMode.FullScreen
     background: null
@@ -242,7 +212,10 @@ Page {
         id: inputRegion
 
         window: webView.chromeWindow
-        overlayMask: inputMaskForOrientation(orientation)
+        orientation: browserPage.orientation // Qt and Silica orientations match
+        overlayMask: (webView.enabled && browserPage.active && !webView.touchBlocked && !downloadPopup.visible)
+                     ? Qt.rect(0, overlay.y, browserPage.width, browserPage.height - overlay.y)
+                     : Qt.rect(0, 0, browserPage.width, browserPage.height)
     }
 
     Browser.DimmerEffect {

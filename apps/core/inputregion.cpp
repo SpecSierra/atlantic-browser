@@ -14,6 +14,8 @@
 #include <QGuiApplication>
 #include <QRegion>
 #include <QWindow>
+#include <QScreen>
+#include <QDebug>
 
 #include <qpa/qplatformnativeinterface.h>
 
@@ -25,6 +27,7 @@ class InputRegionPrivate
 public:
     InputRegionPrivate(InputRegion *q);
 
+    QRect translateRect(QRect input);
     void scheduleUpdate();
     void update();
 
@@ -34,6 +37,7 @@ public:
     QWindow *window;
     InputRegion *q_ptr;
     int updateTimerId;
+    Qt::ScreenOrientation orientation;
 
     Q_DECLARE_PUBLIC(InputRegion)
 };
@@ -45,7 +49,37 @@ InputRegionPrivate::InputRegionPrivate(InputRegion *q)
     , window(0)
     , q_ptr(q)
     , updateTimerId(0)
+    , orientation(Qt::PortraitOrientation)
 {
+}
+
+QRect InputRegionPrivate::translateRect(QRect input)
+{
+    QRect result = input;
+    QScreen *screen = qApp->primaryScreen();
+    if (!screen) {
+        return result;
+    }
+
+    int angle = screen->angleBetween(orientation, screen->primaryOrientation());
+
+    if (angle == 180 || angle == -180) {
+        result.moveTop(screen->size().height() - input.y() - input.height());
+        result.moveLeft(screen->size().width() - input.x() - input.width());
+    } else if (qAbs(angle) == 270 || qAbs(angle) == 90) {
+        result.setWidth(input.height());
+        result.setHeight(input.width());
+    }
+
+    if (angle == 270 || angle == -90) {
+        result.moveLeft(input.y());
+        result.moveTop(screen->size().height() - input.width() - input.x());
+    } else if (angle == -270 || angle == 90) {
+        result.moveTop(input.x());
+        result.moveLeft(screen->size().width() - input.height() - input.y());
+    }
+
+    return result;
 }
 
 void InputRegionPrivate::update()
@@ -56,9 +90,9 @@ void InputRegionPrivate::update()
 
     if (window) {
         QRect rects[3];
-        rects[0] = selectionStartHandleMask;
-        rects[1] = selectionEndHandleMask;
-        rects[2] = overlayMask;
+        rects[0] = translateRect(selectionStartHandleMask);
+        rects[1] = translateRect(selectionEndHandleMask);
+        rects[2] = translateRect(overlayMask);
         QRegion mask;
         mask.setRects(rects, 3);
         window->setMask(mask);
@@ -148,6 +182,22 @@ void InputRegion::setWindow(QWindow *window)
         d->window = window;
         d->scheduleUpdate();
         emit windowChanged();
+    }
+}
+
+int InputRegion::orientation() const
+{
+    Q_D(const InputRegion);
+    return d->orientation;
+}
+
+void InputRegion::setOrientation(int orientation)
+{
+    Q_D(InputRegion);
+    if (d->orientation != orientation) {
+        d->orientation = static_cast<Qt::ScreenOrientation>(orientation);
+        d->scheduleUpdate();
+        emit orientationChanged();
     }
 }
 
