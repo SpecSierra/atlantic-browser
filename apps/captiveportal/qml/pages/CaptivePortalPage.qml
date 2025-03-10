@@ -110,6 +110,12 @@ Page {
             }
         }
 
+        onTouched: {
+            if (contentFullscreen) {
+                fullscreenCloseVisibleTimer.restart()
+            }
+        }
+
         onWebContentOrientationChanged: orientationFader.waitForWebContentOrientationChanged = false
 
         function applyContentOrientation(orientation) {
@@ -133,6 +139,27 @@ Page {
         }
     }
 
+    IconButton {
+        id: fullscreenClose
+
+        opacity: fullscreenCloseVisibleTimer.running || pressed ? 1.0 : 0.0
+        Behavior on opacity { FadeAnimation {} }
+        visible: opacity > 0
+        x: Theme.paddingLarge
+        y: Theme.paddingLarge
+        icon.source: "image://theme/icon-m-close"
+        onClicked: {
+            webView.sendAsyncMessage("embedui:exitFullscreen", {})
+        }
+
+        Timer {
+            id: fullscreenCloseVisibleTimer
+
+            interval: 2000
+            running: webView.contentFullscreen
+        }
+    }
+
     // Use Connections so that target updates when model changes.
     Connections {
         target: AccessPolicy.browserEnabled && webView && webView.tabModel || null
@@ -147,6 +174,9 @@ Page {
         overlayMask: (webView.enabled && browserPage.active && !webView.touchBlocked)
                      ? Qt.rect(0, overlay.y, browserPage.width, browserPage.height - overlay.y)
                      : Qt.rect(0, 0, browserPage.width, browserPage.height)
+        closeButtonMask: fullscreenClose.visible ? Qt.rect(fullscreenClose.x, fullscreenClose.y,
+                                                           fullscreenClose.width, fullscreenClose.height)
+                                                 : Qt.rect(0, 0, 0, 0)
     }
 
     Browser.CaptivePortalOverlay {

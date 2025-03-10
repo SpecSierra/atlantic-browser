@@ -27,7 +27,8 @@ WebContainer {
     property bool activePortalMode
     readonly property bool moving: contentItem && contentItem.moving
     property bool portrait: true
-    property bool fullscreenMode: contentItem && (!contentItem.chrome || contentItem.fullscreen)
+    property bool contentFullscreen: contentItem && contentItem.fullscreen
+    property bool needChrome: !contentItem || (contentItem.chrome && !contentItem.fullscreen)
     property real fullscreenHeight
     property bool imOpened
     property real toolbarHeight
@@ -133,23 +134,20 @@ WebContainer {
                                                    && (webView.contentItem.domContentLoaded
                                                        || webView.contentItem.painted)
 
-    selectionActive: webView.contentItem && webView.contentItem.textSelectionActive
     touchBlocked: contentItem && contentItem.popupOpener && contentItem.popupOpener.active
                   || !AccessPolicy.browserEnabled || false
-
-    onSelectionActiveChanged: {
-        if (!selectionActive && webView.contentItem && webView.contentItem.textSelectionController) {
-            webView.contentItem.textSelectionController.clearSelection()
-            browserPage.inputRegion.selectionStartHandleMask = Qt.rect(0, 0, 0, 0)
-            browserPage.inputRegion.selectionEndHandleMask = Qt.rect(0, 0, 0, 0)
-        }
-    }
 
     onKeyPressed: handleKeyPress(key)
 
     onBackButtonPressed: webView.goBack()
 
     onForwardButtonPressed: webView.goForward()
+
+    onTouched: {
+        if (webView.contentItem && webView.contentItem.textSelectionActive) {
+            clearSelection()
+        }
+    }
 
     webPageComponent: Component {
         WebPage {

@@ -173,11 +173,11 @@ Item {
         target: webView
         ignoreUnknownSignals: true
 
-        onFullscreenModeChanged: {
-            if (webView.fullscreenMode) {
-                updateState(_fullscreenWebPage)
-            } else {
+        onNeedChromeChanged: {
+            if (webView.needChrome) {
                 updateState(_chromeVisible)
+            } else {
+                updateState(_fullscreenWebPage)
             }
         }
     }

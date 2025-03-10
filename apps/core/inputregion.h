@@ -25,6 +25,7 @@ class InputRegion : public QObject
     Q_PROPERTY(QRect overlayMask READ overlayMask WRITE setOverlayMask NOTIFY overlayMaskChanged)
     Q_PROPERTY(QRect selectionStartHandleMask READ selectionStartHandleMask WRITE setSelectionStartHandleMask NOTIFY selectionStartHandleMaskChanged FINAL)
     Q_PROPERTY(QRect selectionEndHandleMask READ selectionEndHandleMask WRITE setSelectionEndHandleMask NOTIFY selectionEndHandleMaskChanged FINAL)
+    Q_PROPERTY(QRect closeButtonMask READ closeButtonMask WRITE setCloseButtonMask NOTIFY closeButtonMaskChanged)
     Q_PROPERTY(QWindow *window READ window WRITE setWindow NOTIFY windowChanged FINAL)
     Q_PROPERTY(int orientation READ orientation WRITE setOrientation NOTIFY orientationChanged)
 
@@ -37,6 +38,8 @@ public:
     void setSelectionStartHandleMask(const QRect& rect);
     const QRect& selectionEndHandleMask() const;
     void setSelectionEndHandleMask(const QRect& rect);
+    const QRect& closeButtonMask() const;
+    void setCloseButtonMask(const QRect& rect);
 
     QWindow *window() const;
     void setWindow(QWindow *window);
@@ -48,6 +51,7 @@ signals:
     void overlayMaskChanged();
     void selectionStartHandleMaskChanged();
     void selectionEndHandleMaskChanged();
+    void closeButtonMaskChanged();
     void windowChanged();
     void orientationChanged();
 

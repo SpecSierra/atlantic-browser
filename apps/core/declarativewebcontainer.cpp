@@ -801,7 +801,7 @@ void DeclarativeWebContainer::touchEvent(QTouchEvent *event)
         return;
     }
 
-    if (m_webPage && m_enabled && ((!m_touchBlocked || m_selectionActive) || event->type() != QEvent::TouchBegin)) {
+    if (m_webPage && m_enabled && (!m_touchBlocked || event->type() != QEvent::TouchBegin)) {
         QList<QTouchEvent::TouchPoint> touchPoints = event->touchPoints();
         QTouchEvent mappedTouchEvent = *event;
 
@@ -812,11 +812,8 @@ void DeclarativeWebContainer::touchEvent(QTouchEvent *event)
 
         mappedTouchEvent.setTouchPoints(touchPoints);
         m_webPage->touchEvent(&mappedTouchEvent);
-        if (m_selectionActive && event->type() == QEvent::TouchBegin) {
-            // If touch event is received here after selection is active it's pressed outside selection area
-            // Inform that selection should close
-            m_selectionActive = false;
-            emit selectionActiveChanged();
+        if (event->type() == QEvent::TouchBegin) {
+            emit touched();
         }
     } else {
         QWindow::touchEvent(event);
