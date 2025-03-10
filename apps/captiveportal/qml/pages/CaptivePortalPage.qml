@@ -27,6 +27,7 @@ Page {
     property alias url: webView.url
     property alias title: webView.title
     property alias webView: webView
+    property alias inputRegion: inputRegion
 
     // for time being make this fullscreen. TODO: avoid drawing over cutout and corner areas.
     cutoutMode: CutoutMode.FullScreen
@@ -93,6 +94,7 @@ Page {
     Shared.WebView {
         id: webView
 
+        activePortalMode: true
         enabled: overlay.animator.allowContentUse
         fullscreenHeight: portrait ? Screen.height : Screen.width
         portrait: browserPage.isPortrait
@@ -138,6 +140,8 @@ Page {
     }
 
     InputRegion {
+        id: inputRegion
+
         window: webView.chromeWindow
         orientation: browserPage.orientation // Qt and Silica orientations match
         overlayMask: (webView.enabled && browserPage.active && !webView.touchBlocked)
