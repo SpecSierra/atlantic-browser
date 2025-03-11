@@ -34,6 +34,7 @@ public:
     QRect overlayMask;
     QRect selectionStartHandleMask;
     QRect selectionEndHandleMask;
+    QRect closeButtonMask;
     QWindow *window;
     InputRegion *q_ptr;
     int updateTimerId;
@@ -46,6 +47,7 @@ InputRegionPrivate::InputRegionPrivate(InputRegion *q)
     : overlayMask(0.0, 0.0, 0.0, 0.0)
     , selectionStartHandleMask(0.0, 0.0, 0.0, 0.0)
     , selectionEndHandleMask(0.0, 0.0, 0.0, 0.0)
+    , closeButtonMask(0.0, 0.0, 0.0, 0.0)
     , window(0)
     , q_ptr(q)
     , updateTimerId(0)
@@ -89,12 +91,13 @@ void InputRegionPrivate::update()
     updateTimerId = 0;
 
     if (window) {
-        QRect rects[3];
+        QRect rects[4];
         rects[0] = translateRect(selectionStartHandleMask);
         rects[1] = translateRect(selectionEndHandleMask);
         rects[2] = translateRect(overlayMask);
+        rects[3] = translateRect(closeButtonMask);
         QRegion mask;
-        mask.setRects(rects, 3);
+        mask.setRects(rects, 4);
         window->setMask(mask);
         if (window->handle()) {
             QPlatformNativeInterface *native = QGuiApplication::platformNativeInterface();
@@ -166,6 +169,22 @@ void InputRegion::setSelectionEndHandleMask(const QRect& rect)
         d->selectionEndHandleMask = rect;
         d->scheduleUpdate();
         emit selectionEndHandleMaskChanged();
+    }
+}
+
+const QRect& InputRegion::closeButtonMask() const
+{
+    Q_D(const InputRegion);
+    return d->closeButtonMask;
+}
+
+void InputRegion::setCloseButtonMask(const QRect& rect)
+{
+    Q_D(InputRegion);
+    if (d->closeButtonMask != rect) {
+        d->closeButtonMask = rect;
+        d->scheduleUpdate();
+        emit closeButtonMaskChanged();
     }
 }
 

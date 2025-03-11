@@ -24,9 +24,11 @@ import "." as Browser
 WebContainer {
     id: webView
 
+    property bool activePortalMode
     readonly property bool moving: contentItem && contentItem.moving
     property bool portrait: true
-    property bool fullscreenMode: contentItem && (!contentItem.chrome || contentItem.fullscreen)
+    property bool contentFullscreen: contentItem && contentItem.fullscreen
+    property bool needChrome: !contentItem || (contentItem.chrome && !contentItem.fullscreen)
     property real fullscreenHeight
     property bool imOpened
     property real toolbarHeight
@@ -91,6 +93,11 @@ WebContainer {
     }
 
     function thumbnailCaptureSize() {
+        if (webView.activePortalMode) {
+            console.log("Thumbnail size tried accessed in captive portal mode")
+            return Qt.size(0, 0)
+        }
+
         var ratio = Math.min(
                     browserPage.width / browserPage.thumbnailSize.width,
                     browserPage.height / browserPage.thumbnailSize.height)
@@ -101,6 +108,11 @@ WebContainer {
     }
 
     function grabActivePage() {
+        if (webView.activePortalMode) {
+            console.warn("Refusing page grab in active portal mode")
+            return
+        }
+
         if (webView.contentItem && webView.activeTabRendered) {
             if (webView.privateMode) {
                 webView.contentItem.grabThumbnail(thumbnailCaptureSize())
@@ -122,23 +134,20 @@ WebContainer {
                                                    && (webView.contentItem.domContentLoaded
                                                        || webView.contentItem.painted)
 
-    selectionActive: webView.contentItem && webView.contentItem.textSelectionActive
     touchBlocked: contentItem && contentItem.popupOpener && contentItem.popupOpener.active
                   || !AccessPolicy.browserEnabled || false
-
-    onSelectionActiveChanged: {
-        if (!selectionActive && webView.contentItem && webView.contentItem.textSelectionController) {
-            webView.contentItem.textSelectionController.clearSelection()
-            browserPage.inputRegion.selectionStartHandleMask = Qt.rect(0, 0, 0, 0)
-            browserPage.inputRegion.selectionEndHandleMask = Qt.rect(0, 0, 0, 0)
-        }
-    }
 
     onKeyPressed: handleKeyPress(key)
 
     onBackButtonPressed: webView.goBack()
 
     onForwardButtonPressed: webView.goForward()
+
+    onTouched: {
+        if (webView.contentItem && webView.contentItem.textSelectionActive) {
+            clearSelection()
+        }
+    }
 
     webPageComponent: Component {
         WebPage {
@@ -175,14 +184,18 @@ WebContainer {
 
                     // Possible path that leads to a new tab. Thus, capturing current
                     // view before opening context menu.
-                    webView.grabActivePage()
+                    if (!webView.activePortalMode) {
+                        webView.grabActivePage()
+                    }
                     contextMenuRequested(data)
                 }
 
                 onLoginSaved: {
-                    FaviconManager.grabIcon("logins", webPage,
-                                            Qt.size(Theme.iconSizeMedium,
-                                                    Theme.iconSizeMedium))
+                    if (!webView.activePortalMode) {
+                        FaviconManager.grabIcon("logins", webPage,
+                                                Qt.size(Theme.iconSizeMedium,
+                                                        Theme.iconSizeMedium))
+                    }
                 }
             }
 
@@ -277,13 +290,16 @@ WebContainer {
                                          })
                         resurrectedContentRect = null
                     }
-                    grabItem()
 
-                    if (!webView.privateMode) {
-                        // Update the favicon for history items.
-                        FaviconManager.grabIcon("history", webPage,
-                                                Qt.size(Theme.iconSizeMedium,
-                                                        Theme.iconSizeMedium))
+                    if (!webView.activePortalMode) {
+                        grabItem()
+
+                        if (!webView.privateMode) {
+                            // Update the favicon for history items.
+                            FaviconManager.grabIcon("history", webPage,
+                                                    Qt.size(Theme.iconSizeMedium,
+                                                            Theme.iconSizeMedium))
+                        }
                     }
                 }
 
@@ -309,7 +325,9 @@ WebContainer {
                     ++frameCounter
                 } else if (!rendered) {
                     rendered = true
-                    grabItem()
+                    if (!webView.activePortalMode) {
+                        grabItem()
+                    }
                 }
             }
 

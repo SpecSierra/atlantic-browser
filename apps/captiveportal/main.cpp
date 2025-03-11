@@ -54,6 +54,7 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     QScopedPointer<QQuickView> view(new QQuickView);
 #endif
     app->setQuitOnLastWindowClosed(false);
+    app->setAttribute(Qt::AA_SynthesizeTouchForUnhandledMouseEvents, true);
 
     CaptivePortalService *service = new CaptivePortalService(app.data());
     // Handle command line launch

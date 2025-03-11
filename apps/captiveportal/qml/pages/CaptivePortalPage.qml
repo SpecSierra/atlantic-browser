@@ -27,6 +27,7 @@ Page {
     property alias url: webView.url
     property alias title: webView.title
     property alias webView: webView
+    property alias inputRegion: inputRegion
 
     // for time being make this fullscreen. TODO: avoid drawing over cutout and corner areas.
     cutoutMode: CutoutMode.FullScreen
@@ -93,6 +94,7 @@ Page {
     Shared.WebView {
         id: webView
 
+        activePortalMode: true
         enabled: overlay.animator.allowContentUse
         fullscreenHeight: portrait ? Screen.height : Screen.width
         portrait: browserPage.isPortrait
@@ -105,6 +107,12 @@ Page {
         onForegroundChanged: {
             if (foreground && webView.chromeWindow) {
                 webView.chromeWindow.raise()
+            }
+        }
+
+        onTouched: {
+            if (contentFullscreen) {
+                fullscreenCloseVisibleTimer.restart()
             }
         }
 
@@ -131,6 +139,27 @@ Page {
         }
     }
 
+    IconButton {
+        id: fullscreenClose
+
+        opacity: fullscreenCloseVisibleTimer.running || pressed ? 1.0 : 0.0
+        Behavior on opacity { FadeAnimation {} }
+        visible: opacity > 0
+        x: Theme.paddingLarge
+        y: Theme.paddingLarge
+        icon.source: "image://theme/icon-m-close"
+        onClicked: {
+            webView.sendAsyncMessage("embedui:exitFullscreen", {})
+        }
+
+        Timer {
+            id: fullscreenCloseVisibleTimer
+
+            interval: 2000
+            running: webView.contentFullscreen
+        }
+    }
+
     // Use Connections so that target updates when model changes.
     Connections {
         target: AccessPolicy.browserEnabled && webView && webView.tabModel || null
@@ -138,11 +167,16 @@ Page {
     }
 
     InputRegion {
+        id: inputRegion
+
         window: webView.chromeWindow
         orientation: browserPage.orientation // Qt and Silica orientations match
         overlayMask: (webView.enabled && browserPage.active && !webView.touchBlocked)
                      ? Qt.rect(0, overlay.y, browserPage.width, browserPage.height - overlay.y)
                      : Qt.rect(0, 0, browserPage.width, browserPage.height)
+        closeButtonMask: fullscreenClose.visible ? Qt.rect(fullscreenClose.x, fullscreenClose.y,
+                                                           fullscreenClose.width, fullscreenClose.height)
+                                                 : Qt.rect(0, 0, 0, 0)
     }
 
     Browser.CaptivePortalOverlay {

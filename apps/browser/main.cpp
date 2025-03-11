@@ -19,7 +19,6 @@
 #include <QDBusPendingCall>
 
 #include "browser.h"
-#include "browserappinfo.h"
 // Registered QML types
 #include "declarativebookmarkmodel.h"
 #include "bookmarkfiltermodel.h"
@@ -48,7 +47,6 @@
 
 #include <signal.h>
 
-namespace {
 static QObject *search_model_factory(QQmlEngine *, QJSEngine *)
 {
     return new SearchEngineModel;
@@ -62,7 +60,6 @@ static QObject *faviconmanager_factory(QQmlEngine *, QJSEngine *)
 static QObject *bookmarkmanager_factory(QQmlEngine *, QJSEngine *)
 {
     return BookmarkManager::instance();
-}
 }
 
 Q_DECL_EXPORT int main(int argc, char *argv[])
@@ -153,16 +150,15 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     qmlRegisterUncreatableType<DeclarativeTabModel>(uri, 1, 0, "TabModel", "TabModel is abstract!");
     qmlRegisterUncreatableType<PrivateTabModel>(uri, 1, 0, "PrivateTabModel", "");
 
-    if (!BrowserAppInfo::captivePortal()) {
-        qmlRegisterType<DeclarativeBookmarkModel>(uri, 1, 0, "BookmarkModel");
-        qmlRegisterUncreatableType<PersistentTabModel>(uri, 1, 0, "PersistentTabModel", "");
-        qmlRegisterType<DeclarativeHistoryModel>(uri, 1, 0, "HistoryModel");
-        qmlRegisterType<BookmarkFilterModel>(uri, 1, 0, "BookmarkFilterModel");
-        qmlRegisterType<DeclarativeLoginModel>(uri, 1, 0, "LoginModel");
-        qmlRegisterType<LoginFilterModel>(uri, 1, 0, "LoginFilterModel");
-        qmlRegisterType<DeclarativeTabFilterModel>(uri, 1, 0, "TabFilterModel");
-        qmlRegisterSingletonType<BookmarkManager>(uri, 1, 0, "BookmarkManager", bookmarkmanager_factory);
-    }
+    // non-captive portal content
+    qmlRegisterType<DeclarativeBookmarkModel>(uri, 1, 0, "BookmarkModel");
+    qmlRegisterUncreatableType<PersistentTabModel>(uri, 1, 0, "PersistentTabModel", "");
+    qmlRegisterType<DeclarativeHistoryModel>(uri, 1, 0, "HistoryModel");
+    qmlRegisterType<BookmarkFilterModel>(uri, 1, 0, "BookmarkFilterModel");
+    qmlRegisterType<DeclarativeLoginModel>(uri, 1, 0, "LoginModel");
+    qmlRegisterType<LoginFilterModel>(uri, 1, 0, "LoginFilterModel");
+    qmlRegisterType<DeclarativeTabFilterModel>(uri, 1, 0, "TabFilterModel");
+    qmlRegisterSingletonType<BookmarkManager>(uri, 1, 0, "BookmarkManager", bookmarkmanager_factory);
 
     qmlRegisterSingletonType<FaviconManager>(uri, 1, 0, "FaviconManager", faviconmanager_factory);
     qmlRegisterUncreatableType<DownloadStatus>(uri, 1, 0, "DownloadStatus", "");
