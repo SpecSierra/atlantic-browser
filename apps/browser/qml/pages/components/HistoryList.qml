@@ -22,6 +22,7 @@ SilicaListView {
     property bool showDeleteButton
     property bool menuClosed
     property real horizontalMargin: Theme.horizontalPageMargin
+    property real footerHeight: Theme.itemSizeLarge
 
     signal load(string url, string title, bool newTab)
     signal saveBookmark(string url, string title, string favicon)
@@ -33,7 +34,7 @@ SilicaListView {
 
     footer: Item {
         width: 1
-        height: Theme.itemSizeLarge
+        height: view.footerHeight
     }
 
     delegate: HistoryItem {
