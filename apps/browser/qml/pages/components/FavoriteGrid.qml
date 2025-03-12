@@ -17,7 +17,8 @@ import Sailfish.Browser 1.0
 IconGridViewBase {
     id: favoriteGrid
 
-    property real menuHeight: 0
+    property real menuHeight
+    property int footerHeight: Theme.itemSizeLarge
 
     signal load(string url)
     signal newTab(string url)
@@ -48,7 +49,7 @@ IconGridViewBase {
 
     footer: Item {
         width: 1
-        height: Theme.itemSizeLarge
+        height: favoriteGrid.footerHeight
     }
 
     delegate: FavoriteItem {
