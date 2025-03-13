@@ -465,7 +465,6 @@ Shared.Background {
                 iconSource: "image://theme/icon-m-history"
                 visible: historyContainer.showHistoryButton
                 opacity: visible && toolBar.opacity < 0.9 ? 1.0 : 0.0
-                enabled: overlayAnimator.atTop
 
                 onClicked: {
                     var historyPage = pageStack.push("../HistoryPage.qml", { model: historyModel })
