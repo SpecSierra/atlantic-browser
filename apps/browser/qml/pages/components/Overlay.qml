@@ -605,7 +605,7 @@ Shared.Background {
                     enabled: overlayAnimator.atTop
                     visible: historyContainer.showFavorites
                     _quickScrollRightMargin: -(browserPage.width - width) / 2
-                    footerHeight: showHistoryList ? 0 : Theme.paddingLarge
+                    footerHeight: historyContainer.showHistoryList ? 0 : Theme.paddingLarge
 
                     header: Item {
                         width: parent.width

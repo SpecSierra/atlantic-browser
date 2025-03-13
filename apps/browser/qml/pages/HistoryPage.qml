@@ -18,7 +18,7 @@ Page {
 
     property QtObject model
     property var remorse
-    readonly property bool pendingRemorse: remorse && remorse.pending
+    readonly property bool pendingRemorse: !!remorse && remorse.pending
 
     signal loadPage(string url, bool newTab)
     signal saveBookmark(string url, string title, string favicon)
