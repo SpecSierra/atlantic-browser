@@ -184,6 +184,12 @@ Shared.Background {
         }
     }
 
+    BookmarkModel {
+        id: bookmarkModel
+
+        activeUrl: toolBar.url
+    }
+
     MouseArea {
         id: dragArea
 
@@ -459,7 +465,6 @@ Shared.Background {
                 iconSource: "image://theme/icon-m-history"
                 visible: historyContainer.showHistoryButton
                 opacity: visible && toolBar.opacity < 0.9 ? 1.0 : 0.0
-                enabled: overlayAnimator.atTop
 
                 onClicked: {
                     var historyPage = pageStack.push("../HistoryPage.qml", { model: historyModel })
@@ -577,11 +582,6 @@ Shared.Background {
                 }
             }
 
-            BookmarkModel {
-                id: bookmarkModel
-                activeUrl: toolBar.url
-            }
-
             Browser.HistoryList {
                 id: historyList
 
@@ -590,6 +590,7 @@ Shared.Background {
 
                 width: parent.width
                 height: browserPage.height - _overlayGap - panelSize
+                footerHeight: historyContainer.showHistoryList ? Theme.itemSizeLarge : 0
                 horizontalMargin: overlay.horizontalMargin
 
                 header: Browser.FavoriteGrid {
@@ -599,11 +600,12 @@ Shared.Background {
                     height: historyContainer.showHistoryList ? (count > 0
                                                                 ? cellHeight + headerItem.height + menuHeight
                                                                 : headerItem.height)
-                                                             : (historyList.height - historyList.footerItem.height)
+                                                             : historyList.height
                     opacity: visible && toolBar.opacity < 0.9 ? 1.0 : 0.0
                     enabled: overlayAnimator.atTop
                     visible: historyContainer.showFavorites
                     _quickScrollRightMargin: -(browserPage.width - width) / 2
+                    footerHeight: showHistoryList ? 0 : Theme.paddingLarge
 
                     header: Item {
                         width: parent.width
