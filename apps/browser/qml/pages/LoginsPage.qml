@@ -80,8 +80,8 @@ Page {
             onClicked: openMenu()
 
             Row {
-                width: parent.width - 2 * Theme.horizontalPageMargin
                 x: Theme.horizontalPageMargin
+                width: parent.width - 2 * x
                 spacing: Theme.paddingMedium
                 anchors.verticalCenter: parent.verticalCenter
 
