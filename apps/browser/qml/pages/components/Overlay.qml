@@ -463,8 +463,8 @@ Shared.Background {
 
                 text: qsTrId("sailfish_browser-la-history")
                 iconSource: "image://theme/icon-m-history"
-                visible: historyContainer.showHistoryButton
-                opacity: visible && toolBar.opacity < 0.9 ? 1.0 : 0.0
+                visible: opacity > 0
+                opacity: (historyContainer.showHistoryButton && toolBar.opacity < 0.9) ? 1.0 : 0.0
 
                 onClicked: {
                     var historyPage = pageStack.push("../HistoryPage.qml", { model: historyModel })

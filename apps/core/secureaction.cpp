@@ -209,20 +209,23 @@ void SecureAction::perform(const QJSValue &resolve)
 
         m_response.reset(new QDBusPendingCallWatcher(systemBus.asyncCall(createAuthenticatorCall(
                     QStringLiteral("RequestPermission"),
-                    { QVariant::fromValue(QDBusObjectPath(m_replyPath)), m_message, QVariantMap(), uint(Method::AllAvailable) }))));
+                    { QVariant::fromValue(QDBusObjectPath(m_replyPath)), m_message,
+                      QVariantMap(), uint(Method::AllAvailable) }))));
 
         // The reply here just confirms that the device lock service received the request and is
         // handling it. The users response or further status changes will be delivered by
         // the device lock service invoking methods on the SecureActionAuthenticatorAdaptor
         // registered on m_replyPath.
-        connect(m_response.data(), &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *watcher) {
+        connect(m_response.data(), &QDBusPendingCallWatcher::finished,
+                this, [this](QDBusPendingCallWatcher *watcher) {
             watcher->deleteLater();
             m_response.take();
 
             if (watcher->isError()) {
                 m_authenticating = false;
 
-                qmlInfo(this) << "Authentication D-Bus error " << watcher->error().name() << " " << watcher->error().message();
+                qmlInfo(this) << "Authentication D-Bus error " << watcher->error().name()
+                              << " " << watcher->error().message();
             }
         });
     }

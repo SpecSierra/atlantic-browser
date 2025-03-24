@@ -14,7 +14,6 @@
 LoginFilterModel::LoginFilterModel(QObject *parent)
     : QSortFilterProxyModel(parent)
 {
-
 }
 
 int LoginFilterModel::getIndex(int currentIndex)
@@ -28,10 +27,8 @@ bool LoginFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex &source
 {
     QModelIndex index = sourceModel()->index(sourceRow, 0, sourceParent);
 
-    if (sourceModel()->data(index, DeclarativeLoginModel::HostnameRole).toString().trimmed().contains(m_search, Qt::CaseInsensitive)) {
-        return true;
-    }
-    return false;
+    return sourceModel()->data(index, DeclarativeLoginModel::HostnameRole)
+            .toString().trimmed().contains(m_search, Qt::CaseInsensitive);
 }
 
 void LoginFilterModel::setSourceModel(QAbstractItemModel *sourceModel)

@@ -220,4 +220,3 @@ bool DeclarativeLoginModel::canModify(int uid, const QString &username, const QS
     }
     return validModification;
 }
-
