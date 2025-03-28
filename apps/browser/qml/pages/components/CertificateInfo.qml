@@ -28,7 +28,8 @@ SilicaFlickable {
     signal closeCertInfo
 
     function openSiteSettings() {
-        pageStack.push("../SitePermissionPage.qml", {
+        pageStack.push("../SitePermissionPage.qml",
+                       {
                            title: webView.title,
                            url: toolBarRow.url,
                            permissionModel: permissionIndicationModel
@@ -42,6 +43,7 @@ SilicaFlickable {
 
     PermissionModel {
         id: permissionIndicationModel
+
         host: toolBarRow.url
     }
 
@@ -171,36 +173,48 @@ SilicaFlickable {
                         columns: Math.min(permissionIndicationModel.count, 5)
                         anchors.horizontalCenter: parent.horizontalCenter
                         spacing: Theme.paddingLarge
+
                         Repeater {
                             id: permissionIndicationRepeater
+
                             model: permissionIndicationModel
                             delegate: Icon {
                                 source: {
-                                    var blocked = (model.capability === PermissionManager.Deny)
+                                    // template variants have small hole to avoid overlapping transparent
+                                    // icon content.
+                                    // TODO: designed for deny graphics, the prompt case should either
+                                    // have prompt icon adjusted to match the deny shape or there should be
+                                    // yet another set of clipped permission graphics.
+                                    var template = (model.capability === PermissionManager.Deny
+                                                    || model.capability === PermissionManager.Prompt)
                                     if (model.type === "geolocation") {
-                                        return "image://theme/icon-m-browser-location" + (blocked ? "-template" : "")
+                                        return "image://theme/icon-m-browser-location" + (template ? "-template" : "")
                                     } else if (model.type === "cookie") {
-                                        return "image://theme/icon-m-browser-cookies" + (blocked ? "-template" : "")
+                                        return "image://theme/icon-m-browser-cookies" + (template ? "-template" : "")
                                     } else if (model.type === "popup") {
-                                        return "image://theme/icon-m-browser-popup" + (blocked ? "-template" : "")
+                                        return "image://theme/icon-m-browser-popup" + (template ? "-template" : "")
                                     } else if (model.type === "camera") {
-                                        return "image://theme/icon-m-browser-camera" + (blocked ? "-template" : "")
+                                        return "image://theme/icon-m-browser-camera" + (template ? "-template" : "")
                                     } else if (model.type === "microphone") {
-                                        return "image://theme/icon-m-browser-microphone" + (blocked ? "-template" : "")
+                                        return "image://theme/icon-m-browser-microphone" + (template ? "-template" : "")
                                     } else {
                                         return ""
                                     }
                                 }
                                 highlighted: permissionArea.pressed
+
                                 Icon {
                                     anchors {
                                         bottom: parent.bottom
                                         right: parent.right
                                     }
-                                    source: "image://theme/icon-s-blocked"
-
-                                    color: Theme.errorColor
                                     visible: model.capability === PermissionManager.Deny
+                                             || model.capability === PermissionManager.Prompt
+                                    source: model.capability === PermissionManager.Deny
+                                            ? "image://theme/icon-s-blocked"
+                                            : "image://theme/icon-s-maybe"
+                                    color: model.capability === PermissionManager.Deny
+                                           ? Theme.errorColor : Theme.primaryColor
                                 }
                             }
                         }
