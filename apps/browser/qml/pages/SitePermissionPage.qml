@@ -140,8 +140,8 @@ Page {
                     //: Shown for context menu always ask permission
                     //% "Always ask"
                     text: qsTrId("sailfish_browser-me-always_ask")
-                    onClicked: PermissionManager.add(url, model.type, PermissionManager.Prompt)
                     visible: model.type !== "popup" && model.type !== "cookie"
+                    onClicked: PermissionManager.add(url, model.type, PermissionManager.Prompt)
                 }
             }
         }

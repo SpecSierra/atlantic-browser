@@ -22,7 +22,7 @@ Page {
     property string iconSource
 
     property var remorse
-    readonly property bool pendingRemorse: remorse && remorse.pending
+    readonly property bool pendingRemorse: !!remorse && remorse.pending
 
     PermissionFilterProxyModel {
         id: proxyModel
@@ -54,7 +54,6 @@ Page {
             id: listItem
 
             width: parent.width
-
             contentHeight: Theme.itemSizeMedium
 
             function remove(uri, type, capability) {
@@ -81,6 +80,9 @@ Page {
                     case PermissionManager.Deny:
                         //% "Block"
                         return qsTrId("sailfish_browser-me-block")
+                    case PermissionManager.Prompt:
+                        //% "Always ask"
+                        return qsTrId("sailfish_browser-me-always_ask")
                     }
                 }
             }
@@ -94,6 +96,12 @@ Page {
                     //% "Block"
                     text: qsTrId("sailfish_browser-me-block")
                     onClicked: proxyModel.setCapability(model.index, PermissionManager.Deny)
+                }
+                MenuItem {
+                    //% "Always ask"
+                    text: qsTrId("sailfish_browser-me-always_ask")
+                    onClicked: proxyModel.setCapability(model.index, PermissionManager.Prompt)
+                    visible: model.type !== "popup" && model.type !== "cookie"
                 }
                 MenuItem {
                     //% "Delete"
@@ -126,8 +134,7 @@ Page {
         }
 
         ViewPlaceholder {
-            enabled: page.pendingRemorse || (view.count === 0)
-
+            enabled: page.pendingRemorse || view.count === 0
             //% "You have no exceptions"
             text: qsTrId("sailfish_browser-la-have-no-exceptions")
         }
