@@ -32,6 +32,8 @@
 #include <qmozwindow.h>
 #include <qmozsecurity.h>
 
+#include <MDConfItem>
+
 #include <qpa/qplatformnativeinterface.h>
 #include <libsailfishpolicy/policyvalue.h>
 
@@ -66,7 +68,10 @@ DeclarativeWebContainer::DeclarativeWebContainer(QWindow *parent)
     setTitle("BrowserContent");
     setObjectName("WebView");
 
-    if (!browserEnabled()) m_privateMode = true;
+
+    MDConfItem privatebrowsingAutostart(QStringLiteral("/apps/sailfish-browser/settings/browser_privatebrowsing_autostart"));
+
+    if (!browserEnabled() || privatebrowsingAutostart.value(QVariant(false)).toBool()) m_privateMode = true;
 
     WebPageFactory* pageFactory = new WebPageFactory(this);
     connect(this, &DeclarativeWebContainer::webPageComponentChanged,

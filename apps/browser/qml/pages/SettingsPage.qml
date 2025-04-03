@@ -156,6 +156,18 @@ Page {
             }
 
             TextSwitch {
+                //% "Start browser in private browsing mode"
+                text: qsTrId("settings_browser-la-start_in_private")
+                checked: autoStartPrivateBrowser.value
+                automaticCheck: false
+                // Margins adjusted to align with other items on the page
+                leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
+                _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
+
+                onClicked: autoStartPrivateBrowser.value = !autoStartPrivateBrowser.value
+            }
+
+            TextSwitch {
                 checked: WebEngineSettings.doNotTrack
 
                 //: Tell sites that I do not want to be tracked.
@@ -391,6 +403,13 @@ Page {
         id: fixedToolbarConfig
 
         key: "/apps/sailfish-browser/settings/fixed_toolbar"
+        defaultValue: false
+    }
+
+    ConfigurationValue {
+        id: autoStartPrivateBrowser
+
+        key: "/apps/sailfish-browser/settings/browser_privatebrowsing_autostart"
         defaultValue: false
     }
 
