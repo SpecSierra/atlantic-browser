@@ -336,10 +336,13 @@ Shared.Background {
 
                 property bool edited
                 property bool enteringNewTabUrl
+                property bool _resetting
 
                 function resetUrl(url) {
+                    _resetting = true
                     // Reset first text and then mark as unedited.
                     text = url === "about:blank" ? "" : url || ""
+                    _resetting = false
                     edited = false
                 }
 
@@ -422,11 +425,7 @@ Shared.Background {
                 onFocusChanged: {
                     if (focus) {
                         cursorPosition = text.length
-                        // Mark SearchField as edited if focused before url is resolved.
-                        // Otherwise select all.
-                        if (!text) {
-                            edited = true
-                        } else {
+                        if (text.length > 0) {
                             searchField.selectAll()
                         }
                         dragArea.moved = false
@@ -434,7 +433,7 @@ Shared.Background {
                 }
 
                 onTextChanged: {
-                    if (!edited && text !== webView.url) {
+                    if (!_resetting && !edited && text !== webView.url) {
                         edited = true
                     }
                 }
