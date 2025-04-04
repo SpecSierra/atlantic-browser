@@ -9,7 +9,6 @@
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "downloadmanager.h"
-#include "downloadmimetypehandler.h"
 #include "browserpaths.h"
 #include "logging.h"
 
@@ -185,9 +184,6 @@ void DownloadManager::setPreferences()
 
     // NS_PREF_DOWNLOAD_FOLDERLIST of nsExternalHelperAppService
     webEngineSettings->setPreference(QString("browser.download.folderList"), QVariant(2));
-
-    // Partial downloads are removed in the embedlite-components (see JB#50127)
-    DownloadMimetypeHandler::update();
 }
 
 void DownloadManager::setPdfPrinting(const bool pdfPrinting)

@@ -11,7 +11,6 @@ SOURCES += \
     $$PWD/closeeventfilter.cpp \
     $$PWD/datafetcher.cpp \
     $$PWD/downloadmanager.cpp \
-    $$PWD/downloadmimetypehandler.cpp \
     $$PWD/declarativewebcontainer.cpp \
     $$PWD/declarativewebutils.cpp \
     $$PWD/faviconmanager.cpp \
@@ -31,7 +30,6 @@ HEADERS += \
     $$PWD/declarativewebcontainer.h \
     $$PWD/declarativewebutils.h \
     $$PWD/downloadmanager.h \
-    $$PWD/downloadmimetypehandler.h \
     $$PWD/downloadstatus.h \
     $$PWD/faviconmanager.h \
     $$PWD/inputregion.h \

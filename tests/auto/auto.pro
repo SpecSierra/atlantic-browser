@@ -5,7 +5,6 @@ SUBDIRS += tst_dbmanager \
     tst_declarativehistorymodel \
 #    tst_declarativewebcontainer \
     tst_desktopbookmarkwriter \
-    tst_downloadmimetypehandler \
     tst_logins \
     tst_persistenttabmodel \
 #    tst_webpages \
