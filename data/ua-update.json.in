@@ -35,7 +35,7 @@
   "chinaz.com": "Mozilla/5.0 (Android; Mobile; rv:91.0) Gecko/91.0 Firefox/91.0",
   // JB#39351, tmall.com
   "tmall.com": "Mozilla/5.0 (Android; Mobile; rv:91.0) Gecko/91.0 Firefox/91.0",
-  "youtube.com": "Mozilla/5.0 (Android 8.1.0; U; Sailfish 4.0; rv:91.0) Gecko/91.0 Firefox/91.0 SailfishBrowser/1.0 like Safari/538.1",
+  "youtube.com": "Mozilla/5.0 (Sailfish 5.0; Mobile; rv:91.0) Gecko/91.0 Firefox/91.0 like Chrome/135.0.0.0 Safari/537.36",
   // JB#39970, slashdot.org
   "slashdot.org": "Mozilla/5.0 (Android 8.1.0; Mobile; rv:91.0) Gecko/91.0 Firefox/91.0",
   // JB#58095, forum https://forum.sailfishos.org/t/browser-crashes-on-everytime-you-open-any-profile-on-linkedin/11395
