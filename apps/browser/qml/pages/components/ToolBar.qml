@@ -259,12 +259,12 @@ Column {
             expandedWidth: toolBarRow.smallIconWidth
             icon.source: danger ? "image://theme/icon-s-filled-warning" : "image://theme/icon-s-outline-secure"
             active: webView.security && webView.security.validState && !findInPageActive
+                    && !(webView.url.indexOf("about:") === 0)
             icon.color: danger ? Qt.tint(Theme.primaryColor,
                                          Qt.rgba(Theme.errorColor.r, Theme.errorColor.g,
                                                  Theme.errorColor.b, glow))
                                : Theme.primaryColor
             enabled: webView.security
-            visible: !(webView.url.indexOf("about:") === 0)
             onTapped: {
                 if (certOverlayActive) {
                     showChrome()
