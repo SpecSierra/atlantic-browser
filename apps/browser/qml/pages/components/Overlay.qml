@@ -337,6 +337,8 @@ Shared.Background {
                 property bool edited
                 property bool enteringNewTabUrl
 
+                property string lastFindText
+
                 function resetUrl(url) {
                     // Reset first text and then mark as unedited.
                     text = url === "about:blank" ? "" : url || ""
@@ -389,6 +391,7 @@ Shared.Background {
                     }
 
                     if (toolBar.findInPageActive) {
+                        lastFindText = text
                         webView.sendAsyncMessage("embedui:find", { text: text, backwards: false, again: false })
                         overlayAnimator.showChrome()
                     } else {
@@ -555,7 +558,11 @@ Shared.Background {
                 onEnterNewTabUrl: overlay.enterNewTabUrl()
                 onFindInPage: {
                     _showFindInPage = true
-                    searchField.resetUrl("")
+                    if (searchField.lastFindText.length > 0) {
+                        searchField.resetUrl(searchField.lastFindText)
+                    } else {
+                        searchField.resetUrl("")
+                    }
                     _overlayGap = Qt.binding(function () { return overlayAnimator.fullscreenGap })
                     overlayAnimator.showOverlay()
                 }
