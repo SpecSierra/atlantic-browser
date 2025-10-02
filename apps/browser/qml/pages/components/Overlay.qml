@@ -338,6 +338,8 @@ Shared.Background {
                 property bool enteringNewTabUrl
                 property bool _resetting
 
+                property string lastFindText
+
                 function resetUrl(url) {
                     _resetting = true
                     // Reset first text and then mark as unedited.
@@ -392,6 +394,7 @@ Shared.Background {
                     }
 
                     if (toolBar.findInPageActive) {
+                        lastFindText = text
                         webView.sendAsyncMessage("embedui:find", { text: text, backwards: false, again: false })
                         overlayAnimator.showChrome()
                     } else {
@@ -554,7 +557,11 @@ Shared.Background {
                 onEnterNewTabUrl: overlay.enterNewTabUrl()
                 onFindInPage: {
                     _showFindInPage = true
-                    searchField.resetUrl("")
+                    if (searchField.lastFindText.length > 0) {
+                        searchField.resetUrl(searchField.lastFindText)
+                    } else {
+                        searchField.resetUrl("")
+                    }
                     _overlayGap = Qt.binding(function () { return overlayAnimator.fullscreenGap })
                     overlayAnimator.showOverlay()
                 }
