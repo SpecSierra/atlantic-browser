@@ -56,7 +56,7 @@ signals:
     void orientationChanged();
 
 protected:
-    void timerEvent(QTimerEvent *);
+    void timerEvent(QTimerEvent *) override;
 
 private:
     InputRegionPrivate *d_ptr;
