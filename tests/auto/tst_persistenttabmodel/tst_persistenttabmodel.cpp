@@ -536,12 +536,12 @@ void tst_persistenttabmodel::data_data()
     modelIndex = tabModel->createIndex(1000, 0);
     QTest::newRow("invalid_index_2") << modelIndex << (int)DeclarativeTabModel::TabIdRole << false;
     modelIndex = tabModel->createIndex(1, 0);
-    QTest::newRow("TabIdRole") << modelIndex  << (int)DeclarativeTabModel::TabIdRole << true;
-    QTest::newRow("ActiveRole") << modelIndex  << (int)DeclarativeTabModel::ActiveRole << true;
-    QTest::newRow("UrlRole") << modelIndex  << (int)DeclarativeTabModel::UrlRole << true;
-    QTest::newRow("TitleRole") << modelIndex  << (int)DeclarativeTabModel::TitleRole << true;
-    QTest::newRow("ThumbPathRole") << modelIndex  << (int)DeclarativeTabModel::ThumbPathRole << true;
-    QTest::newRow("InvalidRole") << modelIndex  << -10000 << false;
+    QTest::newRow("TabIdRole") << modelIndex << (int)DeclarativeTabModel::TabIdRole << true;
+    QTest::newRow("ActiveRole") << modelIndex << (int)DeclarativeTabModel::ActiveRole << true;
+    QTest::newRow("UrlRole") << modelIndex << (int)DeclarativeTabModel::UrlRole << true;
+    QTest::newRow("TitleRole") << modelIndex << (int)DeclarativeTabModel::TitleRole << true;
+    QTest::newRow("ThumbPathRole") << modelIndex << (int)DeclarativeTabModel::ThumbPathRole << true;
+    QTest::newRow("InvalidRole") << modelIndex << -10000 << false;
 }
 
 void tst_persistenttabmodel::data()

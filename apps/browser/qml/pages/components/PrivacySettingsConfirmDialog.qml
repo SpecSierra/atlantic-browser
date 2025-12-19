@@ -80,10 +80,10 @@ Dialog {
                 id: cookieAndSiteDataItem
 
                 text: _siteDataUsage > 0
-                        //% "%1 of cookie and site data"
-                      ? qsTrId("sailfish_browser-la-usage_of_cookie_and_site_data").arg(Format.formatFileSize(_siteDataUsage))
-                        //% "Cookie and site data"
-                      : qsTrId("sailfish_browser-la-cookie_and_site_data")
+                      ? //% "%1 of cookie and site data"
+                        qsTrId("sailfish_browser-la-usage_of_cookie_and_site_data").arg(Format.formatFileSize(_siteDataUsage))
+                      : //% "Cookie and site data"
+                        qsTrId("sailfish_browser-la-cookie_and_site_data")
             }
 
             BrowserDataItem {
@@ -97,10 +97,10 @@ Dialog {
                 id: cacheItem
 
                 text: _cacheUsage > 0
-                        //% "%1 of cache"
-                      ? qsTrId("sailfish_browser-la-usage_of_cache").arg(Format.formatFileSize(_cacheUsage))
-                        //% "Cache"
-                      : qsTrId("sailfish_browser-la-cache")
+                      ? //% "%1 of cache"
+                        qsTrId("sailfish_browser-la-usage_of_cache").arg(Format.formatFileSize(_cacheUsage))
+                      : //% "Cache"
+                        qsTrId("sailfish_browser-la-cache")
             }
 
             BrowserDataItem {

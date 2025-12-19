@@ -32,7 +32,7 @@ public:
     enum Status { Null, Fetching, Ready, Error };
     enum Type { Icon, OpenSearch };
 
-    explicit DataFetcher(QObject *parent = 0);
+    explicit DataFetcher(QObject *parent = nullptr);
 
     Q_INVOKABLE void fetch(const QString &iconUrl);
 
@@ -69,6 +69,5 @@ private:
     QUrl m_url;
     Type m_type;
 };
-
 
 #endif // DATAFETCHER_H

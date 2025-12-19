@@ -24,7 +24,7 @@ class WebPageFactory : public QObject
 {
     Q_OBJECT
 public:
-    WebPageFactory(QObject *parent = 0) : QObject(parent) {};
+    WebPageFactory(QObject *parent = nullptr) : QObject(parent) {}
 
     DeclarativeWebPage* createWebPage(DeclarativeWebContainer *webContainer,
                                       const Tab &initialTab);

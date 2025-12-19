@@ -29,7 +29,7 @@ protected:
     virtual void updateThumbPath(int tabId, const QString &path);
 
 public:
-    PrivateTabModel(int nextTabId, DeclarativeWebContainer *webContainer = 0);
+    PrivateTabModel(int nextTabId, DeclarativeWebContainer *webContainer = nullptr);
     ~PrivateTabModel();
 };
 

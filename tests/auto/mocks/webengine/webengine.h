@@ -30,7 +30,7 @@ public:
     typedef void (*TaskCallback)(void* data);
     typedef void* TaskHandle;
 
-    explicit WebEngine(QObject *parent = 0) : QObject(parent) {};
+    explicit WebEngine(QObject *parent = nullptr) : QObject(parent) {}
 
     static void initialize(const QString &profilePath);
     static WebEngine* instance();

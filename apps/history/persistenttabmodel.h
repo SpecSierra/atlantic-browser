@@ -33,7 +33,7 @@ private slots:
     void tabsAvailable(const QList<Tab> &tabs);
 
 public:
-    PersistentTabModel(int nextTabId, DeclarativeWebContainer *webContainer = 0);
+    PersistentTabModel(int nextTabId, DeclarativeWebContainer *webContainer = nullptr);
     ~PersistentTabModel();
 };
 

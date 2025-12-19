@@ -52,9 +52,9 @@ QString tst_desktopbookmarkwriter::writtenDesktopFile(QSignalSpy &spy)
     if (spy.count() == 1) {
         QList<QVariant> arguments = spy.takeFirst();
         return arguments.at(0).toString();
-    } else {
-        return "";
     }
+
+    return QString();
 }
 
 void tst_desktopbookmarkwriter::invalidInput_data()

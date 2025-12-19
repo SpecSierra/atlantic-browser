@@ -201,8 +201,7 @@ void FaviconManager::grabIcon(const QString &type, DeclarativeWebPage *webPage, 
         if (dataFetcher->hasAcceptedTouchIcon()) {
             qCDebug(lcFavoritesLog) << "Storing favicon for" << type;
             add(type, webPage->url().toString(), dataFetcher->data(), true);
-        }
-        else {
+        } else {
             std::shared_ptr<QMetaObject::Connection> thumbConn = std::make_shared<QMetaObject::Connection>();
             *thumbConn = connect(webPage, &DeclarativeWebPage::thumbnailResult,
                                  [this, type, webPage, thumbConn](const QString &data) {

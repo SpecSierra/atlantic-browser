@@ -32,7 +32,7 @@ class DeclarativeWebPage : public QObject
     Q_OBJECT
 
 public:
-    explicit DeclarativeWebPage(QObject *parent = 0) : QObject(parent) {};
+    explicit DeclarativeWebPage(QObject *parent = 0) : QObject(parent) {}
 
     MOCK_CONST_METHOD0(contentRect, QRectF());
     MOCK_METHOD1(setWindow, void(QWindow *));

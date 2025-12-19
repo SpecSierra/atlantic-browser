@@ -104,7 +104,7 @@ QString DesktopBookmarkWriter::write(const QString &url, const QString &title, c
         desktopFile.flush();
         desktopFile.close();
         return fileName;
-    } else {
-        return "";
     }
+
+    return QString();
 }

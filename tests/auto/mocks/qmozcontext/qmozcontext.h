@@ -26,7 +26,7 @@ public:
     typedef void (*TaskCallback)(void* data);
     typedef void* TaskHandle;
 
-    explicit QMozContext(QObject *parent = 0) : QObject(parent) {};
+    explicit QMozContext(QObject *parent = nullptr) : QObject(parent) {}
 
     static QMozContext* instance();
     MOCK_METHOD2(setPref, void(const QString &, QVariant const &));
