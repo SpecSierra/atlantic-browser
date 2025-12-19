@@ -360,7 +360,8 @@ void DeclarativeWebPage::thumbnailReady()
         buffer.open(QIODevice::WriteOnly);
         if (image.save(&buffer, "jpg", 75)) {
             buffer.close();
-            emit thumbnailResult(QString(BASE64_IMAGE).arg(QString(iconData.toBase64())));
+            emit thumbnailResult(QStringLiteral("data:image/jpeg;base64,")
+                                 + QString::fromLatin1(iconData.toBase64()));
         } else {
             emit thumbnailResult(DEFAULT_DESKTOP_BOOKMARK_ICON);
         }

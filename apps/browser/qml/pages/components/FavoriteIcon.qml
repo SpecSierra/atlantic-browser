@@ -24,7 +24,9 @@ Image {
     source: {
         if (!icon.length) {
             return "image://theme/icon-launcher-bookmark"
-        } else if (icon.indexOf(':/') !== -1 || icon.indexOf("data:image/png;base64") === 0) {
+        } else if (icon.indexOf(':/') !== -1
+                   || icon.indexOf("data:image/png;base64") === 0
+                   || icon.indexOf("data:image/jpeg;base64") === 0) {
             return icon
         } else if (icon.indexOf('/') === 0) {
             return 'file://' + icon
