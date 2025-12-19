@@ -32,71 +32,71 @@ class DeclarativeWebPage : public QObject
     Q_OBJECT
 
 public:
-    explicit DeclarativeWebPage(QObject *parent = 0) : QObject(parent) {}
+    explicit DeclarativeWebPage(QObject *parent = nullptr) : QObject(parent) {}
 
-    MOCK_CONST_METHOD0(contentRect, QRectF());
-    MOCK_METHOD1(setWindow, void(QWindow *));
-    MOCK_CONST_METHOD0(completed, bool());
-    MOCK_CONST_METHOD0(uniqueId, quint32());
-    MOCK_CONST_METHOD0(isPainted, bool());
-    MOCK_CONST_METHOD0(loadProgress, int());
-    MOCK_CONST_METHOD0(loading, bool());
-    MOCK_CONST_METHOD0(canGoForward, bool());
-    MOCK_CONST_METHOD0(canGoBack, bool());
-    MOCK_METHOD0(reload, void());
-    MOCK_METHOD0(goForward, void());
-    MOCK_METHOD0(goBack, void());
-    MOCK_METHOD1(setChrome, void(bool));
-    MOCK_METHOD0(suspendView, void());
-    MOCK_METHOD0(resumeView, void());
-    MOCK_METHOD0(update, void());
-    MOCK_METHOD0(initialize, void());
-    MOCK_METHOD0(stop, void());
-    MOCK_METHOD0(bgcolor, QColor());
-    MOCK_METHOD1(touchEvent, void(QTouchEvent *));
-    MOCK_METHOD1(keyPressEvent, void(QKeyEvent *));
-    MOCK_METHOD1(keyReleaseEvent, void(QKeyEvent *));
-    MOCK_METHOD1(focusInEvent, void(QFocusEvent *));
-    MOCK_METHOD1(focusOutEvent, void(QFocusEvent *));
-    MOCK_METHOD1(timerEvent, void(QTimerEvent *));
-    MOCK_METHOD1(updateContentOrientation, void(Qt::ScreenOrientation));
-    MOCK_CONST_METHOD0(contentHeight, qreal());
-    MOCK_CONST_METHOD0(resolution, float());
-    MOCK_METHOD2(sendAsyncMessage, void(const QString&, const QVariant&));
-    MOCK_METHOD1(setParentId, void(unsigned));
-    MOCK_METHOD1(setParentBrowsingContext, void(uintptr_t));
+    MOCK_METHOD(QRectF, contentRect, (), (const));
+    MOCK_METHOD(void, setWindow, (QWindow *));
+    MOCK_METHOD(bool, completed, (), (const));
+    MOCK_METHOD(quint32, uniqueId, (), (const));
+    MOCK_METHOD(bool, isPainted, (), (const));
+    MOCK_METHOD(int, loadProgress, (), (const));
+    MOCK_METHOD(bool, loading, (), (const));
+    MOCK_METHOD(bool, canGoForward, (), (const));
+    MOCK_METHOD(bool, canGoBack, (), (const));
+    MOCK_METHOD(void, reload, ());
+    MOCK_METHOD(void, goForward, ());
+    MOCK_METHOD(void, goBack, ());
+    MOCK_METHOD(void, setChrome, (bool));
+    MOCK_METHOD(void, suspendView, ());
+    MOCK_METHOD(void, resumeView, ());
+    MOCK_METHOD(void, update, ());
+    MOCK_METHOD(void, initialize, ());
+    MOCK_METHOD(void, stop, ());
+    MOCK_METHOD(QColor, bgcolor, ());
+    MOCK_METHOD(void, touchEvent, (QTouchEvent *));
+    MOCK_METHOD(void, keyPressEvent, (QKeyEvent *));
+    MOCK_METHOD(void, keyReleaseEvent, (QKeyEvent *));
+    MOCK_METHOD(void, focusInEvent, (QFocusEvent *));
+    MOCK_METHOD(void, focusOutEvent, (QFocusEvent *));
+    MOCK_METHOD(void, timerEvent, (QTimerEvent *), (override));
+    MOCK_METHOD(void, updateContentOrientation, (Qt::ScreenOrientation));
+    MOCK_METHOD(qreal, contentHeight, (), (const));
+    MOCK_METHOD(float, resolution, (), (const));
+    MOCK_METHOD(void, sendAsyncMessage, (const QString&, const QVariant&));
+    MOCK_METHOD(void, setParentId, (unsigned));
+    MOCK_METHOD(void, setParentBrowsingContext, (uintptr_t));
 
-    MOCK_METHOD1(grabThumbnail, void(const QSize&));
+    MOCK_METHOD(void, grabThumbnail, (const QSize&));
 
-    MOCK_CONST_METHOD0(active, bool());
-    MOCK_METHOD1(setActive, void(bool));
+    MOCK_METHOD(bool, active, (), (const));
+    MOCK_METHOD(void, setActive, (bool));
 
-    MOCK_METHOD1(setContainer, void(DeclarativeWebContainer *));
+    MOCK_METHOD(void, setContainer, (DeclarativeWebContainer *));
 
-    MOCK_METHOD1(setResurrectedContentRect, void(QVariant));
-    MOCK_METHOD2(setInitialState, void(const Tab&, bool privateMode));
+    MOCK_METHOD(void, setResurrectedContentRect, (QVariant));
+    MOCK_METHOD(void, setInitialState, (const Tab&, bool privateMode));
 
-    MOCK_METHOD1(forceChrome, void(bool));
-    MOCK_CONST_METHOD0(domContentLoaded, bool());
+    MOCK_METHOD(void, forceChrome, (bool));
+    MOCK_METHOD(bool, domContentLoaded, (), (const));
 
-    MOCK_CONST_METHOD0(tabId, int());
+    MOCK_METHOD(int, tabId, (), (const));
 
-    MOCK_CONST_METHOD0(url, QUrl());
+    MOCK_METHOD(QUrl, url, (), (const));
 
-    MOCK_CONST_METHOD0(desktopMode, bool());
+    MOCK_METHOD(bool, desktopMode, (), (const));
 
-    MOCK_CONST_METHOD0(title, QString());
-    MOCK_METHOD1(setTitle, void(const QString &title));
+    MOCK_METHOD(QString, title, (), (const));
+    MOCK_METHOD(void, setTitle, (const QString &title));
 
-    MOCK_CONST_METHOD0(parentId, int());
+    MOCK_METHOD(int, parentId, (), (const));
 
-    MOCK_METHOD1(setPrivateMode, void(bool));
+    MOCK_METHOD(void, setPrivateMode, (bool));
 
-    MOCK_METHOD3(Q_INVOKABLE loadTab, void(const QString &newUrl, bool force, bool fromExternal));
+    MOCK_METHOD(void, Q_INVOKABLE loadTab, (const QString &newUrl, bool force, bool fromExternal));
 
-    MOCK_CONST_METHOD0(securityState, uint());
-    MOCK_CONST_METHOD0(securityStatus, QString());
-    MOCK_CONST_METHOD0(security, QMozSecurity *());
+    MOCK_METHOD(uint, securityState, (), (const));
+    MOCK_METHOD(QString, securityStatus, (), (const));
+    MOCK_METHOD(QMozSecurity*, security, (), (const));
 
 signals:
     void canGoBackChanged();

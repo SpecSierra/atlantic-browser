@@ -24,7 +24,7 @@ class WebPageFactory : public QObject
 public:
     WebPageFactory(QObject *parent = nullptr) : QObject(parent) {}
 
-    MOCK_METHOD3(createWebPage, DeclarativeWebPage*(DeclarativeWebContainer*, const Tab&, int));
+    MOCK_METHOD(DeclarativeWebPage*, createWebPage, (DeclarativeWebContainer*, const Tab&, int));
 
 signals:
     void aboutToInitialize(DeclarativeWebPage *webPage);

@@ -29,25 +29,25 @@ public:
     static WebEngineSettings *instance();
     static void initialize();
 
-    explicit WebEngineSettings(QObject *parent = 0) : QObject(parent) {}
+    explicit WebEngineSettings(QObject *parent = nullptr) : QObject(parent) {}
 
-    MOCK_CONST_METHOD0(isInitialized, bool());
+    MOCK_METHOD(bool, isInitialized, (), (const));
 
-    MOCK_CONST_METHOD0(autoLoadImages, bool());
-    MOCK_METHOD1(setAutoLoadImages, void(bool));
+    MOCK_METHOD(bool, autoLoadImages, (), (const));
+    MOCK_METHOD(void, setAutoLoadImages, (bool));
 
-    MOCK_CONST_METHOD0(javascriptEnabled, bool());
-    MOCK_METHOD1(setJavascriptEnabled, void(bool));
+    MOCK_METHOD(bool, javascriptEnabled, (), (const));
+    MOCK_METHOD(void, setJavascriptEnabled, (bool));
 
-    MOCK_METHOD1(setTileSize, void(const QSize &));
+    MOCK_METHOD(void, setTileSize, (const QSize &));
 
-    MOCK_CONST_METHOD0(pixelRatio, qreal());
-    MOCK_METHOD1(setPixelRatio, void(qreal));
+    MOCK_METHOD(qreal, pixelRatio, (), (const));
+    MOCK_METHOD(void, setPixelRatio, (qreal));
 
-    MOCK_METHOD1(enableProgressivePainting, void(bool));
-    MOCK_METHOD1(enableLowPrecisionBuffers, void(bool));
+    MOCK_METHOD(void, enableProgressivePainting, (bool));
+    MOCK_METHOD(void, enableLowPrecisionBuffers, (bool));
 
-    MOCK_METHOD2(setPreference, void(const QString &, const QVariant &));
+    MOCK_METHOD(void, setPreference, (const QString &, const QVariant &));
 
 signals:
     void autoLoadImagesChanged();
