@@ -15,6 +15,7 @@
 #include "desktopbookmarkwriter.h"
 #include "browserpaths.h"
 #include "faviconmanager.h"
+#include "datafetcher.h"
 
 static bool dbw_testMode = false;
 
@@ -54,7 +55,22 @@ void DesktopBookmarkWriter::save(const QString &url, const QString &title, const
         effectiveIcon = FaviconManager::defaultDesktopBookmarkIcon();
     }
 
-    m_writer.setFuture(QtConcurrent::run(this, &DesktopBookmarkWriter::write, url, title, effectiveIcon));
+    if (icon.startsWith(QStringLiteral("https://")) || icon.startsWith(QStringLiteral("http://"))) {
+        DataFetcher *fetcher = new DataFetcher(this);
+        connect(fetcher, &DataFetcher::statusChanged,
+                this, [this, url, title, fetcher]() {
+            if (fetcher->status() == DataFetcher::Error) {
+                m_writer.setFuture(QtConcurrent::run(this, &DesktopBookmarkWriter::write, url, title,
+                                                     FaviconManager::defaultDesktopBookmarkIcon()));
+            } else if (fetcher->status() == DataFetcher::Ready) {
+                m_writer.setFuture(QtConcurrent::run(this, &DesktopBookmarkWriter::write, url, title,
+                                                     fetcher->data()));
+            }
+        });
+        fetcher->fetch(icon);
+    } else {
+        m_writer.setFuture(QtConcurrent::run(this, &DesktopBookmarkWriter::write, url, title, effectiveIcon));
+    }
 }
 
 void DesktopBookmarkWriter::desktopFileWritten()
