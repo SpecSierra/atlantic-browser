@@ -21,14 +21,14 @@ static bool dbw_testMode = false;
 DesktopBookmarkWriter::DesktopBookmarkWriter(QObject *parent)
     : QObject(parent)
 {
-    connect(&m_writter, &QFutureWatcher<QString>::finished,
+    connect(&m_writer, &QFutureWatcher<QString>::finished,
             this, &DesktopBookmarkWriter::desktopFileWritten);
 }
 
 DesktopBookmarkWriter::~DesktopBookmarkWriter()
 {
-    if (m_writter.isRunning()) {
-        m_writter.waitForFinished();
+    if (m_writer.isRunning()) {
+        m_writer.waitForFinished();
     }
 }
 
@@ -54,12 +54,12 @@ void DesktopBookmarkWriter::save(const QString &url, const QString &title, const
         effectiveIcon = FaviconManager::defaultDesktopBookmarkIcon();
     }
 
-    m_writter.setFuture(QtConcurrent::run(this, &DesktopBookmarkWriter::write, url, title, effectiveIcon));
+    m_writer.setFuture(QtConcurrent::run(this, &DesktopBookmarkWriter::write, url, title, effectiveIcon));
 }
 
 void DesktopBookmarkWriter::desktopFileWritten()
 {
-    QString path = m_writter.result();
+    QString path = m_writer.result();
     emit saved(path);
 }
 

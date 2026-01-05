@@ -38,7 +38,7 @@ private:
     QString uniqueDesktopFileName(QString title);
     QString write(const QString &url, const QString &title, const QString &icon);
 
-    QFutureWatcher<QString> m_writter;
+    QFutureWatcher<QString> m_writer;
 
     static QString desktopFilePattern();
 
