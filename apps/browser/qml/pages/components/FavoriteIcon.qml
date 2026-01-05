@@ -29,7 +29,7 @@ Image {
                    || icon.indexOf("data:image/jpeg;base64") === 0) {
             return icon
         } else if (icon.indexOf('/') === 0) {
-            return 'file://' + icon
+            return 'file://' + icon.split("/").map(encodeURIComponent).join("/")
         } else {
             return 'image://theme/' + icon
         }
