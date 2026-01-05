@@ -40,6 +40,8 @@ private:
 
     QFutureWatcher<QString> m_writter;
 
+    static QString desktopFilePattern();
+
     friend class tst_desktopbookmarkwriter;
 };
 

@@ -80,13 +80,13 @@ QString DesktopBookmarkWriter::uniqueDesktopFileName(QString title)
     QStringList similarlyNamedFiles = dir.entryList();
     int count = similarlyNamedFiles.count();
 
-    QString fileName = QString(DESKTOP_FILE).arg(title).arg(count);
+    QString fileName = QString(desktopFilePattern()).arg(title).arg(count);
     while (similarlyNamedFiles.contains(fileName)) {
         ++count;
-        fileName = QString(DESKTOP_FILE).arg(title).arg(count);
+        fileName = QString(desktopFilePattern()).arg(title).arg(count);
     }
 
-    return QString(DESKTOP_FILE_PATTERN).arg(filePath, title).arg(count);
+    return filePath + '/' + fileName;
 }
 
 QString DesktopBookmarkWriter::write(const QString &url, const QString &title, const QString &icon)
@@ -108,4 +108,9 @@ QString DesktopBookmarkWriter::write(const QString &url, const QString &title, c
     }
 
     return QString();
+}
+
+QString DesktopBookmarkWriter::desktopFilePattern()
+{
+    return QStringLiteral("sailfish-browser-%2-%3.desktop");
 }
