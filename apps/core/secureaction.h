@@ -71,7 +71,7 @@ private:
     SecureActionAuthenticatorAdaptor m_adaptor { this };
 
     std::shared_ptr<ServiceWatcher> m_serviceWatcher;
-    QScopedPointer<QDBusPendingCallWatcher> m_response;
+    std::unique_ptr<QDBusPendingCallWatcher> m_response;
     QJSValue m_resolve;
     const QString m_replyPath;
     QString m_message;

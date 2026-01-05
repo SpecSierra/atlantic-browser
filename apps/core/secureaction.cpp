@@ -216,10 +216,10 @@ void SecureAction::perform(const QJSValue &resolve)
         // handling it. The users response or further status changes will be delivered by
         // the device lock service invoking methods on the SecureActionAuthenticatorAdaptor
         // registered on m_replyPath.
-        connect(m_response.data(), &QDBusPendingCallWatcher::finished,
+        connect(m_response.get(), &QDBusPendingCallWatcher::finished,
                 this, [this](QDBusPendingCallWatcher *watcher) {
             watcher->deleteLater();
-            m_response.take();
+            m_response.release();
 
             if (watcher->isError()) {
                 m_authenticating = false;
