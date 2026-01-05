@@ -10,6 +10,7 @@
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "bookmark.h"
+#include "faviconmanager.h"
 
 Bookmark::Bookmark(const QString &title, const QString &url, const QString &favicon, bool hasTouchIcon, QObject* parent)
     : QObject(parent)
@@ -19,7 +20,7 @@ Bookmark::Bookmark(const QString &title, const QString &url, const QString &favi
     , m_hasTouchIcon(hasTouchIcon)
 {
     if (m_favicon.isEmpty()) {
-        m_favicon = DEFAULT_DESKTOP_BOOKMARK_ICON;
+        m_favicon = FaviconManager::defaultDesktopBookmarkIcon();
         m_hasTouchIcon = true;
     }
 }

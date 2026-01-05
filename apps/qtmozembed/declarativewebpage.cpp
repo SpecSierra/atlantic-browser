@@ -12,6 +12,7 @@
 #include "dbmanager.h"
 #include "browserappinfo.h"
 #include "browserpaths.h"
+#include "faviconmanager.h"
 #include "logging.h"
 
 #include <webenginesettings.h>
@@ -363,7 +364,7 @@ void DeclarativeWebPage::thumbnailReady()
             emit thumbnailResult(QStringLiteral("data:image/jpeg;base64,")
                                  + QString::fromLatin1(iconData.toBase64()));
         } else {
-            emit thumbnailResult(DEFAULT_DESKTOP_BOOKMARK_ICON);
+            emit thumbnailResult(FaviconManager::defaultDesktopBookmarkIcon());
         }
     }
     m_thumbnailResult.clear();

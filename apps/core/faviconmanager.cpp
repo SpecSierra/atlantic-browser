@@ -223,3 +223,8 @@ void FaviconManager::clear(const QString &type)
     m_faviconSets.insert(type, faviconSet);
     save(type);
 }
+
+QString FaviconManager::defaultDesktopBookmarkIcon()
+{
+    return QStringLiteral("icon-launcher-bookmark");
+}

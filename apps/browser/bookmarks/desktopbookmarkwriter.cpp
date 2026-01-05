@@ -14,6 +14,7 @@
 
 #include "desktopbookmarkwriter.h"
 #include "browserpaths.h"
+#include "faviconmanager.h"
 
 static bool dbw_testMode = false;
 
@@ -50,7 +51,7 @@ void DesktopBookmarkWriter::save(const QString &url, const QString &title, const
     }
 
     if (icon.isEmpty()) {
-        effectiveIcon = DEFAULT_DESKTOP_BOOKMARK_ICON;
+        effectiveIcon = FaviconManager::defaultDesktopBookmarkIcon();
     }
 
     m_writter.setFuture(QtConcurrent::run(this, &DesktopBookmarkWriter::write, url, title, effectiveIcon));

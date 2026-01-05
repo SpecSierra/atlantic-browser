@@ -10,6 +10,7 @@
 
 #include "datafetcher.h"
 #include "opensearchconfigs.h"
+#include "faviconmanager.h"
 
 #include <webengine.h>
 
@@ -76,7 +77,7 @@ QString DataFetcher::data() const
 
 QString DataFetcher::defaultIcon() const
 {
-    return DEFAULT_DESKTOP_BOOKMARK_ICON;
+    return FaviconManager::defaultDesktopBookmarkIcon();
 }
 
 bool DataFetcher::hasAcceptedTouchIcon()

@@ -10,6 +10,7 @@
 
 #include "desktopbookmarkwriter.h"
 #include "browserpaths.h"
+#include "faviconmanager.h"
 
 #include <MDesktopEntry>
 #include <QtTest>
@@ -89,23 +90,23 @@ void tst_desktopbookmarkwriter::writeDesktopFile_data()
     QString testPath = BrowserPaths::dataLocation();
     QTest::newRow("basic default icon")  << "Jolla" << "Jolla"
                             << "http://www.test1.jolla.com" << "http://www.test1.jolla.com"
-                            << "" << QString(DEFAULT_DESKTOP_BOOKMARK_ICON)
+                            << "" << FaviconManager::defaultDesktopBookmarkIcon()
                             << QString(DESKTOP_FILE_PATTERN).arg(testPath, "Jolla", "0");
     QTest::newRow("duplicate basic default icon")  << "Jolla" << "Jolla"
                             << "http://www.test1.jolla.com" << "http://www.test1.jolla.com"
-                            << "" << QString(DEFAULT_DESKTOP_BOOKMARK_ICON)
+                            << "" << FaviconManager::defaultDesktopBookmarkIcon()
                             << QString(DESKTOP_FILE_PATTERN).arg(testPath, "Jolla", "1");
     QTest::newRow("title surrounded with spaces")  << "   HelloWorld   " << "HelloWorld"
                             << "http://www.test1.jolla.com" << "http://www.test1.jolla.com"
-                            << "" << QString(DEFAULT_DESKTOP_BOOKMARK_ICON)
+                            << "" << FaviconManager::defaultDesktopBookmarkIcon()
                             << QString(DESKTOP_FILE_PATTERN).arg(testPath, "HelloWorld", "0");
     QTest::newRow("title spaces inside word")  << "   W  o   r  l  d   " << "W  o   r  l  d"
                             << "http://www.test1.jolla.com" << "http://www.test1.jolla.com"
-                            << "" << QString(DEFAULT_DESKTOP_BOOKMARK_ICON)
+                            << "" << FaviconManager::defaultDesktopBookmarkIcon()
                             << QString(DESKTOP_FILE_PATTERN).arg(testPath, "W-o-r-l-d", "0");
     QTest::newRow("link surrounded with spaces")  << "World" << "World"
                             << "   http://www.test1.jolla.com    " << "http://www.test1.jolla.com"
-                            << "" << QString(DEFAULT_DESKTOP_BOOKMARK_ICON)
+                            << "" << FaviconManager::defaultDesktopBookmarkIcon()
                             << QString(DESKTOP_FILE_PATTERN).arg(testPath, "World", "0");
 }
 

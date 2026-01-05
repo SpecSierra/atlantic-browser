@@ -32,6 +32,8 @@ public:
     Q_INVOKABLE void grabIcon(const QString &type, DeclarativeWebPage *webPage, const QSize &size);
     Q_INVOKABLE void clear(const QString &type);
 
+    static QString defaultDesktopBookmarkIcon();
+
 private:
     FaviconManager(QObject *parent = nullptr);
 
