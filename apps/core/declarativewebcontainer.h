@@ -146,9 +146,9 @@ public:
 
     Q_INVOKABLE void dumpPages() const;
 
-    QObject *focusObject() const;
+    QObject *focusObject() const override;
 
-    bool event(QEvent *event);
+    bool event(QEvent *event) override;
 
     DeclarativeHistoryModel *historyModel() const;
     void setHistoryModel(DeclarativeHistoryModel *model);
@@ -198,7 +198,7 @@ signals:
     void touched();
 
 protected:
-    bool eventFilter(QObject *obj, QEvent *event);
+    bool eventFilter(QObject *obj, QEvent *event) override;
     void exposeEvent(QExposeEvent *event) override;
     void touchEvent(QTouchEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;

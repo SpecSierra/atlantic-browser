@@ -30,23 +30,24 @@ public:
     typedef void (*TaskCallback)(void* data);
     typedef void* TaskHandle;
 
-    explicit WebEngine(QObject *parent = 0) : QObject(parent) {};
+    explicit WebEngine(QObject *parent = nullptr) : QObject(parent) {}
 
     static void initialize(const QString &profilePath);
     static WebEngine* instance();
-    MOCK_CONST_METHOD0(isInitialized, bool());
-    MOCK_CONST_METHOD0(stopEmbedding, bool());
 
-    MOCK_METHOD1(CancelTask, void(void *));
-    MOCK_METHOD2(PostCompositorTask, TaskHandle(TaskCallback, void *));
-    MOCK_METHOD2(sendObserve, void(const QString &, const QString &));
-    MOCK_METHOD2(sendObserve, void(const QString &, const QVariant &));
+    MOCK_METHOD(bool, isInitialized, (), (const));
+    MOCK_METHOD(bool, stopEmbedding, (), (const));
 
-    MOCK_METHOD2(notifyObservers, void(const QString &, const QString &));
-    MOCK_METHOD2(notifyObservers, void(const QString &, const QVariant &));
+    MOCK_METHOD(void, CancelTask, (void *));
+    MOCK_METHOD(TaskHandle, PostCompositorTask, (TaskCallback, void *));
+    MOCK_METHOD(void, sendObserve, (const QString &, const QString &));
+    MOCK_METHOD(void, sendObserve, (const QString &, const QVariant &));
 
-    MOCK_METHOD1(addObserver, void(const std::string &));
-    MOCK_METHOD1(addObservers, void(const std::vector<std::string> &));
+    MOCK_METHOD(void, notifyObservers, (const QString &, const QString &));
+    MOCK_METHOD(void, notifyObservers, (const QString &, const QVariant &));
+
+    MOCK_METHOD(void, addObserver, (const std::string &));
+    MOCK_METHOD(void, addObservers, (const std::vector<std::string> &));
 
 signals:
     void initialized();

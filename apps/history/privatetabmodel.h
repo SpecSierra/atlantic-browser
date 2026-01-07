@@ -21,15 +21,15 @@ class PrivateTabModel : public DeclarativeTabModel
     Q_OBJECT
 
 protected:
-    virtual void createTab(const Tab &tab);
-    virtual void updateTitle(int tabId, const QString &url, const QString &title);
-    virtual void removeTab(int tabId);
-    virtual void updateRequestedUrl(int tabId, const QString &requestedUrl, const QString &resolvedUrl);
-    virtual void navigateTo(int tabId, const QString &url, const QString &title, const QString &path);
-    virtual void updateThumbPath(int tabId, const QString &path);
+    void createTab(const Tab &tab) override;
+    void updateTitle(int tabId, const QString &url, const QString &title) override;
+    void removeTab(int tabId) override;
+    void updateRequestedUrl(int tabId, const QString &requestedUrl, const QString &resolvedUrl) override;
+    void navigateTo(int tabId, const QString &url, const QString &title, const QString &path) override;
+    void updateThumbPath(int tabId, const QString &path) override;
 
 public:
-    PrivateTabModel(int nextTabId, DeclarativeWebContainer *webContainer = 0);
+    PrivateTabModel(int nextTabId, DeclarativeWebContainer *webContainer = nullptr);
     ~PrivateTabModel();
 };
 

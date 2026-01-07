@@ -10,6 +10,7 @@
 
 #include "datafetcher.h"
 #include "opensearchconfigs.h"
+#include "faviconmanager.h"
 
 #include <webengine.h>
 
@@ -76,7 +77,7 @@ QString DataFetcher::data() const
 
 QString DataFetcher::defaultIcon() const
 {
-    return DEFAULT_DESKTOP_BOOKMARK_ICON;
+    return FaviconManager::defaultDesktopBookmarkIcon();
 }
 
 bool DataFetcher::hasAcceptedTouchIcon()
@@ -108,7 +109,9 @@ void DataFetcher::saveAsImage()
         if (image.width() < m_minimumIconSize || image.height() < m_minimumIconSize) {
             m_data = defaultIcon();
         } else {
-            m_data = QString(BASE64_IMAGE).arg(QString(m_networkData.toBase64()));
+            // TODO: use the actual image type
+            m_data = QStringLiteral("data:image/png;base64,")
+                    + QString::fromLatin1(m_networkData.toBase64());
         }
     }
     updateAcceptedTouchIcon(true);

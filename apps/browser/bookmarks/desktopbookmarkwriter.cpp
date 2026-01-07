@@ -14,20 +14,22 @@
 
 #include "desktopbookmarkwriter.h"
 #include "browserpaths.h"
+#include "faviconmanager.h"
+#include "datafetcher.h"
 
 static bool dbw_testMode = false;
 
 DesktopBookmarkWriter::DesktopBookmarkWriter(QObject *parent)
     : QObject(parent)
 {
-    connect(&m_writter, &QFutureWatcher<QString>::finished,
+    connect(&m_writer, &QFutureWatcher<QString>::finished,
             this, &DesktopBookmarkWriter::desktopFileWritten);
 }
 
 DesktopBookmarkWriter::~DesktopBookmarkWriter()
 {
-    if (m_writter.isRunning()) {
-        m_writter.waitForFinished();
+    if (m_writer.isRunning()) {
+        m_writer.waitForFinished();
     }
 }
 
@@ -50,15 +52,30 @@ void DesktopBookmarkWriter::save(const QString &url, const QString &title, const
     }
 
     if (icon.isEmpty()) {
-        effectiveIcon = DEFAULT_DESKTOP_BOOKMARK_ICON;
+        effectiveIcon = FaviconManager::defaultDesktopBookmarkIcon();
     }
 
-    m_writter.setFuture(QtConcurrent::run(this, &DesktopBookmarkWriter::write, url, title, effectiveIcon));
+    if (icon.startsWith(QStringLiteral("https://")) || icon.startsWith(QStringLiteral("http://"))) {
+        DataFetcher *fetcher = new DataFetcher(this);
+        connect(fetcher, &DataFetcher::statusChanged,
+                this, [this, url, title, fetcher]() {
+            if (fetcher->status() == DataFetcher::Error) {
+                m_writer.setFuture(QtConcurrent::run(this, &DesktopBookmarkWriter::write, url, title,
+                                                     FaviconManager::defaultDesktopBookmarkIcon()));
+            } else if (fetcher->status() == DataFetcher::Ready) {
+                m_writer.setFuture(QtConcurrent::run(this, &DesktopBookmarkWriter::write, url, title,
+                                                     fetcher->data()));
+            }
+        });
+        fetcher->fetch(icon);
+    } else {
+        m_writer.setFuture(QtConcurrent::run(this, &DesktopBookmarkWriter::write, url, title, effectiveIcon));
+    }
 }
 
 void DesktopBookmarkWriter::desktopFileWritten()
 {
-    QString path = m_writter.result();
+    QString path = m_writer.result();
     emit saved(path);
 }
 
@@ -79,13 +96,13 @@ QString DesktopBookmarkWriter::uniqueDesktopFileName(QString title)
     QStringList similarlyNamedFiles = dir.entryList();
     int count = similarlyNamedFiles.count();
 
-    QString fileName = QString(DESKTOP_FILE).arg(title).arg(count);
+    QString fileName = QString(desktopFilePattern()).arg(title).arg(count);
     while (similarlyNamedFiles.contains(fileName)) {
         ++count;
-        fileName = QString(DESKTOP_FILE).arg(title).arg(count);
+        fileName = QString(desktopFilePattern()).arg(title).arg(count);
     }
 
-    return QString(DESKTOP_FILE_PATTERN).arg(filePath, title).arg(count);
+    return filePath + '/' + fileName;
 }
 
 QString DesktopBookmarkWriter::write(const QString &url, const QString &title, const QString &icon)
@@ -104,7 +121,12 @@ QString DesktopBookmarkWriter::write(const QString &url, const QString &title, c
         desktopFile.flush();
         desktopFile.close();
         return fileName;
-    } else {
-        return "";
     }
+
+    return QString();
+}
+
+QString DesktopBookmarkWriter::desktopFilePattern()
+{
+    return QStringLiteral("sailfish-browser-%2-%3.desktop");
 }

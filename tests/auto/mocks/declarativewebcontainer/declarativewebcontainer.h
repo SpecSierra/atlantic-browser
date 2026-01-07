@@ -23,7 +23,7 @@ class DeclarativeWebContainer : public QObject
     Q_OBJECT
 
 public:
-    explicit DeclarativeWebContainer(QObject *parent = 0);
+    explicit DeclarativeWebContainer(QObject *parent = nullptr);
 
     int tabId(uint32_t uniqueId) const;
     int previouslyUsedTabId() const;
@@ -33,6 +33,5 @@ public:
 signals:
     void portraitChanged();
 };
-
 
 #endif

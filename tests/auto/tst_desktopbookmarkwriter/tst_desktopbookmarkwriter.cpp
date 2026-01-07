@@ -10,6 +10,7 @@
 
 #include "desktopbookmarkwriter.h"
 #include "browserpaths.h"
+#include "faviconmanager.h"
 
 #include <MDesktopEntry>
 #include <QtTest>
@@ -52,9 +53,9 @@ QString tst_desktopbookmarkwriter::writtenDesktopFile(QSignalSpy &spy)
     if (spy.count() == 1) {
         QList<QVariant> arguments = spy.takeFirst();
         return arguments.at(0).toString();
-    } else {
-        return "";
     }
+
+    return QString();
 }
 
 void tst_desktopbookmarkwriter::invalidInput_data()
@@ -86,27 +87,28 @@ void tst_desktopbookmarkwriter::writeDesktopFile_data()
     QTest::addColumn<QString>("outputIcon");
     QTest::addColumn<QString>("savedDesktopFile");
 
-    QString testPath = BrowserPaths::dataLocation();
-    QTest::newRow("basic default icon")  << "Jolla" << "Jolla"
+    QString testPath = BrowserPaths::dataLocation() + '/';
+
+    QTest::newRow("basic default icon") << "Jolla" << "Jolla"
                             << "http://www.test1.jolla.com" << "http://www.test1.jolla.com"
-                            << "" << QString(DEFAULT_DESKTOP_BOOKMARK_ICON)
-                            << QString(DESKTOP_FILE_PATTERN).arg(testPath, "Jolla", "0");
-    QTest::newRow("duplicate basic default icon")  << "Jolla" << "Jolla"
+                            << "" << FaviconManager::defaultDesktopBookmarkIcon()
+                            << testPath + DesktopBookmarkWriter::desktopFilePattern().arg("Jolla", "0");
+    QTest::newRow("duplicate basic default icon") << "Jolla" << "Jolla"
                             << "http://www.test1.jolla.com" << "http://www.test1.jolla.com"
-                            << "" << QString(DEFAULT_DESKTOP_BOOKMARK_ICON)
-                            << QString(DESKTOP_FILE_PATTERN).arg(testPath, "Jolla", "1");
-    QTest::newRow("title surrounded with spaces")  << "   HelloWorld   " << "HelloWorld"
+                            << "" << FaviconManager::defaultDesktopBookmarkIcon()
+                            << testPath + DesktopBookmarkWriter::desktopFilePattern().arg("Jolla", "1");
+    QTest::newRow("title surrounded with spaces") << "   HelloWorld   " << "HelloWorld"
                             << "http://www.test1.jolla.com" << "http://www.test1.jolla.com"
-                            << "" << QString(DEFAULT_DESKTOP_BOOKMARK_ICON)
-                            << QString(DESKTOP_FILE_PATTERN).arg(testPath, "HelloWorld", "0");
-    QTest::newRow("title spaces inside word")  << "   W  o   r  l  d   " << "W  o   r  l  d"
+                            << "" << FaviconManager::defaultDesktopBookmarkIcon()
+                            << testPath + DesktopBookmarkWriter::desktopFilePattern().arg("HelloWorld", "0");
+    QTest::newRow("title spaces inside word") << "   W  o   r  l  d   " << "W  o   r  l  d"
                             << "http://www.test1.jolla.com" << "http://www.test1.jolla.com"
-                            << "" << QString(DEFAULT_DESKTOP_BOOKMARK_ICON)
-                            << QString(DESKTOP_FILE_PATTERN).arg(testPath, "W-o-r-l-d", "0");
-    QTest::newRow("link surrounded with spaces")  << "World" << "World"
+                            << "" << FaviconManager::defaultDesktopBookmarkIcon()
+                            << testPath + DesktopBookmarkWriter::desktopFilePattern().arg("W-o-r-l-d", "0");
+    QTest::newRow("link surrounded with spaces") << "World" << "World"
                             << "   http://www.test1.jolla.com    " << "http://www.test1.jolla.com"
-                            << "" << QString(DEFAULT_DESKTOP_BOOKMARK_ICON)
-                            << QString(DESKTOP_FILE_PATTERN).arg(testPath, "World", "0");
+                            << "" << FaviconManager::defaultDesktopBookmarkIcon()
+                            << testPath + DesktopBookmarkWriter::desktopFilePattern().arg("World", "0");
 }
 
 void tst_desktopbookmarkwriter::writeDesktopFile()

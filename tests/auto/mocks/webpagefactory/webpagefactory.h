@@ -22,13 +22,13 @@ class WebPageFactory : public QObject
 {
     Q_OBJECT
 public:
-    WebPageFactory(QObject *parent = 0) : QObject(parent) {};
+    WebPageFactory(QObject *parent = nullptr) : QObject(parent) {}
 
-    MOCK_METHOD3(createWebPage, DeclarativeWebPage*(DeclarativeWebContainer*, const Tab&, int));
+    MOCK_METHOD(DeclarativeWebPage*, createWebPage, (DeclarativeWebContainer*, const Tab&, int));
 
 signals:
     void aboutToInitialize(DeclarativeWebPage *webPage);
 
 public slots:
-    void updateQmlComponent(QQmlComponent*) {};
+    void updateQmlComponent(QQmlComponent*) {}
 };

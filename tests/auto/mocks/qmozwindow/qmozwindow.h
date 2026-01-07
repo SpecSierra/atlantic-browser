@@ -26,21 +26,23 @@ class QMozWindow : public QObject
     Q_OBJECT
 
 public:
-    explicit QMozWindow(const QSize &size, QObject *parent = 0) : QObject(parent) {
+    explicit QMozWindow(const QSize &size, QObject *parent = nullptr)
+        : QObject(parent)
+    {
         Q_UNUSED(size);
     }
 
-    MOCK_METHOD1(setSize, void(QSize));
-    MOCK_METHOD0(size, QSize(void));
-    MOCK_METHOD1(setContentOrientation, void(Qt::ScreenOrientation));
-    MOCK_METHOD0(contentOrientation, Qt::ScreenOrientation());
-    MOCK_METHOD0(pendingOrientation, Qt::ScreenOrientation());
-    MOCK_METHOD2(getPlatformImage, void(int*, int*));
-    MOCK_METHOD0(suspendRendering, void(void));
-    MOCK_METHOD0(resumeRendering, void(void));
-    MOCK_METHOD0(scheduleUpdate, void(void));
-    MOCK_METHOD0(readyToPaint, bool(void));
-    MOCK_METHOD1(setReadyToPaint, bool(bool));
+    MOCK_METHOD(void, setSize, (QSize));
+    MOCK_METHOD(QSize, size, (void));
+    MOCK_METHOD(void, setContentOrientation, (Qt::ScreenOrientation));
+    MOCK_METHOD(Qt::ScreenOrientation, contentOrientation, ());
+    MOCK_METHOD(Qt::ScreenOrientation, pendingOrientation, ());
+    MOCK_METHOD(void, getPlatformImage, (int*, int*));
+    MOCK_METHOD(void, suspendRendering, (void));
+    MOCK_METHOD(void, resumeRendering, (void));
+    MOCK_METHOD(void, scheduleUpdate, (void));
+    MOCK_METHOD(bool, readyToPaint, (void));
+    MOCK_METHOD(bool, setReadyToPaint, (bool));
 
 signals:
     void pendingOrientationChanged(Qt::ScreenOrientation orientation);
