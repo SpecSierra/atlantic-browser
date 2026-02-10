@@ -8,7 +8,7 @@
 Name:       sailfish-browser
 
 Summary:    Sailfish Browser
-Version:    2.3.0
+Version:    2.3.30
 Release:    1
 License:    MPLv2.0
 Url:        https://github.com/sailfishos/sailfish-browser
@@ -39,7 +39,6 @@ Requires: sailfish-content-graphics
 Requires: xulrunner-qt5 >= %{min_xulrunner_version}
 Requires: embedlite-components-qt5 >= %{min_embedlite_components_version}
 Requires: qtmozembed-qt5 >= %{min_qtmozembed_version}
-Requires: sailfish-browser-settings = %{version}
 Requires: sailfish-components-webview-qt5 >= %{min_sailfishwebengine_version}
 Requires: sailfish-components-webview-qt5-popups >= %{min_sailfishwebengine_version}
 Requires: sailfish-components-webview-qt5-pickers >= %{min_sailfishwebengine_version}
@@ -51,12 +50,16 @@ Requires: desktop-file-utils
 Requires: qt5-qtgraphicaleffects
 Requires: nemo-qml-plugin-policy-qt5 >= 0.0.4
 Requires: sailfish-policy >= 0.3.31
-Requires: jolla-settings-system >= 1.0.70
 Requires: libkeepalive >= 1.7.0
 Requires: sailfish-components-pickers-qt5 >= 0.1.7
 Requires: nemo-qml-plugin-notifications-qt5 >= 1.0.12
 Requires: mapplauncherd-booster-browser
 Requires: nemo-qml-plugin-connectivity
+Requires: jolla-settings >= 0.11.29
+Requires: jolla-settings-system >= 1.0.70
+Requires: sailfish-policy
+Obsoletes: sailfish-browser-settings <= 2.3.29
+Provides: sailfish-browser-settings > 2.3.29
 
 %{_oneshot_requires_post}
 
@@ -65,15 +68,6 @@ Requires: nemo-qml-plugin-connectivity
 
 %description
 Sailfish Web Browser
-
-%package settings
-Summary:  Browser plugin for Jolla Settings
-Requires: jolla-settings >= 0.11.29
-Requires: jolla-settings-system >= 1.0.70
-Requires: sailfish-policy
-
-%description settings
-Browser plugin for Jolla Settings
 
 %package ts-devel
 Summary: Translation source for Sailfish browser
@@ -128,6 +122,7 @@ fi
 %{_datadir}/%{captiveportal}
 %{_datadir}/translations/%{name}*.qm
 %{_datadir}/translations/%{captiveportal}*.qm
+%{_datadir}/translations/settings-%{name}_eng_en.qm
 %{_datadir}/dbus-1/services/*.service
 %{_oneshotdir}/*
 %{_userunitdir}/user-session.target.d/50-sailfish-browser.conf
@@ -138,12 +133,9 @@ fi
 %{_sharedstatedir}/environment/nemo/*
 %{_libexecdir}/jolla-vault/units/vault-browser
 %{_datadir}/jolla-vault/units/Browser.json
-
-%files settings
 %{_libdir}/qt5/qml/org/sailfishos/browser/settings
 %{_datadir}/jolla-settings/entries/browser.json
 %{_datadir}/jolla-settings/pages/browser
-%{_datadir}/translations/settings-%{name}_eng_en.qm
 
 %files ts-devel
 %{_datadir}/translations/source/*.ts
