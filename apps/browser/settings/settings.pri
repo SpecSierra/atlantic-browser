@@ -1,7 +1,7 @@
 INCLUDEPATH += $$PWD
 
 CONFIG += link_pkgconfig
-PKGCONFIG += mlite5 sailfishwebengine
+PKGCONFIG += mlite5
 
 SOURCES += \
     $$PWD/searchenginemodel.cpp \

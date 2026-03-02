@@ -13,12 +13,9 @@ include(../use_lib.pri)
 DEPLOYMENT_PATH = /usr/share/$$TARGET
 DEFINES += DEPLOYMENT_PATH=\"\\\"\"$${DEPLOYMENT_PATH}/\"\\\"\"
 
+# Link against boostable but do NOT define HAS_BOOSTER (use standalone QGuiApplication)
 packagesExist(qdeclarative5-boostable) {
-    message("Building with qdeclarative-boostable support")
-    DEFINES += HAS_BOOSTER
     PKGCONFIG += qdeclarative5-boostable
-} else {
-    warning("qdeclarative5-boostable not available; startup times will be slower")
 }
 
 

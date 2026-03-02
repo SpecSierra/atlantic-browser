@@ -1,25 +1,23 @@
 INCLUDEPATH += $$PWD
 
 CONFIG += link_pkgconfig
-PKGCONFIG += sailfishwebengine sailfishpolicy nemotransferengine-qt5 dsme_dbus_if mlite5
+PKGCONFIG += sailfishpolicy nemotransferengine-qt5 dsme_dbus_if mlite5
 
 QT += quick
 
-# C++ sources
+# C++ sources (Gecko-free)
 SOURCES += \
     $$PWD/browser.cpp \
     $$PWD/closeeventfilter.cpp \
     $$PWD/datafetcher.cpp \
-    $$PWD/downloadmanager.cpp \
     $$PWD/declarativewebcontainer.cpp \
+    $$PWD/downloadmanager.cpp \
     $$PWD/declarativewebutils.cpp \
     $$PWD/faviconmanager.cpp \
     $$PWD/inputregion.cpp \
     $$PWD/logging.cpp \
     $$PWD/secureaction.cpp \
-    $$PWD/settingmanager.cpp \
-    $$PWD/webpagequeue.cpp \
-    $$PWD/webpages.cpp
+    $$PWD/settingmanager.cpp
 
 # C++ headers
 HEADERS += \
@@ -36,5 +34,4 @@ HEADERS += \
     $$PWD/logging.h \
     $$PWD/secureaction.h \
     $$PWD/settingmanager.h \
-    $$PWD/webpagequeue.h \
-    $$PWD/webpages.h
+    $$PWD/mdconfitem.h
