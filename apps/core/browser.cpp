@@ -24,48 +24,9 @@
 #include <QTimer>
 #include <QUrl>
 #include <QDebug>
-#include <webengine.h>
-#include <webenginesettings.h>
-
-const auto MOZILLA_DATA_UA_UPDATE = QStringLiteral("ua-update.json");
-const auto MOZILLA_DATA_UA_UPDATE_SOURCE = QStringLiteral("/usr/share/sailfish-browser/data/ua-update.json.in");
-const auto MOZILLA_DATA_PREFS = QStringLiteral("prefs.js");
-const auto MOZILLA_DATA_PREFS_SOURCE = QStringLiteral("/usr/share/sailfish-browser/data/prefs.js");
-
 BrowserPrivate::BrowserPrivate(QQuickView *view)
     : view(view)
 {
-    initUserData();
-}
-
-void BrowserPrivate::initUserData()
-{
-    QString mozillaDir = QString("%1/.mozilla/").arg(BrowserAppInfo::profileName());
-    QDir dir(mozillaDir);
-    if (!dir.exists())
-        dir.mkpath(dir.path());
-
-    QFile ua(mozillaDir + MOZILLA_DATA_UA_UPDATE);
-    if (!ua.exists()) {
-        if (ua.open(QIODevice::WriteOnly)) {
-            QFile source(MOZILLA_DATA_UA_UPDATE_SOURCE);
-            if (source.open(QIODevice::ReadOnly)) {
-                QByteArray line;
-                while (!source.atEnd()) {
-                    line = source.readLine();
-                    if (!line.trimmed().startsWith("//"))
-                        ua.write(line);
-                }
-                source.close();
-            }
-            ua.close();
-        } else {
-            qWarning() << "Could not open ua-update.json";
-        }
-    }
-
-    if (!QFile::exists(mozillaDir + MOZILLA_DATA_PREFS))
-        QFile::copy(MOZILLA_DATA_PREFS_SOURCE, mozillaDir + MOZILLA_DATA_PREFS);
 }
 
 Browser::Browser(QQuickView *view, const QString &dataPath, QObject *parent)
@@ -77,9 +38,6 @@ Browser::Browser(QQuickView *view, const QString &dataPath, QObject *parent)
 
     Q_ASSERT(view);
     Q_ASSERT(qGuiApp);
-
-    SailfishOS::WebEngine::initialize(BrowserAppInfo::profileName());
-    SailfishOS::WebEngineSettings::initialize();
 
     DeclarativeWebUtils *utils = DeclarativeWebUtils::instance();
     DownloadManager *downloadManager = DownloadManager::instance();

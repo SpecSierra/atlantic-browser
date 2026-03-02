@@ -1,15 +1,8 @@
-/****************************************************************************
-**
-** Copyright (c) 2013 Jolla Ltd.
-** Contact: Dmitry Rozhkov <dmitry.rozhkov@jollamobile.com>
-**
-****************************************************************************/
+/*
+ * Copyright (c) 2013 Jolla Ltd.
+ * SPDX-License-Identifier: MPL-2.0
+ */
 
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this file,
- * You can obtain one at http://mozilla.org/MPL/2.0/. */
-
-#include <webengine.h>
 #include "closeeventfilter.h"
 #include "declarativewebutils.h"
 #include "dbmanager.h"
@@ -22,9 +15,6 @@ CloseEventFilter::CloseEventFilter(DownloadManager *dlMgr, QObject *parent)
       m_downloadManager(dlMgr),
       m_closing(false)
 {
-    SailfishOS::WebEngine *webEngine = SailfishOS::WebEngine::instance();
-    connect(webEngine, &SailfishOS::WebEngine::contextDestroyed,
-            this, &CloseEventFilter::onContextDestroyed);
     connect(&m_shutdownWatchdog, &QTimer::timeout,
             this, &CloseEventFilter::onWatchdogTimeout);
     connect(m_downloadManager, &DownloadManager::allTransfersCompleted,
@@ -34,8 +24,7 @@ CloseEventFilter::CloseEventFilter(DownloadManager *dlMgr, QObject *parent)
 void CloseEventFilter::applicationClosingStarted()
 {
     if (!m_downloadManager->existActiveTransfers()) {
-        // Give the engine 60 seconds to send lastWindowDestroyed signal.
-        m_shutdownWatchdog.start(60000);
+        closeApplication();
     } else {
         m_closing = true;
     }
@@ -53,10 +42,7 @@ void CloseEventFilter::closeApplication()
         DBManager::instance()->removeAllTabs();
     }
 
-    SailfishOS::WebEngine::instance()->stopEmbedding();
-    // Give the engine 5 seconds to shut down. If it fails terminate
-    // with a fatal error.
-    m_shutdownWatchdog.start(5000);
+    qApp->exit();
 }
 
 void CloseEventFilter::onContextDestroyed()
@@ -66,7 +52,7 @@ void CloseEventFilter::onContextDestroyed()
 
 void CloseEventFilter::onWatchdogTimeout()
 {
-    qFatal("Browser failed to terminate in acceptable time!");
+    qApp->exit();
 }
 
 void CloseEventFilter::cancelCloseApplication()
