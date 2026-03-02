@@ -1,47 +1,44 @@
-%global min_xulrunner_version 45.8.1.1
-%global min_qtmozembed_version 1.53.8
-%global min_embedlite_components_version 1.20.0
-%global min_sailfishwebengine_version 1.5.9
-
 %global captiveportal sailfish-captiveportal
 
 Name:       sailfish-browser
 
-Summary:    Sailfish Browser
+Summary:    Sailfish Browser (WPE WebKit engine)
 Version:    2.3.30
-Release:    1
+Release:    1.wpe1
 License:    MPLv2.0
-Url:        https://github.com/sailfishos/sailfish-browser
+Url:        https://github.com/SpecSierra/sailfish-browser
 Source0:    %{name}-%{version}.tar.bz2
+
+# --- Build dependencies (WPE replaces Gecko/EmbedLite) ---
 BuildRequires:  pkgconfig(Qt5Core)
 BuildRequires:  pkgconfig(Qt5Qml)
 BuildRequires:  pkgconfig(Qt5Gui)
 BuildRequires:  pkgconfig(Qt5Quick)
-BuildRequires:  pkgconfig(qt5embedwidget) >= %{min_qtmozembed_version}
 BuildRequires:  pkgconfig(Qt5DBus)
 BuildRequires:  pkgconfig(Qt5Concurrent)
 BuildRequires:  pkgconfig(Qt5Sql)
 BuildRequires:  pkgconfig(nemotransferengine-qt5)
 BuildRequires:  pkgconfig(mlite5)
 BuildRequires:  pkgconfig(qdeclarative5-boostable)
-BuildRequires:  pkgconfig(sailfishwebengine) >= %{min_sailfishwebengine_version}
 BuildRequires:  pkgconfig(sailfishpolicy)
+BuildRequires:  pkgconfig(dsme_dbus_if)
+BuildRequires:  pkgconfig(vault) >= 1.0.1
+BuildRequires:  pkgconfig(glib-2.0)
+BuildRequires:  pkgconfig(gio-2.0)
+BuildRequires:  pkgconfig(wpewebkit-2.0)
+BuildRequires:  pkgconfig(wpe-1.0)
 BuildRequires:  qt5-qttools
 BuildRequires:  qt5-qttools-linguist
 BuildRequires:  oneshot
 BuildRequires:  pkgconfig(gtest)
 BuildRequires:  pkgconfig(gmock)
-BuildRequires:  pkgconfig(vault) >= 1.0.1
-BuildRequires:  pkgconfig(dsme_dbus_if)
 
+# --- Runtime dependencies ---
 Requires: sailfishsilica-qt5 >= 1.2.33
 Requires: sailfish-content-graphics
-Requires: xulrunner-qt5 >= %{min_xulrunner_version}
-Requires: embedlite-components-qt5 >= %{min_embedlite_components_version}
-Requires: qtmozembed-qt5 >= %{min_qtmozembed_version}
-Requires: sailfish-components-webview-qt5 >= %{min_sailfishwebengine_version}
-Requires: sailfish-components-webview-qt5-popups >= %{min_sailfishwebengine_version}
-Requires: sailfish-components-webview-qt5-pickers >= %{min_sailfishwebengine_version}
+Requires: wpewebkit2 >= 2.50.5
+Requires: wpewebkit2-qt5 >= 2.50.5
+Requires: wpe-sfos-compat >= 1.0.0
 Requires: qt5-plugin-imageformat-ico
 Requires: qt5-plugin-imageformat-gif
 Requires: qt5-plugin-position-geoclue
@@ -53,13 +50,16 @@ Requires: sailfish-policy >= 0.3.31
 Requires: libkeepalive >= 1.7.0
 Requires: sailfish-components-pickers-qt5 >= 0.1.7
 Requires: nemo-qml-plugin-notifications-qt5 >= 1.0.12
-Requires: mapplauncherd-booster-browser
 Requires: nemo-qml-plugin-connectivity
 Requires: jolla-settings >= 0.11.29
 Requires: jolla-settings-system >= 1.0.70
 Requires: sailfish-policy
+
+# Gecko engine packages obsoleted by this WPE build
 Obsoletes: sailfish-browser-settings <= 2.3.29
-Provides: sailfish-browser-settings > 2.3.29
+Provides:  sailfish-browser-settings > 2.3.29
+Conflicts: xulrunner-qt5
+Conflicts: qtmozembed-qt5
 
 %{_oneshot_requires_post}
 
@@ -67,7 +67,10 @@ Provides: sailfish-browser-settings > 2.3.29
 %{!?qtc_make:%define qtc_make make}
 
 %description
-Sailfish Web Browser
+Sailfish Web Browser — WPE WebKit engine build.
+
+Replaces the Gecko/EmbedLite engine with WPE WebKit 2.50.5.
+All Silica QML UI is preserved; only the engine layer is swapped.
 
 %package ts-devel
 Summary: Translation source for Sailfish browser
@@ -90,7 +93,11 @@ Unit tests and additional data needed for functional tests
 %setup -q -n %{name}-%{version}
 
 %build
-%qtc_qmake5 -r VERSION=%{version}
+# Pass WPE include/lib paths to qmake. The wpewebkit-2.0 pkg-config is
+# provided by the wpewebkit2-devel BuildRequires above.
+%qtc_qmake5 -r VERSION=%{version} \
+    "INCLUDEPATH += /usr/include/wpe-webkit-2.0 /usr/include/wpe-1.0" \
+    "LIBS += -lWPEWebKit-2.0 -lwpe-1.0 -lgio-2.0 -lgobject-2.0 -lglib-2.0"
 %qtc_make %{?_smp_mflags}
 
 %install
@@ -99,6 +106,20 @@ chmod +x %{buildroot}/%{_oneshotdir}/*
 
 mkdir -p %{buildroot}/%{_sharedstatedir}/environment/nemo/
 cp -f data/70-browser.conf %{buildroot}/%{_sharedstatedir}/environment/nemo/
+
+# Install sailjail profile
+install -d %{buildroot}%{_sysconfdir}/sailjail/applications
+# NOTE: profile ships from wpe-sfos-build/sailjail/sailfish-browser.profile
+# For now install a minimal stub that disables sandboxing pending full profile work
+cat > %{buildroot}%{_sysconfdir}/sailjail/applications/sailfish-browser.profile << 'EOF'
+[sailfish]
+Sandboxing=disabled
+
+[X-Sailjail]
+Permissions=Internet;Audio
+OrganizationName=org.sailfishos
+ApplicationName=sailfish-browser
+EOF
 
 %post
 /sbin/ldconfig || :
@@ -126,16 +147,16 @@ fi
 %{_datadir}/dbus-1/services/*.service
 %{_oneshotdir}/*
 %{_userunitdir}/user-session.target.d/50-sailfish-browser.conf
-# Let main package own import root level
 %dir %{_libdir}/qt5/qml/org/sailfishos/browser
 %{_libdir}/libsailfishbrowser.so.*
 %exclude %{_libdir}/libsailfishbrowser.so
-%{_sharedstatedir}/environment/nemo/*
+%{_sharedstatedir}/environment/nemo/70-browser.conf
 %{_libexecdir}/jolla-vault/units/vault-browser
 %{_datadir}/jolla-vault/units/Browser.json
 %{_libdir}/qt5/qml/org/sailfishos/browser/settings
 %{_datadir}/jolla-settings/entries/browser.json
 %{_datadir}/jolla-settings/pages/browser
+%config %{_sysconfdir}/sailjail/applications/sailfish-browser.profile
 
 %files ts-devel
 %{_datadir}/translations/source/*.ts
