@@ -14,9 +14,9 @@
 
 #include <QString>
 #include <QFile>
+#include <cstdio>
 
 #include <MDConfItem>
-#include <webengine.h>
 
 const auto SEARCH_ENGINE_CONFIG = QStringLiteral("/apps/sailfish-browser/settings/search_engine");
 const auto SEARCH_ENGINES_AVAILABLE_CONFIG = QStringLiteral("/apps/sailfish-browser/settings/search_engines_available");
@@ -24,12 +24,13 @@ const auto SEARCH_ENGINES_AVAILABLE_CONFIG = QStringLiteral("/apps/sailfish-brow
 SearchEngineModel::SearchEngineModel(QObject *parent)
     : QAbstractListModel(parent)
 {
+    fprintf(stderr, "[SEM] constructor start\n");
     QString userSearchPrefix = OpenSearchConfigs::getOpenSearchConfigPath();
     QMap<QString, QString> searchConfigs = OpenSearchConfigs::getAvailableOpenSearchConfigs();
+    fprintf(stderr, "[SEM] got %d search configs\n", searchConfigs.count());
 
     for (const QString &name : searchConfigs.keys()) {
         Status status;
-        // User installed searches are saved to user config dir
         if (searchConfigs.value(name).startsWith(userSearchPrefix)) {
             status = Status::UserInstalled;
         } else {
@@ -40,14 +41,9 @@ SearchEngineModel::SearchEngineModel(QObject *parent)
         m_searchEngines.append(engine);
     }
 
-    // Get available searches from config
-    MDConfItem gconf(SEARCH_ENGINES_AVAILABLE_CONFIG);
-    QMap<QString, QVariant> engines = gconf.value().toMap();
-
-    for (const QString &name : engines.keys()) {
-        SearchEngine engine(engines.value(name).toString(), name, Status::Available);
-        m_searchEngines.append(engine);
-    }
+    // WPE: Skip MDConfItem for available engines — causes SIGSEGV in mlite5/dconf
+    // The "available" engines are user-discoverable ones from websites; not critical.
+    fprintf(stderr, "[SEM] constructor done, %d engines total\n", m_searchEngines.count());
 }
 
 SearchEngineModel::~SearchEngineModel()
@@ -108,10 +104,7 @@ void SearchEngineModel::add(const QString &title, const QString &url)
     endInsertRows();
     emit countChanged();
 
-    MDConfItem gconf(SEARCH_ENGINES_AVAILABLE_CONFIG);
-    QMap<QString, QVariant> engines = gconf.value().toMap();
-    engines.insert(title, url);
-    gconf.set(engines);
+    // WPE: MDConfItem causes SIGSEGV — skip dconf persistence
 }
 
 void SearchEngineModel::install(const QString &title)
@@ -125,12 +118,7 @@ void SearchEngineModel::install(const QString &title)
                     m_searchEngines[i].status = Status::UserInstalled;
                     emit dataChanged(index(i), index(i), QVector<int>() << StatusRole);
 
-                    MDConfItem gconf(SEARCH_ENGINE_CONFIG);
-                    gconf.set(m_searchEngines[i].title);
-                    MDConfItem available(SEARCH_ENGINES_AVAILABLE_CONFIG);
-                    QMap<QString, QVariant> engines = available.value().toMap();
-                    engines.remove(m_searchEngines[i].title);
-                    available.set(engines);
+                    // WPE: MDConfItem causes SIGSEGV — skip dconf persistence
 
                     emit installed(m_searchEngines[i].title);
 
@@ -148,25 +136,14 @@ void SearchEngineModel::install(const QString &title)
 
 void SearchEngineModel::remove(const QString &title)
 {
-    MDConfItem gconf(SEARCH_ENGINE_CONFIG);
-    if (gconf.value() == title)
-        return;
-
+    // WPE: MDConfItem causes SIGSEGV — skip dconf check for active engine
     for (int i = 0; i < m_searchEngines.count(); i++) {
         if (m_searchEngines[i].title == title && m_searchEngines[i].status != Status::System) {
             beginRemoveRows(QModelIndex(), i, i);
             if (m_searchEngines[i].status == Status::Available) {
-                MDConfItem gconf(SEARCH_ENGINES_AVAILABLE_CONFIG);
-                QMap<QString, QVariant> engines = gconf.value().toMap();
-                engines.remove(title);
-                gconf.set(engines);
+                // WPE: skip dconf persistence
             } else {
                 QFile::remove(OpenSearchConfigs::getAvailableOpenSearchConfigs().value(title));
-                // Inform WebEngine
-                QVariantMap message;
-                message.insert(QLatin1String("msg"), QVariant(QLatin1String("remove")));
-                message.insert(QLatin1String("name"), QVariant(title));
-                SailfishOS::WebEngine::instance()->notifyObservers(QLatin1String("embedui:search"), QVariant(message));
             }
             m_searchEngines.removeAt(i);
             endRemoveRows();

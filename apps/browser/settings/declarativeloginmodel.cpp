@@ -11,7 +11,6 @@
 #include <QDebug>
 #include <QPair>
 
-#include "webengine.h"
 #include "faviconmanager.h"
 
 #include "declarativeloginmodel.h"
@@ -24,9 +23,7 @@ DeclarativeLoginModel::DeclarativeLoginModel(QObject *parent)
     , m_nextUid(0)
     , m_populated(false)
 {
-    SailfishOS::WebEngine *webEngine = SailfishOS::WebEngine::instance();
-    webEngine->addObserver(ALL_LOGINS);
-    connect(webEngine, &SailfishOS::WebEngine::recvObserve, this, &DeclarativeLoginModel::handleRecvObserve);
+    // WPE: login management via WebKit not available; password manager stub
 }
 
 void DeclarativeLoginModel::classBegin()
@@ -71,7 +68,7 @@ void DeclarativeLoginModel::modify(int uid, const QString &username, const QStri
     data.insert(QStringLiteral("oldinfo"), oldLogin.toMap());
     data.insert(QStringLiteral("newinfo"), newLogin.toMap());
 
-    SailfishOS::WebEngine::instance()->notifyObservers(LOGINS_ACTION, QVariant(data));
+    
     m_logins.replace(index, UidLoginInfo(uid, newLogin));
 
     emit dataChanged(QAbstractListModel::index(index), QAbstractListModel::index(index), QVector<int>());
@@ -125,7 +122,7 @@ void DeclarativeLoginModel::handleRecvObserve(const QString &message, const QVar
     if (message == ALL_LOGINS) {
         setLoginList(qvariant_cast<QVariantList>(data));
         // We're only interested in receiving the message once
-        SailfishOS::WebEngine::instance()->removeObserver(ALL_LOGINS);
+        
     }
 }
 
@@ -154,9 +151,11 @@ void DeclarativeLoginModel::setLoginList(const QVariantList &data)
 
 void DeclarativeLoginModel::requestLogins()
 {
-    QVariantMap data;
-    data.insert(QStringLiteral("action"), "getall");
-    SailfishOS::WebEngine::instance()->notifyObservers(LOGINS_ACTION, QVariant(data));
+    // WPE: no Gecko login storage; mark as populated immediately with empty list
+    if (!m_populated) {
+        m_populated = true;
+        emit populatedChanged();
+    }
 }
 
 void DeclarativeLoginModel::remove(int uid)
@@ -173,7 +172,7 @@ void DeclarativeLoginModel::remove(int uid)
     QVariantMap data;
     data.insert(QStringLiteral("action"), "remove");
     data.insert(QStringLiteral("login"), login.toMap());
-    SailfishOS::WebEngine::instance()->notifyObservers(LOGINS_ACTION, QVariant(data));
+    
     m_logins.removeAt(index);
     m_index.remove(uid);
 
