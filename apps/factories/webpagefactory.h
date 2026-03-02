@@ -15,22 +15,14 @@
 #include <QPointer>
 #include <QObject>
 
-class DeclarativeWebPage;
-class DeclarativeWebContainer;
-class Tab;
 class QQmlComponent;
 
+// Stub factory — WPEWebContainer creates pages directly
 class WebPageFactory : public QObject
 {
     Q_OBJECT
 public:
     WebPageFactory(QObject *parent = nullptr) : QObject(parent) {}
-
-    DeclarativeWebPage* createWebPage(DeclarativeWebContainer *webContainer,
-                                      const Tab &initialTab);
-
-signals:
-    void aboutToInitialize(DeclarativeWebPage *webPage);
 
 public slots:
     void updateQmlComponent(QQmlComponent *newComponent);
