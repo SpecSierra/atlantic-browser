@@ -28,7 +28,7 @@ WebContainer {
     readonly property bool moving: contentItem && contentItem.moving
     property bool portrait: true
     property bool contentFullscreen: contentItem && contentItem.fullscreen
-    property bool needChrome: !contentItem || (contentItem.chrome && !contentItem.fullscreen)
+    // needChrome is provided as FINAL by WPEWebContainer C++ (cannot override)
     property real fullscreenHeight
     property bool imOpened
     property real toolbarHeight
