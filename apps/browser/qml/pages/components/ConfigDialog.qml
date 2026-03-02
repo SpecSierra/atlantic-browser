@@ -12,175 +12,29 @@
 
 import QtQuick 2.2
 import Sailfish.Silica 1.0
-import Sailfish.WebEngine 1.0
 
+// WPE: about:config removed (Gecko-specific). This dialog is not available with WPE WebKit.
 Dialog {
     id: configDialog
 
     property var changedConfigs: ({})
-
-    // Get all the preferences
-    Component.onCompleted: WebEngine.notifyObservers("embedui:allprefs", {})
-
-    // If dialog is accepted, save all the changed configs
-    onAccepted: {
-        for (var key in changedConfigs) {
-            var preference = changedConfigs[key]
-            WebEngineSettings.setPreference(key, preference.value, preference.type)
-        }
-        WebEngine.notifyObservers("embedui:saveprefs", {})
+    // WPE stubs
+    QtObject {
+        id: _webEngineSettings
+        readonly property int BoolPref: 0
+        readonly property int IntPref: 1
+        function setPreference(key, value, type) {}
     }
 
-    function filterModel(value) {
-        if (value === "") {
-            prefsList.model = prefsListModel
-        } else {
-            filterListModel.clear()
-            for (var i=0; i<prefsListModel.count; i++) {
-                if (prefsListModel.get(i).name.toLowerCase().search(value.toLowerCase()) != -1) {
-                    var obj = prefsListModel.get(i)
-                    obj.prefsListIndex = i
-                    filterListModel.append(obj)
-                }
-            }
-            prefsList.model = filterListModel
-        }
-    }
-
-    Connections {
-        target: WebEngine
-        onRecvObserve: {
-            if (message === "embed:allprefs") {
-                var allprefs = data
-                prefsListModel.clear()
-                for (var i=0; i < allprefs.length; i++) {
-                    prefsListModel.append(allprefs[i])
-                }
-            }
-        }
-    }
-
-    ListModel {
-        id: prefsListModel
-    }
-
-    ListModel {
-        id: filterListModel
-    }
-
-    SilicaListView {
-        id: prefsList
-
-        model: prefsListModel
+    Column {
         width: parent.width
-        height: parent.height
-
-        VerticalScrollDecorator { flickable: prefsList }
-
-        header: Column {
-            DialogHeader {
-                dialog: configDialog
-                title: "about:config"
-                _glassOnly: true
-            }
-
-            SearchField {
-                width: prefsList.width
-                //: Placeholder text for search (used in about:config page).
-                //% "Search"
-                placeholderText: qsTrId("sailfish_browser-ph-search")
-                inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
-
-                EnterKey.onClicked: filterModel(text)
-            }
-        }
-
-        delegate: Loader {
-            height: Theme.itemSizeMedium
-            width: prefsList.width
-            sourceComponent: model.type == WebEngineSettings.BoolPref ? textSwitch : textField
-
-            Component {
-                id: textField
-
-                TextField {
-                    readonly property bool digitsOnly: model.type == WebEngineSettings.IntPref
-
-                    label: {
-                        if (errorHighlight && digitsOnly) {
-                            //% "Please enter only integer values"
-                            return qsTrId("sailfish_browser-la-only_integer_values")
-                        }
-                        return model.name
-                    }
-                    text: model.value
-                    placeholderText: model.name
-                    inputMethodHints: (digitsOnly ? Qt.ImhDigitsOnly : 0)
-                    width: parent.width
-                    height: Theme.itemSizeMedium
-
-                    Component.onCompleted: {
-                        if (digitsOnly) {
-                            validator = intValidator
-                        }
-                    }
-
-                    onTextChanged: {
-                        if (text === model.value)
-                            return
-
-                        if (digitsOnly) {
-                            changedConfigs[model.name] = {
-                                value: parseInt(text, 10),
-                                type: model.type
-                            }
-                        } else {
-                            changedConfigs[model.name] = {
-                                value: text,
-                                type: model.type
-                            }
-                        }
-
-                        if (prefsList.model === prefsListModel) {
-                            prefsListModel.setProperty(model.index, "value", text)
-                        } else {
-                            filterListModel.setProperty(model.index, "value", text)
-                            prefsListModel.setProperty(model.prefsListIndex, "value", text)
-                        }
-                    }
-
-                    IntValidator {
-                        id: intValidator
-                    }
-                }
-            }
-
-            Component {
-                id: textSwitch
-
-                TextSwitch {
-                    text: model.name
-                    checked: model.value === "true"
-                    width: parent.width
-                    height: Theme.itemSizeMedium
-
-                    onCheckedChanged: {
-                        if (checked.toString() !== model.value) {
-                            changedConfigs[model.name] = {
-                                value: checked,
-                                type: model.type
-                            }
-
-                            if (prefsList.model === prefsListModel) {
-                                prefsListModel.setProperty(model.index, "value", checked.toString())
-                            } else {
-                                filterListModel.setProperty(model.index, "value", checked.toString())
-                                prefsListModel.setProperty(model.prefsListIndex, "value", checked.toString())
-                            }
-                        }
-                    }
-                }
-            }
+        DialogHeader { title: "about:config"; dialog: configDialog }
+        Label {
+            x: Theme.horizontalPageMargin
+            width: parent.width - 2*Theme.horizontalPageMargin
+            text: "about:config is not available with WPE WebKit"
+            color: Theme.secondaryHighlightColor
+            wrapMode: Text.Wrap
         }
     }
 }

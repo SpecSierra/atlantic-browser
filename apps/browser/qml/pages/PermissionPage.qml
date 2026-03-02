@@ -10,96 +10,54 @@
 
 import QtQuick 2.0
 import Sailfish.Silica 1.0
-import Sailfish.WebView.Controls 1.0
-import Sailfish.WebEngine 1.0
 import "components"
 
 Page {
-    property PermissionModel permissionExceptionsModel: PermissionModel {}
-    property ListModel permissionTypesModel: ListModel {}
+    // WPE: permission constants (replacing PermissionManager enum from Gecko)
+    readonly property int _permAllow: 1
+    readonly property int _permDeny: 2
+    readonly property int _permPrompt: 0
 
-    function setGlobalPermission(permission, type) {
-        if (type === "popup") {
-            if (permission === PermissionManager.Allow) {
-                WebEngineSettings.popupEnabled = true
-            }
-            if (permission === PermissionManager.Deny) {
-                WebEngineSettings.popupEnabled = false
-            }
-        } else if (type === "cookie") {
-            if (permission === PermissionManager.Allow) {
-                WebEngineSettings.cookieBehavior = WebEngineSettings.AcceptAll
-            } else if (permission === PermissionManager.Deny) {
-                WebEngineSettings.cookieBehavior = WebEngineSettings.BlockAll
-            }
-        }
-    }
-
-    function _getPopupCapability() {
-        if (WebEngineSettings.popupEnabled) {
-            return PermissionManager.Allow
-        } else {
-            return PermissionManager.Deny
-        }
-    }
-
-    function _getCookieCapability() {
-        switch(WebEngineSettings.cookieBehavior) {
-        case WebEngineSettings.AcceptAll:
-            return PermissionManager.Allow
-        case WebEngineSettings.BlockAll:
-            return PermissionManager.Deny
-        default:
-            return PermissionManager.Unknown
-        }
+    ListModel {
+        id: permissionTypesModel
     }
 
     function initPermissionTypesModel() {
         permissionTypesModel.append({
-                                        //% "Location"
-                                        title: qsTrId("sailfish_browser-ti-geolocation"),
-                                        type: "geolocation",
-                                        capability: PermissionManager.Prompt,
-                                        iconSource: "image://theme/icon-m-browser-location",
-                                        sensitiveData: true
-                                    })
-
+            title: qsTrId("sailfish_browser-ti-geolocation"),
+            type: "geolocation",
+            capability: _permPrompt,
+            iconSource: "image://theme/icon-m-browser-location",
+            sensitiveData: true
+        })
         permissionTypesModel.append({
-                                        //% "Popup"
-                                        title: qsTrId("sailfish_browser-ti-popup"),
-                                        type: "popup",
-                                        capability: _getPopupCapability(),
-                                        iconSource: "image://theme/icon-m-browser-popup",
-                                        sensitiveData: false
-                                    })
-
+            title: qsTrId("sailfish_browser-ti-popup"),
+            type: "popup",
+            capability: _permAllow,
+            iconSource: "image://theme/icon-m-browser-popup",
+            sensitiveData: false
+        })
         permissionTypesModel.append({
-                                        //% "Cookies"
-                                        title: qsTrId("sailfish_browser-ti-cookies"),
-                                        type: "cookie",
-                                        capability: _getCookieCapability(),
-                                        iconSource: "image://theme/icon-m-browser-cookies",
-                                        sensitiveData: false
-                                    })
-
+            title: qsTrId("sailfish_browser-ti-cookies"),
+            type: "cookie",
+            capability: _permAllow,
+            iconSource: "image://theme/icon-m-browser-cookies",
+            sensitiveData: false
+        })
         permissionTypesModel.append({
-                                        //% "Camera"
-                                        title: qsTrId("sailfish_browser-ti-camera"),
-                                        type: "camera",
-                                        capability: PermissionManager.Prompt,
-                                        iconSource: "image://theme/icon-m-browser-camera",
-                                        sensitiveData: true
-                                    })
-
+            title: qsTrId("sailfish_browser-ti-camera"),
+            type: "camera",
+            capability: _permPrompt,
+            iconSource: "image://theme/icon-m-browser-camera",
+            sensitiveData: true
+        })
         permissionTypesModel.append({
-                                        //% "Microphone"
-                                        title: qsTrId("sailfish_browser-ti-microphone"),
-                                        type: "microphone",
-                                        capability: PermissionManager.Prompt,
-                                        iconSource: "image://theme/icon-m-browser-microphone",
-                                        sensitiveData: true
-                                    })
-
+            title: qsTrId("sailfish_browser-ti-microphone"),
+            type: "microphone",
+            capability: _permPrompt,
+            iconSource: "image://theme/icon-m-browser-microphone",
+            sensitiveData: true
+        })
     }
 
     Component.onCompleted: initPermissionTypesModel()
@@ -115,14 +73,14 @@ Page {
         delegate: BrowserListItem {
             label: model.title
             value: {
-                switch(model.capability) {
-                case PermissionManager.Allow:
+                switch (model.capability) {
+                case _permAllow:
                     //% "Allow"
                     return qsTrId("sailfish_browser-me-allow")
-                case PermissionManager.Deny:
+                case _permDeny:
                     //% "Block"
                     return qsTrId("sailfish_browser-me-block")
-                case PermissionManager.Prompt:
+                default:
                     //% "Ask"
                     return qsTrId("sailfish_browser-me-ask")
                 }
@@ -134,37 +92,18 @@ Page {
                     //% "Allow"
                     text: qsTrId("sailfish_browser-me-allow")
                     visible: !model.sensitiveData
-                    onClicked: {
-                        model.capability = PermissionManager.Allow
-                        setGlobalPermission(PermissionManager.Allow, model.type)
-                    }
+                    onClicked: model.capability = _permAllow
                 }
                 MenuItem {
                     //% "Block"
                     text: qsTrId("sailfish_browser-me-block")
                     visible: !model.sensitiveData
-                    onClicked: {
-                        model.capability = PermissionManager.Deny
-                        setGlobalPermission(PermissionManager.Deny, model.type)
-                    }
+                    onClicked: model.capability = _permDeny
                 }
                 MenuItem {
                     //% "Ask"
                     text: qsTrId("sailfish_browser-me-ask")
                     visible: model.sensitiveData
-                }
-                MenuItem {
-                    //% "Show exceptions"
-                    text: qsTrId("sailfish_browser-me-show-exceptions")
-                    onClicked: {
-                        pageStack.push("PermissionExceptionsPage.qml",
-                                       {
-                                           model: permissionExceptionsModel,
-                                           permissionType: model.type,
-                                           title: model.title,
-                                           iconSource: model.iconSource
-                                       })
-                    }
                 }
             }
         }

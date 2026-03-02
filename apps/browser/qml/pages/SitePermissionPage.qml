@@ -10,94 +10,52 @@
 
 import QtQuick 2.6
 import Sailfish.Silica 1.0
-import Sailfish.WebView.Controls 1.0
-import Sailfish.WebEngine 1.0
 
 Page {
     id: page
 
     property string title
     property string url
-    property PermissionModel permissionModel
 
-    function _getPopupCapability() {
-        if (WebEngineSettings.popupEnabled) {
-            return PermissionManager.Allow
-        } else {
-            return PermissionManager.Deny
-        }
-    }
-
-    function _getCookieCapability() {
-        switch (WebEngineSettings.cookieBehavior) {
-        case WebEngineSettings.AcceptAll:
-            return PermissionManager.Allow
-        case WebEngineSettings.BlockAll:
-            return PermissionManager.Deny
-        default:
-            return PermissionManager.Unknown
-        }
-    }
-
-    property var permissions: {
-        "geolocation": PermissionManager.Prompt,
-        "popup": _getPopupCapability(),
-        "cookie": _getCookieCapability(),
-        "camera": PermissionManager.Prompt,
-        "microphone": PermissionManager.Prompt
-    }
-
-    function setPermissionTypesModel(permissions) {
-        permissionTypesModel.append({
-                   //% "Location"
-                   title: qsTrId("sailfish_browser-ti-location"),
-                   type: "geolocation",
-                   capability: permissions["geolocation"]
-               })
-        permissionTypesModel.append({
-                   //% "Popup"
-                   title: qsTrId("sailfish_browser-ti-popup"),
-                   type: "popup",
-                   capability: permissions["popup"]
-               })
-        permissionTypesModel.append({
-                   //% "Cookies"
-                   title: qsTrId("sailfish_browser-ti-cookies"),
-                   type: "cookie",
-                   capability: permissions["cookie"]
-               })
-        permissionTypesModel.append({
-                   //% "Camera"
-                   title: qsTrId("sailfish_browser-ti-camera"),
-                   type: "camera",
-                   capability: permissions["camera"]
-               })
-        permissionTypesModel.append({
-                   //% "Microphone"
-                   title: qsTrId("sailfish_browser-ti-microphone"),
-                   type: "microphone",
-                   capability: permissions["microphone"]
-               })
-    }
-
-    PermissionFilterProxyModel {
-        id: permissionFilterProxyModel
-
-        sourceModel: permissionModel
-        onlyPermanent: true
-
-        Component.onCompleted: setPermissionTypesModel(permissions)
-    }
-
-    Repeater {
-        model: permissionFilterProxyModel
-        delegate: Item {
-            Component.onCompleted: permissions[model.type] = model.capability
-        }
-    }
+    readonly property int _allow: 1
+    readonly property int _deny: 2
+    readonly property int _prompt: 3
 
     ListModel {
         id: permissionTypesModel
+    }
+
+    Component.onCompleted: {
+        permissionTypesModel.append({
+            //% "Location"
+            title: qsTrId("sailfish_browser-ti-location"),
+            type: "geolocation",
+            capability: _prompt
+        })
+        permissionTypesModel.append({
+            //% "Popup"
+            title: qsTrId("sailfish_browser-ti-popup"),
+            type: "popup",
+            capability: _deny
+        })
+        permissionTypesModel.append({
+            //% "Cookies"
+            title: qsTrId("sailfish_browser-ti-cookies"),
+            type: "cookie",
+            capability: _allow
+        })
+        permissionTypesModel.append({
+            //% "Camera"
+            title: qsTrId("sailfish_browser-ti-camera"),
+            type: "camera",
+            capability: _prompt
+        })
+        permissionTypesModel.append({
+            //% "Microphone"
+            title: qsTrId("sailfish_browser-ti-microphone"),
+            type: "microphone",
+            capability: _prompt
+        })
     }
 
     SilicaListView {
@@ -114,12 +72,12 @@ Page {
 
             currentIndex: {
                 switch(model.capability) {
-                case PermissionManager.Allow:
-                    return 0 // index for "Allow" menu
-                case PermissionManager.Deny:
-                    return 1 // index for "Deny" menu
+                case _allow:
+                    return 0
+                case _deny:
+                    return 1
                 default:
-                    return 2 // index for "Always ask" menu
+                    return 2
                 }
             }
 
@@ -128,20 +86,20 @@ Page {
                     //: Shown for context menu allow permission
                     //% "Allow"
                     text: qsTrId("sailfish_browser-me-allow")
-                    onClicked: PermissionManager.add(url, model.type, PermissionManager.Allow)
+                    onClicked: permissionTypesModel.setProperty(index, "capability", _allow)
                 }
                 MenuItem {
                     //: Shown for context menu block permission
                     //% "Block"
                     text: qsTrId("sailfish_browser-me-block")
-                    onClicked: PermissionManager.add(url, model.type, PermissionManager.Deny)
+                    onClicked: permissionTypesModel.setProperty(index, "capability", _deny)
                 }
                 MenuItem {
                     //: Shown for context menu always ask permission
                     //% "Always ask"
                     text: qsTrId("sailfish_browser-me-always_ask")
                     visible: model.type !== "popup" && model.type !== "cookie"
-                    onClicked: PermissionManager.add(url, model.type, PermissionManager.Prompt)
+                    onClicked: permissionTypesModel.setProperty(index, "capability", _prompt)
                 }
             }
         }

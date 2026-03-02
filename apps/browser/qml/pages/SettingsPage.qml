@@ -14,12 +14,31 @@ import Sailfish.Silica 1.0
 import Sailfish.Browser 1.0
 import Nemo.Configuration 1.0
 import com.jolla.settings.system 1.0
-import Sailfish.WebEngine 1.0
+import Nemo.Configuration 1.0
 import Sailfish.Pickers 1.0
 import "components"
 
 Page {
     id: page
+
+    // WPE: color scheme constants (outside QtObject — QML forbids uppercase property names)
+    readonly property int _prefersLightMode: 0
+    readonly property int _prefersDarkMode: 1
+    readonly property int _followsAmbience: 2
+
+    // WPE: stub for Gecko WebEngineSettings — wired to Nemo.Configuration
+    QtObject {
+        id: webEngineSettings
+        property bool doNotTrack: doNotTrackConf.value
+        property bool javascriptEnabled: jsEnabledConf.value
+        property bool useDownloadDir: useDownloadDirConf.value
+        property string downloadDir: downloadDirConf.value || StandardPaths.download
+        property int colorScheme: 0
+    }
+    ConfigurationValue { id: doNotTrackConf; key: "/apps/sailfish-browser/settings/do_not_track"; defaultValue: false }
+    ConfigurationValue { id: jsEnabledConf; key: "/apps/sailfish-browser/settings/javascript_enabled"; defaultValue: true }
+    ConfigurationValue { id: useDownloadDirConf; key: "/apps/sailfish-browser/settings/use_download_dir"; defaultValue: false }
+    ConfigurationValue { id: downloadDirConf; key: "/apps/sailfish-browser/settings/download_dir"; defaultValue: "" }
 
     readonly property int _textSwitchIconCenter: Math.round((permissionIcon.width - Theme.itemSizeExtraSmall) / 2.0)
 
@@ -168,7 +187,7 @@ Page {
             }
 
             TextSwitch {
-                checked: WebEngineSettings.doNotTrack
+                checked: webEngineSettings.doNotTrack
 
                 //: Tell sites that I do not want to be tracked.
                 //% "Do not track"
@@ -181,25 +200,25 @@ Page {
                 _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
                 automaticCheck: false
 
-                onClicked: WebEngineSettings.doNotTrack = !WebEngineSettings.doNotTrack
+                onClicked: doNotTrackConf.value = !webEngineSettings.doNotTrack
             }
 
             TextSwitch {
                 //: Label for text switch that enables JavaScript globally for all tabs
                 //% "Enable JavaScript"
                 text: qsTrId("settings_browser-la-enable_javascript")
-                description: WebEngineSettings.javascriptEnabled ?
+                description: webEngineSettings.javascriptEnabled ?
                                  //% "Allowed (recommended)"
                                  qsTrId("settings_browser-la-enabled_javascript_description") :
                                  //% "Blocked, some sites may not work correctly"
                                  qsTrId("settings_browser-la-disable_javascript_description")
-                checked: WebEngineSettings.javascriptEnabled
+                checked: webEngineSettings.javascriptEnabled
                 // Margins adjusted to align with other items on the page
                 leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
                 _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
                 automaticCheck: false
 
-                onClicked: WebEngineSettings.javascriptEnabled = !WebEngineSettings.javascriptEnabled
+                onClicked: jsEnabledConf.value = !webEngineSettings.javascriptEnabled
             }
 
             BackgroundItem {
@@ -284,22 +303,22 @@ Page {
                 label: qsTrId("settings_browser-la-save_destination")
                 iconSource: "image://theme/icon-m-downloads"
                 value: {
-                    if (WebEngineSettings.useDownloadDir) {
+                    if (webEngineSettings.useDownloadDir) {
                         //% "Download to %1"
-                        return qsTrId("sailfish_browser-me-download_to").arg(WebEngineSettings.downloadDir.split("/").pop())
+                        return qsTrId("sailfish_browser-me-download_to").arg(webEngineSettings.downloadDir.split("/").pop())
                     } else {
                         //% "Always ask"
                         return qsTrId("sailfish_browser-me-always_ask")
                     }
                 }
-                currentIndex: WebEngineSettings.useDownloadDir
+                currentIndex: webEngineSettings.useDownloadDir
                               ? 0 // for selection a download folder
                               : 1 // for always ask
 
                 description: {
-                    if (WebEngineSettings.useDownloadDir) {
+                    if (webEngineSettings.useDownloadDir) {
                         //% "Downloaded files will be saved to %1 folder"
-                        return qsTrId("sailfish_browser-me-will_be_saved_to_download").arg(WebEngineSettings.downloadDir)
+                        return qsTrId("sailfish_browser-me-will_be_saved_to_download").arg(webEngineSettings.downloadDir)
                     } else {
                         //% "You will be asked where to save files"
                         return qsTrId("sailfish_browser-me-you_will_be_asked_where_to_save_files")
@@ -311,16 +330,16 @@ Page {
                         //% "Select a download folder"
                         text: qsTrId("sailfish_browser-me-select_download_folder")
                         onClicked: {
-                            WebEngineSettings.useDownloadDir = true
+                            useDownloadDirConf.value = true
                             // If the user will reject, choose download path as default
-                            WebEngineSettings.downloadDir = StandardPaths.download
+                            downloadDirConf.value = StandardPaths.download
                             pageStack.animatorPush(folderPickerPage)
                         }
                     }
                     MenuItem {
                         //% "Always ask"
                         text: qsTrId("sailfish_browser-me-always_ask")
-                        onClicked: WebEngineSettings.useDownloadDir = false
+                        onClicked: useDownloadDirConf.value = false
                     }
                 }
             }
@@ -335,7 +354,7 @@ Page {
                 //% "Preferred color scheme"
                 label: qsTrId("settings_browser-la-color_scheme")
                 iconSource: "image://theme/icon-m-night"
-                currentIndex: WebEngineSettings.colorScheme
+                currentIndex: webEngineSettings.colorScheme
 
                 //% "The website style to use when available"
                 description: qsTrId("sailfish_browser-me-website_color_scheme")
@@ -345,19 +364,19 @@ Page {
                         //: Option to prefer a website's light color scheme
                         //% "Light"
                         text: qsTrId("sailfish_browser-me-prefers_light_mode")
-                        onClicked: WebEngineSettings.colorScheme = WebEngineSettings.PrefersLightMode
+                        onClicked: webEngineSettings.colorScheme = page._prefersLightMode
                     }
                     MenuItem {
                         //: Option to prefer a website's dark color scheme
                         //% "Dark"
                         text: qsTrId("sailfish_browser-me-prefers_dark_mode")
-                        onClicked: WebEngineSettings.colorScheme = WebEngineSettings.PrefersDarkMode
+                        onClicked: webEngineSettings.colorScheme = page._prefersDarkMode
                     }
                     MenuItem {
                         //: Option for the website's color scheme to match the ambience
                         //% "Match ambience"
                         text: qsTrId("sailfish_browser-me-follow_ambience")
-                        onClicked: WebEngineSettings.colorScheme = WebEngineSettings.FollowsAmbience
+                        onClicked: webEngineSettings.colorScheme = page._followsAmbience
                     }
                 }
             }
@@ -438,7 +457,7 @@ Page {
             //% "Download to"
             dialogTitle: qsTrId("sailfish_browser-ti-download-to")
 
-            onSelectedPathChanged: WebEngineSettings.downloadDir = selectedPath
+            onSelectedPathChanged: downloadDirConf.value = selectedPath
         }
     }
 }
