@@ -1,314 +1,34 @@
 /*
- * Copyright (c) 2013 - 2021 Jolla Ltd.
- * Copyright (c) 2019 Open Mobile Platform LLC.
- *
- * This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this file,
- * You can obtain one at http://mozilla.org/MPL/2.0/.
+ * Minimal stub header for DeclarativeWebContainer used by tab models and browser service.
+ * WPE replacement: browsing context IDs are not used, methods return 0/empty.
+ * SPDX-License-Identifier: LGPL-2.1+
  */
-
-#ifndef DECLARATIVEWEBCONTAINER_H
-#define DECLARATIVEWEBCONTAINER_H
-
-#include <qmozcontext.h>
-#include <qmozsecurity.h>
-
-#include <QtGui/QWindow>
-#include <QtGui/QOpenGLFunctions>
+#pragma once
+#include <QObject>
 #include <QPointer>
-#include <QQmlComponent>
-#include <QQuickView>
-#include <QQuickItem>
-#include <QMutex>
-#include <QTimer>
+#include <QString>
 
-class QMozWindow;
-class QTimerEvent;
-class DeclarativeTabModel;
-class DeclarativeWebPage;
-class WebPages;
-class Tab;
-class DeclarativeHistoryModel;
-class CloseEventFilter;
-
-class DeclarativeWebContainer : public QWindow, public QQmlParserStatus, protected QOpenGLFunctions
+class DeclarativeWebContainer : public QObject
 {
     Q_OBJECT
-    Q_INTERFACES(QQmlParserStatus)
-
-    Q_PROPERTY(QQuickItem *rotationHandler MEMBER m_rotationHandler NOTIFY rotationHandlerChanged FINAL)
-    Q_PROPERTY(DeclarativeWebPage *contentItem READ webPage NOTIFY contentItemChanged FINAL)
-    Q_PROPERTY(DeclarativeTabModel *tabModel READ tabModel NOTIFY tabModelChanged FINAL)
-    Q_PROPERTY(DeclarativeTabModel *persistentTabModel READ persistentTabModel CONSTANT)
-    Q_PROPERTY(DeclarativeTabModel *privateTabModel READ privateTabModel CONSTANT)
-    Q_PROPERTY(bool completed READ completed NOTIFY completedChanged FINAL)
-    Q_PROPERTY(bool enabled MEMBER m_enabled NOTIFY enabledChanged FINAL)
-    Q_PROPERTY(bool foreground READ foreground WRITE setForeground NOTIFY foregroundChanged FINAL)
-    Q_PROPERTY(int maxLiveTabCount READ maxLiveTabCount WRITE setMaxLiveTabCount NOTIFY maxLiveTabCountChanged FINAL)
-    // This property should cover all possible popups
-    Q_PROPERTY(bool touchBlocked MEMBER m_touchBlocked NOTIFY touchBlockedChanged FINAL)
-
-    Q_PROPERTY(bool loading READ loading NOTIFY loadingChanged FINAL)
-    Q_PROPERTY(int loadProgress READ loadProgress NOTIFY loadProgressChanged FINAL)
-
-    // Navigation related properties
-    Q_PROPERTY(bool canGoForward READ canGoForward NOTIFY canGoForwardChanged FINAL)
-    Q_PROPERTY(bool canGoBack READ canGoBack NOTIFY canGoBackChanged FINAL)
-
-    Q_PROPERTY(int tabId READ tabId NOTIFY tabIdChanged FINAL)
-    Q_PROPERTY(QString title READ title NOTIFY titleChanged FINAL)
-    Q_PROPERTY(QString url READ url NOTIFY urlChanged FINAL)
-
-    Q_PROPERTY(bool privateMode READ privateMode WRITE setPrivateMode NOTIFY privateModeChanged FINAL)
-    Q_PROPERTY(bool activeTabRendered READ activeTabRendered NOTIFY activeTabRenderedChanged FINAL)
-
-    Q_PROPERTY(QQmlComponent* webPageComponent READ webPageComponent WRITE setWebPageComponent NOTIFY webPageComponentChanged FINAL)
-    Q_PROPERTY(QObject *chromeWindow READ chromeWindow WRITE setChromeWindow NOTIFY chromeWindowChanged FINAL)
-    Q_PROPERTY(bool readyToPaint READ readyToPaint WRITE setReadyToPaint NOTIFY readyToPaintChanged FINAL)
-
-    Q_PROPERTY(Qt::ScreenOrientation pendingWebContentOrientation READ pendingWebContentOrientation NOTIFY pendingWebContentOrientationChanged FINAL)
-
-    Q_PROPERTY(QMozSecurity *security READ security NOTIFY securityChanged)
-    Q_PROPERTY(DeclarativeHistoryModel* historyModel READ historyModel WRITE setHistoryModel NOTIFY historyModelChanged)
-
-    Q_PROPERTY(bool hasInitialUrl READ hasInitialUrl NOTIFY hasInitialUrlChanged)
-
 public:
-    DeclarativeWebContainer(QWindow *parent = 0);
-    ~DeclarativeWebContainer();
+    explicit DeclarativeWebContainer(QObject *parent = nullptr) : QObject(parent) {}
 
-    static DeclarativeWebContainer *instance();
+    static DeclarativeWebContainer *instance() {
+        static DeclarativeWebContainer s_instance;
+        return &s_instance;
+    }
 
-    DeclarativeWebPage *webPage() const;
-    QMozWindow *mozWindow() const;
+    // Gecko-specific: browsing context to tab ID mapping — stub returns 0
+    int tabId(uint32_t) const { return 0; }
+    // Return previously active tab ID — stub returns 0
+    int previouslyUsedTabId() const { return 0; }
 
-    DeclarativeTabModel *tabModel() const;
-    DeclarativeTabModel *persistentTabModel() const;
-    DeclarativeTabModel *privateTabModel() const;
-
-    bool completed() const;
-
-    bool foreground() const;
-    void setForeground(bool active);
-
-    int maxLiveTabCount() const;
-    void setMaxLiveTabCount(int count);
-
-    QQmlComponent* webPageComponent() const;
-    void setWebPageComponent(QQmlComponent* qmlComponent);
-
-    bool privateMode() const;
-    void setPrivateMode(bool);
-
-    bool activeTabRendered() const;
-
-    bool loading() const;
-
-    int loadProgress() const;
-    void setLoadProgress(int loadProgress);
-
-    bool canGoForward() const;
-    bool canGoBack() const;
-
-    QObject *chromeWindow() const;
-    void setChromeWindow(QObject *chromeWindow);
-
-    bool readyToPaint() const;
-    void setReadyToPaint(bool ready);
-
-    Qt::ScreenOrientation pendingWebContentOrientation() const;
-
-    QMozSecurity *security() const;
-
-    int tabId() const;
-    QString title() const;
-    QString url() const;
-    QString thumbnailPath() const;
-
-    bool isActiveTab(int tabId);
-    bool activatePage(const Tab& tab, bool force = false, bool fromExternal = false);
-    int tabId(uint32_t uniqueId) const;
-    int previouslyUsedTabId() const;
-    // For D-Bus interfaces
-    uint tabOwner(int tabId) const;
-    int requestTabWithOwner(int tabId, const QString &url, uint ownerPid);
-    void requestTabWithOwnerAsync(int tabId, const QString &url, uint ownerPid, void *context);
-
-    Q_INVOKABLE void releaseActiveTabOwnership();
-
-    Q_INVOKABLE void load(const QString &url, bool force = false, bool fromExternal = false);
-    Q_INVOKABLE void reload(bool force = true);
-    Q_INVOKABLE void goForward();
-    Q_INVOKABLE void goBack();
-
-    Q_INVOKABLE int activateTab(int tabId, const QString &url);
-    Q_INVOKABLE void closeTab(int tabId);
-
-    Q_INVOKABLE void dumpPages() const;
-
-    QObject *focusObject() const override;
-
-    bool event(QEvent *event) override;
-
-    DeclarativeHistoryModel *historyModel() const;
-    void setHistoryModel(DeclarativeHistoryModel *model);
-
-    bool hasInitialUrl() const;
+    // Browser D-Bus service stubs
+    void requestTabWithOwnerAsync(int /*tabId*/, const QString & /*url*/, qint64 /*pid*/, void * /*ctx*/) {}
+    int  tabOwner(int) const { return 0; }
+    void closeTab(int) {}
 
 signals:
-    void rotationHandlerChanged();
-    void contentItemChanged();
-    void tabModelChanged();
-    void completedChanged();
-    void enabledChanged();
-    void foregroundChanged();
-    void maxLiveTabCountChanged();
-    void touchBlockedChanged();
-
-    void loadingChanged();
-    void loadProgressChanged();
-
-    void canGoForwardChanged();
-    void canGoBackChanged();
-
-    void tabIdChanged();
-    void titleChanged();
-    void urlChanged();
-    void thumbnailPathChanged();
-    void privateModeChanged();
-    void activeTabRenderedChanged();
-
-    void webPageComponentChanged(QQmlComponent *newComponent);
-    void chromeWindowChanged();
-    void chromeExposed();
-    void readyToPaintChanged();
-
-    void pendingWebContentOrientationChanged();
-    void webContentOrientationChanged(Qt::ScreenOrientation orientation);
-    void securityChanged();
-    void historyModelChanged();
-    void applicationClosing();
-
-    void hasInitialUrlChanged();
     void requestTabWithOwnerAsyncResult(int tabId, void *context);
-
-    void keyPressed(int key);
-    void backButtonPressed();
-    void forwardButtonPressed();
-    void touched();
-
-protected:
-    bool eventFilter(QObject *obj, QEvent *event) override;
-    void exposeEvent(QExposeEvent *event) override;
-    void touchEvent(QTouchEvent *event) override;
-    void mousePressEvent(QMouseEvent *event) override;
-    void wheelEvent(QWheelEvent *event) override;
-    void keyPressEvent(QKeyEvent *event) override;
-    void keyReleaseEvent(QKeyEvent *event) override;
-    void focusInEvent(QFocusEvent *event) override;
-    void focusOutEvent(QFocusEvent *event) override;
-    void timerEvent(QTimerEvent *event) override;
-    void classBegin() override;
-    void componentComplete() override;
-
-public slots:
-    void updateContentOrientation(Qt::ScreenOrientation orientation);
-    void clearSurface();
-    void dsmeStateChange(const QString &state);
-
-private slots:
-    void initialize();
-    void onActiveTabChanged(int activeTabId);
-    void onDownloadStarted();
-    void onNewTabRequested(const Tab &tab, bool fromExternal);
-    void releasePage(int tabId);
-    void closeWindow();
-    void updateLoadProgress();
-    void updateLoading();
-    void updateActiveTabRendered();
-    void onLastViewDestroyed();
-
-    void onLastWindowDestroyed();
-    void updateWindowFlags();
-
-    // QMozWindow related slots:
-    void createGLContext();
-
-    void handleContentOrientationChanged(Qt::ScreenOrientation orientation);
-    // Clears window surface on the compositor thread. Can be called even when there are
-    // no active views. In case this function is called too early during gecko initialization,
-    // before compositor thread has actually been started the function returns false.
-    bool postClearWindowSurfaceTask();
-
-    // Restore the previous tab when a hidden tab is opened
-    void restorePreviousTab();
-    void restorePreviousTabDelayed();
-
-private:
-    void setWebPage(DeclarativeWebPage *webPage, bool triggerSignals = false);
-    void setTabModel(DeclarativeTabModel *model);
-    qreal contentHeight() const;
-    bool canInitialize() const;
-    void loadTab(const Tab& tab, bool force, bool fromExternal);
-    void updateMode();
-    void setActiveTabRendered(bool rendered);
-    bool browserEnabled() const;
-
-    void destroyWindow();
-    static void clearWindowSurfaceTask(void* data);
-    void clearWindowSurface();
-
-    QPointer<QMozWindow> m_mozWindow;
-    QPointer<QQuickItem> m_rotationHandler;
-    QPointer<DeclarativeWebPage> m_webPage;
-    QPointer<QQuickView> m_chromeWindow;
-    QOpenGLContext *m_context = nullptr;
-    QMutex m_contextMutex;
-
-    QPointer<DeclarativeTabModel> m_model;
-    QPointer<QQmlComponent> m_webPageComponent;
-    QPointer<WebPages> m_webPages;
-    QPointer<DeclarativeTabModel> m_persistentTabModel;
-    QPointer<DeclarativeTabModel> m_privateTabModel;
-
-    bool m_enabled = true;
-    bool m_foreground = true;
-    bool m_touchBlocked = false;
-
-    // See DeclarativeWebContainer::load (line 283) as load need to "work" even if engine, model,
-    // or qml component is not yet completed (completed property is still false). So cache url/title for later use.
-    // Problem is visible with a download url as it does not trigger urlChange for the loaded page (correct behavior).
-    // Once downloading has been started and if we have existing tabs we reset
-    // back to the active tab and load it. In case we did not have tabs open when downloading was
-    // triggered we just clear these.
-    QString m_initialUrl;
-    bool m_fromExternal = false;
-
-    int m_loadProgress = 0;
-
-    bool m_completed = false;
-    bool m_initialized = false;
-
-    bool m_privateMode = false;
-    bool m_activeTabRendered = false;
-
-    QMutex m_clearSurfaceTaskMutex;
-    QMozContext::TaskHandle m_clearSurfaceTask = nullptr;
-
-    bool m_closing = false;
-
-    QHash<int, uint> m_tabOwners;
-    DeclarativeHistoryModel *m_historyModel = nullptr;
-
-    CloseEventFilter *m_closeEventFilter = nullptr;
-
-    int m_PreviousTabWhenHidden = -1;
-    QTimer m_hiddenTabTimer;
-
-    friend class tst_webview;
-    friend class tst_declarativewebcontainer;
 };
-
-QML_DECLARE_TYPE(DeclarativeWebContainer)
-
-#endif // DECLARATIVEWEBCONTAINER_H
