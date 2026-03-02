@@ -1,0 +1,497 @@
+/*
+ * WPE WebKit engine replacement for Sailfish Browser
+ * WPEWebContainer implementation
+ * SPDX-License-Identifier: LGPL-2.1+
+ */
+
+#include "WPEWebContainer.h"
+#include "WPEWebPage.h"
+#include "WPEQtViewLoadRequest.h"
+#include "declarativehistorymodel.h"
+#include "declarativetabmodel.h"
+#include "persistenttabmodel.h"
+#include "privatetabmodel.h"
+#include "dbmanager.h"
+#include "tab.h"
+
+#include <QGuiApplication>
+#include <QTimer>
+#include <QScreen>
+#include <QDebug>
+#include <QWindow>
+
+WPEWebContainer::WPEWebContainer(QQuickItem *parent)
+    : QQuickItem(parent)
+{
+    setAcceptedMouseButtons(Qt::AllButtons);
+    setFiltersChildMouseEvents(false);
+}
+
+WPEWebContainer::~WPEWebContainer()
+{
+    qDeleteAll(m_pages);
+}
+
+WPEWebPage *WPEWebContainer::contentItem() const
+{
+    return m_contentItem;
+}
+
+bool WPEWebContainer::needChrome() const
+{
+    return !m_contentItem || (m_contentItem->chrome() && !m_contentItem->fullscreen());
+}
+
+bool WPEWebContainer::selectionActive() const
+{
+    return m_contentItem && m_contentItem->textSelectionActive();
+}
+
+DeclarativeTabModel *WPEWebContainer::tabModel() const
+{
+    return m_tabModel;
+}
+
+DeclarativeTabModel *WPEWebContainer::persistentTabModel() const
+{
+    return m_persistentTabModel;
+}
+
+DeclarativeTabModel *WPEWebContainer::privateTabModel() const
+{
+    return m_privateTabModel;
+}
+
+bool WPEWebContainer::loading() const
+{
+    return m_contentItem ? m_contentItem->isLoading() : false;
+}
+
+int WPEWebContainer::loadProgress() const
+{
+    return m_contentItem ? m_contentItem->loadProgress() : 0;
+}
+
+bool WPEWebContainer::canGoForward() const
+{
+    return m_contentItem ? m_contentItem->canGoForward() : false;
+}
+
+bool WPEWebContainer::canGoBack() const
+{
+    return m_contentItem ? m_contentItem->canGoBack() : false;
+}
+
+int WPEWebContainer::tabId() const
+{
+    return m_tabModel ? m_tabModel->activeTabId() : 0;
+}
+
+QString WPEWebContainer::title() const
+{
+    return m_contentItem ? m_contentItem->title() : QString();
+}
+
+QString WPEWebContainer::url() const
+{
+    return m_contentItem ? m_contentItem->url().toString() : QString();
+}
+
+void WPEWebContainer::setForeground(bool f)
+{
+    if (m_foreground != f) {
+        m_foreground = f;
+        emit foregroundChanged();
+    }
+}
+
+void WPEWebContainer::setPrivateMode(bool p)
+{
+    if (m_privateMode != p) {
+        m_privateMode = p;
+        // Disconnect old model
+        if (m_tabModel) {
+            disconnect(m_tabModel, nullptr, this, nullptr);
+        }
+        m_tabModel = p ? static_cast<DeclarativeTabModel *>(m_privateTabModel)
+                       : static_cast<DeclarativeTabModel *>(m_persistentTabModel);
+        if (m_tabModel) {
+            connect(m_tabModel, SIGNAL(activeTabChanged(int)), this, SLOT(onActiveTabChanged(int)));
+            connect(m_tabModel, SIGNAL(tabAdded(int)), this, SLOT(onTabAdded(int)));
+            connect(m_tabModel, SIGNAL(tabClosed(int)), this, SLOT(onTabClosed(int)));
+        }
+        emit tabModelChanged();
+        emit privateModeChanged();
+    }
+}
+
+void WPEWebContainer::setWebPageComponent(QQmlComponent *c)
+{
+    if (m_webPageComponent != c) {
+        m_webPageComponent = c;
+        emit webPageComponentChanged(c);
+    }
+}
+
+void WPEWebContainer::setChromeWindow(QObject *w)
+{
+    if (m_chromeWindow != w) {
+        m_chromeWindow = w;
+        emit chromeWindowChanged();
+        if (w) emit chromeExposed();
+    }
+}
+
+void WPEWebContainer::setReadyToPaint(bool r)
+{
+    if (m_readyToPaint != r) {
+        m_readyToPaint = r;
+        emit readyToPaintChanged();
+    }
+}
+
+void WPEWebContainer::setHistoryModel(DeclarativeHistoryModel *m)
+{
+    if (m_historyModel != m) {
+        m_historyModel = m;
+        emit historyModelChanged();
+    }
+}
+
+void WPEWebContainer::classBegin()
+{
+}
+
+void WPEWebContainer::componentComplete()
+{
+
+    // Qt Quick routes input events based on item bounding-box.  If the
+    // container has size 0×0 (no QML anchor/size binding from the page),
+    // touch events are never delivered to WPEQtView children.  Initialise
+    // to screen size here; the OverlayAnimator may later animate height.
+    if (width() == 0 || height() == 0) {
+        QScreen *screen = QGuiApplication::primaryScreen();
+        qreal sw = screen ? screen->size().width()  : 1080.0;
+        qreal sh = screen ? screen->size().height() : 2520.0;
+        QQuickItem *p = parentItem();
+        qreal pw = p && p->width()  > 0 ? p->width()  : sw;
+        qreal ph = p && p->height() > 0 ? p->height() : sh;
+        setWidth(pw);
+        setHeight(ph);
+        // Track parent resizes (orientation changes, etc.)
+        if (p) {
+            connect(p, &QQuickItem::widthChanged,  this, [this]() {
+                if (parentItem() && parentItem()->width() > 0) setWidth(parentItem()->width());
+            });
+            connect(p, &QQuickItem::heightChanged, this, [this]() {
+                if (parentItem() && parentItem()->height() > 0) setHeight(parentItem()->height());
+            });
+        }
+    }
+    int maxTabId = DBManager::instance()->getMaxTabId();
+    int nextTabId = maxTabId + 1;
+
+    m_persistentTabModel = new PersistentTabModel(nextTabId, nullptr);
+    m_privateTabModel = new PrivateTabModel(nextTabId + 100, nullptr);
+
+    m_tabModel = m_persistentTabModel;
+    connect(m_tabModel, SIGNAL(activeTabChanged(int)), this, SLOT(onActiveTabChanged(int)));
+    connect(m_tabModel, SIGNAL(tabAdded(int)), this, SLOT(onTabAdded(int)));
+    connect(m_tabModel, SIGNAL(tabClosed(int)), this, SLOT(onTabClosed(int)));
+    emit tabModelChanged();
+
+    m_completed = true;
+    emit completedChanged();
+
+    // After the persistent model finishes its async DB load, make sure something is shown.
+    // If an initial URL was requested, load it; otherwise activate the persisted tab, or
+    // fall back to a blank page if there are no saved tabs.
+    auto onPersistentLoaded = [this]() {
+        if (!m_initialUrl.isEmpty()) {
+            load(m_initialUrl);
+        } else if (m_persistentTabModel->count() == 0) {
+            load(QStringLiteral("about:blank"));
+        } else {
+            // Saved tabs exist — activate the current active tab explicitly
+            int activeId = m_persistentTabModel->activeTabId();
+            if (activeId > 0)
+                activatePage(activeId);
+            else if (!m_persistentTabModel->tabs().isEmpty())
+                activatePage(m_persistentTabModel->tabs().first().tabId());
+        }
+    };
+
+    if (m_persistentTabModel->loaded()) {
+        QTimer::singleShot(0, this, [this, onPersistentLoaded]() { onPersistentLoaded(); });
+    } else {
+        connect(m_persistentTabModel, &DeclarativeTabModel::loadedChanged,
+                this, onPersistentLoaded);
+    }
+
+    if (!m_initialUrl.isEmpty())
+        emit hasInitialUrlChanged();
+}
+
+void WPEWebContainer::load(const QString &url, bool force, bool fromExternal)
+{
+    Q_UNUSED(force)
+
+    if (!m_completed) {
+        m_initialUrl = url;
+        emit hasInitialUrlChanged();
+        return;
+    }
+
+    if (!m_tabModel) return;
+
+    if (m_tabModel->count() == 0) {
+        m_tabModel->newTab(url, fromExternal);
+    } else {
+        if (m_contentItem) {
+            m_contentItem->setUrl(QUrl(url));
+        }
+    }
+}
+
+void WPEWebContainer::reload(bool force)
+{
+    Q_UNUSED(force)
+    if (m_contentItem) m_contentItem->reload();
+}
+
+void WPEWebContainer::goForward()
+{
+    if (m_contentItem) m_contentItem->goForward();
+}
+
+void WPEWebContainer::goBack()
+{
+    if (m_contentItem) m_contentItem->goBack();
+}
+
+int WPEWebContainer::activateTab(int tabId, const QString &url)
+{
+    if (!m_tabModel) return -1;
+    m_tabModel->activateTabById(tabId);
+    if (!url.isEmpty() && m_contentItem) {
+        m_contentItem->setUrl(QUrl(url));
+    }
+    return tabId;
+}
+
+void WPEWebContainer::closeTab(int tabId)
+{
+    if (!m_tabModel) return;
+    bool isActive = (tabId == this->tabId());
+    m_tabModel->removeTabById(tabId, isActive);
+}
+
+void WPEWebContainer::releaseActiveTabOwnership()
+{
+    // stub - ownership tracking for D-Bus not needed in WPE
+}
+
+void WPEWebContainer::dumpPages() const
+{
+}
+
+void WPEWebContainer::updateContentOrientation(Qt::ScreenOrientation orientation)
+{
+    emit webContentOrientationChanged(orientation);
+}
+
+void WPEWebContainer::applyContentOrientation(Qt::ScreenOrientation orientation)
+{
+    updateContentOrientation(orientation);
+}
+
+void WPEWebContainer::updatePageFocus(bool)
+{
+    // stub
+}
+
+void WPEWebContainer::onActiveTabChanged(int activeTabId)
+{
+    activatePage(activeTabId);
+}
+
+void WPEWebContainer::onTabAdded(int tabId)
+{
+    // Pre-create the page so it's ready
+    WPEWebPage *page = getOrCreatePage(tabId);
+    Q_UNUSED(page)
+}
+
+void WPEWebContainer::onTabClosed(int tabId)
+{
+    WPEWebPage *page = m_pages.take(tabId);
+    if (page) {
+        page->setVisible(false);
+        page->deleteLater();
+        if (m_contentItem == page) {
+            m_contentItem = nullptr;
+            emit contentItemChanged();
+            emit needChromeChanged();
+        }
+    }
+}
+
+void WPEWebContainer::activatePage(int tabId)
+{
+    if (m_contentItem) {
+        m_contentItem->setActive(false);
+        m_contentItem->setVisible(false);
+    }
+
+    // Get or create new page
+    WPEWebPage *page = getOrCreatePage(tabId);
+
+    // Load the tab's URL if page is new (empty)
+    if (m_tabModel) {
+        QString tabUrl = m_tabModel->url(tabId);
+        if (!tabUrl.isEmpty() && page->url().isEmpty()) {
+            page->setUrl(QUrl(tabUrl));
+        }
+    }
+
+    page->setActive(true);
+    page->setVisible(true);
+
+    if (m_contentItem != page) {
+        m_contentItem = page;
+        emit contentItemChanged();
+        emit needChromeChanged();
+        emit tabIdChanged();
+        emit urlChanged();
+        emit titleChanged();
+        emit loadingChanged();
+        emit loadProgressChanged();
+        emit canGoBackChanged();
+        emit canGoForwardChanged();
+    }
+}
+
+WPEWebPage *WPEWebContainer::getOrCreatePage(int tabId)
+{
+    if (m_pages.contains(tabId)) {
+        return m_pages[tabId];
+    }
+
+    // Create with nullptr parent so windowChanged fires AFTER WPEQtView's connect() is set up,
+    // then reparent via setParentItem() to trigger configureWindow() correctly.
+    WPEWebPage *page = new WPEWebPage(nullptr);
+    page->setTabId(tabId);
+    page->setVisible(false);
+    page->setActive(false);
+
+    // Size: use container bounds if valid, otherwise fall back to screen size.
+    // This ensures WPEQtViewBackend is created with a real size (not -1x-1).
+    QScreen *screen = QGuiApplication::primaryScreen();
+    qreal w = width() > 0 ? width() : (screen ? screen->size().width() : 360.0);
+    qreal h = height() > 0 ? height() : (screen ? screen->size().height() : 640.0);
+    page->setWidth(w);
+    page->setHeight(h);
+    connect(this, &QQuickItem::widthChanged, page, [this, page]() { page->setWidth(width()); });
+    connect(this, &QQuickItem::heightChanged, page, [this, page]() { page->setHeight(height()); });
+
+    // Connect deviceScaleFactor from screen
+    if (screen) {
+        qreal scale = screen->size().width() / 360.0;
+        page->setDeviceScaleFactor(scale);
+    }
+
+    connectPage(page);
+    m_pages[tabId] = page;
+
+    // Reparent after all connections are set up — this fires windowChanged which triggers
+    // WPEQtView::configureWindow() → createWebView().
+    page->setParentItem(this);
+    return page;
+}
+
+void WPEWebContainer::connectPage(WPEWebPage *page)
+{
+    connect(page, &WPEQtView::urlChanged, this, &WPEWebContainer::onPageUrlChanged);
+    connect(page, &WPEQtView::titleChanged, this, &WPEWebContainer::onPageTitleChanged);
+    // WPEQtView::loadingChanged carries a WPEQtViewLoadRequest* — use a lambda to adapt
+    connect(page, &WPEQtView::loadingChanged, this, [this, page](WPEQtViewLoadRequest *) {
+        if (page == m_contentItem) {
+            emit loadingChanged();
+            emit canGoBackChanged();
+            emit canGoForwardChanged();
+        }
+    });
+    connect(page, &WPEQtView::loadProgressChanged, this, &WPEWebContainer::onPageLoadProgressChanged);
+    connect(page, &WPEWebPage::paintedChanged, this, &WPEWebContainer::onPagePaintedChanged);
+    connect(page, &WPEWebPage::chromeChanged, this, &WPEWebContainer::needChromeChanged);
+    connect(page, &WPEWebPage::fullscreenChanged, this, &WPEWebContainer::needChromeChanged);
+    connect(page, &WPEWebPage::fileGrabWritten, this, [this, page](const QString &filePath) {
+        if (m_tabModel)
+            m_tabModel->updateThumbnailPath(page->tabId(), filePath);
+    });
+}
+
+void WPEWebContainer::onPageUrlChanged()
+{
+    WPEWebPage *page = qobject_cast<WPEWebPage *>(sender());
+    if (!page || page != m_contentItem) return;
+
+    QString newUrl = page->url().toString();
+    if (newUrl == QStringLiteral("about:blank")) return;
+
+    emit urlChanged();
+
+    // Update tab model
+    if (m_tabModel) {
+        // The tab model tracks URL via its own signals; here we record history
+        if (m_historyModel && !newUrl.isEmpty()) {
+            m_historyModel->add(newUrl, page->title());
+        }
+    }
+}
+
+void WPEWebContainer::onPageTitleChanged()
+{
+    WPEWebPage *page = qobject_cast<WPEWebPage *>(sender());
+    if (!page || page != m_contentItem) return;
+    emit titleChanged();
+    // Update history entry once title is known
+    QString url = page->url().toString();
+    QString title = page->title();
+    if (m_historyModel && !url.isEmpty() && url != QStringLiteral("about:blank") && !title.isEmpty()) {
+        m_historyModel->add(url, title);
+    }
+}
+
+void WPEWebContainer::onPageLoadingChanged()
+{
+    WPEWebPage *page = qobject_cast<WPEWebPage *>(sender());
+    if (!page || page != m_contentItem) return;
+    emit loadingChanged();
+    emit canGoBackChanged();
+    emit canGoForwardChanged();
+}
+
+void WPEWebContainer::onPageLoadProgressChanged()
+{
+    WPEWebPage *page = qobject_cast<WPEWebPage *>(sender());
+    if (!page || page != m_contentItem) return;
+    emit loadProgressChanged();
+}
+
+void WPEWebContainer::onPagePaintedChanged()
+{
+    WPEWebPage *page = qobject_cast<WPEWebPage *>(sender());
+    if (!page || page != m_contentItem) return;
+    if (page->painted() && !m_activeTabRendered) {
+        setActiveTabRendered(true);
+    }
+}
+
+void WPEWebContainer::setActiveTabRendered(bool r)
+{
+    if (m_activeTabRendered != r) {
+        m_activeTabRendered = r;
+        emit activeTabRenderedChanged();
+    }
+}
