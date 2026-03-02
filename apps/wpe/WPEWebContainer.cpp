@@ -207,10 +207,20 @@ void WPEWebContainer::componentComplete()
     // If an initial URL was requested, load it; otherwise activate the persisted tab, or
     // fall back to a blank page if there are no saved tabs.
     auto onPersistentLoaded = [this]() {
+        qDebug() << "[WPE-INIT] persistentLoaded: initialUrl=" << m_initialUrl
+                 << "tabCount=" << m_persistentTabModel->count();
         if (!m_initialUrl.isEmpty()) {
             load(m_initialUrl);
         } else if (m_persistentTabModel->count() == 0) {
-            load(QStringLiteral("about:blank"));
+            // DeclarativeTabModel::newTab() refuses about:blank when tabs are empty,
+            // so create a page directly without going through the tab model.
+            WPEWebPage *page = getOrCreatePage(1);
+            page->setActive(true);
+            page->setVisible(true);
+            m_contentItem = page;
+            emit contentItemChanged();
+            emit needChromeChanged();
+            qDebug() << "[WPE-INIT] created initial empty page directly";
         } else {
             // Saved tabs exist — activate the current active tab explicitly
             int activeId = m_persistentTabModel->activeTabId();
@@ -235,20 +245,28 @@ void WPEWebContainer::componentComplete()
 void WPEWebContainer::load(const QString &url, bool force, bool fromExternal)
 {
     Q_UNUSED(force)
+    qDebug() << "[WPE-LOAD] load() url=" << url << "completed=" << m_completed
+             << "tabModel=" << (m_tabModel ? m_tabModel->count() : -1)
+             << "contentItem=" << m_contentItem;
 
     if (!m_completed) {
+        qDebug() << "[WPE-LOAD] not completed, saving as initialUrl";
         m_initialUrl = url;
         emit hasInitialUrlChanged();
         return;
     }
 
-    if (!m_tabModel) return;
+    if (!m_tabModel) { qDebug() << "[WPE-LOAD] no tabModel!"; return; }
 
     if (m_tabModel->count() == 0) {
+        qDebug() << "[WPE-LOAD] newTab for" << url;
         m_tabModel->newTab(url, fromExternal);
     } else {
         if (m_contentItem) {
+            qDebug() << "[WPE-LOAD] setUrl on contentItem:" << url;
             m_contentItem->setUrl(QUrl(url));
+        } else {
+            qDebug() << "[WPE-LOAD] contentItem is NULL, cannot load!";
         }
     }
 }
@@ -338,6 +356,7 @@ void WPEWebContainer::onTabClosed(int tabId)
 
 void WPEWebContainer::activatePage(int tabId)
 {
+    qDebug() << "[WPE-ACTIVATE] tabId=" << tabId << "currentContent=" << m_contentItem;
     if (m_contentItem) {
         m_contentItem->setActive(false);
         m_contentItem->setVisible(false);
@@ -373,6 +392,7 @@ void WPEWebContainer::activatePage(int tabId)
 
 WPEWebPage *WPEWebContainer::getOrCreatePage(int tabId)
 {
+    qDebug() << "[WPE-PAGE] getOrCreatePage tabId=" << tabId << "exists=" << m_pages.contains(tabId);
     if (m_pages.contains(tabId)) {
         return m_pages[tabId];
     }

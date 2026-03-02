@@ -62,14 +62,12 @@ Shared.Background {
     }
 
     function loadPage(url, newTab) {
+        console.log("[QML-LOAD] loadPage url=" + url + " newTab=" + newTab)
         if (url == "about:config") {
             pageStack.animatorPush(Qt.resolvedUrl("ConfigWarning.qml"), {"browserPage": browserPage})
         } else if (url == "about:settings") {
             pageStack.animatorPush(Qt.resolvedUrl("../SettingsPage.qml"))
         } else {
-            if (webView && webView.tabModel.count === 0) {
-                webView.clearSurface()
-            }
             var pageUrl = url.trim()
             // WPE: convert search keywords to search URL
             if (pageUrl && !_isUrl(pageUrl)) {
@@ -78,13 +76,8 @@ Shared.Background {
                 pageUrl = "https://" + pageUrl
             }
 
-            if (!searchField.enteringNewTabUrl && !newTab) {
-                webView.releaseActiveTabOwnership()
-                webView.load(pageUrl)
-            } else {
-                // Loading will start once overlay animator has animated chrome visible.
-                enteredUrl = pageUrl
-            }
+            console.log("[QML-LOAD] resolved pageUrl=" + pageUrl)
+            webView.load(pageUrl)
         }
 
         overlayAnimator.showChrome()
@@ -308,23 +301,38 @@ Shared.Background {
                 }
 
                 sourceComponent: Component {
-                    TextSelectionToolbar {
-                        portrait: browserPage.isPortrait
-                        controller: webView && webView.contentItem && webView.contentItem.textSelectionController
+                    Row {
+                        id: selToolbar
+                        property var ci: webView ? webView.contentItem : null
                         width: textSelectionToolbar.width
-                        height: textSelectionToolbar.height
-                        leftPadding: toolBar.horizontalOffset
-                        rightPadding: toolBar.horizontalOffset
-                        onCall: {
-                            Qt.openUrlExternally("tel:" + controller.text)
+                        height: Theme.itemSizeSmall
+                        spacing: 0
+
+                        IconButton {
+                            width: selToolbar.width / 3
+                            height: parent.height
+                            icon.source: "image://theme/icon-m-clipboard"
+                            onClicked: {
+                                if (selToolbar.ci) {
+                                    selToolbar.ci.copyToClipboard()
+                                    selToolbar.ci.clearSelection()
+                                }
+                            }
+                            Label { anchors.horizontalCenter: parent.horizontalCenter; y: parent.icon.y + parent.icon.height - Theme.paddingSmall; text: "Copy"; font.pixelSize: Theme.fontSizeTiny }
                         }
-                        onShare: {
-                            webShareAction.shareText(controller.text)
+                        IconButton {
+                            width: selToolbar.width / 3
+                            height: parent.height
+                            icon.source: "image://theme/icon-m-select-all"
+                            onClicked: { if (selToolbar.ci) selToolbar.ci.selectAll() }
+                            Label { anchors.horizontalCenter: parent.horizontalCenter; y: parent.icon.y + parent.icon.height - Theme.paddingSmall; text: "Select All"; font.pixelSize: Theme.fontSizeTiny }
                         }
-                        onSearch: {
-                            // Open new tab with the search uri.
-                            webView.tabModel.newTab(controller.searchUri, true)
-                            overlay.animator.showChrome(true)
+                        IconButton {
+                            width: selToolbar.width / 3
+                            height: parent.height
+                            icon.source: "image://theme/icon-m-input-remove"
+                            onClicked: { if (selToolbar.ci) selToolbar.ci.clearSelection() }
+                            Label { anchors.horizontalCenter: parent.horizontalCenter; y: parent.icon.y + parent.icon.height - Theme.paddingSmall; text: "Clear"; font.pixelSize: Theme.fontSizeTiny }
                         }
                     }
                 }

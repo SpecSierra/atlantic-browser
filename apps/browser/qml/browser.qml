@@ -21,7 +21,7 @@ BrowserWindow {
             cover = Qt.resolvedUrl("cover/NoTabsCover.qml")
         } else {
             if (cover != null && window.webView) {
-                window.webView.clearSurface()
+                // clearSurface is Gecko-specific, not available in WPE
             }
             cover = null
         }

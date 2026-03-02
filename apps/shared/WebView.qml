@@ -149,6 +149,67 @@ WebContainer {
         }
     }
 
+    // WPE selection drag handles (at container level so contentItem is available)
+    Item {
+        id: selHandles
+        visible: webView.contentItem && webView.contentItem.textSelectionActive
+        anchors.fill: parent
+        z: 100
+
+        property var ci: webView.contentItem
+        property real dsf: ci ? ci.deviceScaleFactor || 1.0 : 1.0
+
+        Rectangle {
+            id: startHandle
+            width: Theme.iconSizeExtraSmall / 2
+            height: Theme.iconSizeMedium / 2
+            radius: width / 2
+            color: Theme.highlightColor
+            visible: selHandles.visible && selHandles.ci && selHandles.ci.selectionStartX > 0
+            x: selHandles.ci ? selHandles.ci.selectionStartX * selHandles.dsf - width : 0
+            y: selHandles.ci ? selHandles.ci.selectionStartY * selHandles.dsf : 0
+
+            MouseArea {
+                anchors.fill: parent
+                anchors.margins: -Theme.paddingLarge
+                drag.target: startHandle
+                drag.axis: Drag.XAndYAxis
+                onPositionChanged: {
+                    if (drag.active && selHandles.ci) {
+                        var cssX = (startHandle.x + startHandle.width) / selHandles.dsf
+                        var cssY = (startHandle.y + startHandle.height / 2) / selHandles.dsf
+                        selHandles.ci.moveSelectionStart(cssX, cssY)
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            id: endHandle
+            width: Theme.iconSizeExtraSmall / 2
+            height: Theme.iconSizeMedium / 2
+            radius: width / 2
+            color: Theme.highlightColor
+            visible: selHandles.visible && selHandles.ci && selHandles.ci.selectionEndX > 0
+            x: selHandles.ci ? selHandles.ci.selectionEndX * selHandles.dsf : 0
+            y: selHandles.ci ? selHandles.ci.selectionEndY * selHandles.dsf : 0
+
+            MouseArea {
+                anchors.fill: parent
+                anchors.margins: -Theme.paddingLarge
+                drag.target: endHandle
+                drag.axis: Drag.XAndYAxis
+                onPositionChanged: {
+                    if (drag.active && selHandles.ci) {
+                        var cssX = endHandle.x / selHandles.dsf
+                        var cssY = (endHandle.y + endHandle.height / 2) / selHandles.dsf
+                        selHandles.ci.moveSelectionEnd(cssX, cssY)
+                    }
+                }
+            }
+        }
+    }
+
     webPageComponent: Component {
         WebPage {
             id: webPage
