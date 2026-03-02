@@ -25,7 +25,7 @@ Column {
     property bool certOverlayActive
     property real certOverlayAnimPos
     property real certOverlayPreferedHeight: 4 * toolBarRow.height
-    readonly property bool showFindButtons: webView.findInPageHasResult && findInPageActive
+    readonly property bool showFindButtons: findInPageActive && webView.contentItem && webView.contentItem.findInPageHasResult
     property var bookmarked
     readonly property alias rowHeight: toolsRow.height
     readonly property int maxRowCount: 6
@@ -74,7 +74,7 @@ Column {
     signal savePageAsPDF
 
     function resetFind() {
-        webView.sendAsyncMessage("embedui:find", { text: "", backwards: false, again: false })
+        if (webView.contentItem) webView.contentItem.findFinish()
         if (webView.contentItem) {
             webView.contentItem.forceChrome(false)
         }
@@ -111,7 +111,7 @@ Column {
 
             active: false
             sourceComponent: CertificateInfo {
-                security: webView.security
+                security: webView.contentItem ? webView.contentItem.security : null
                 width: certOverlay.width
                 height: certOverlayHeight
                 opacity: Math.max((certOverlayAnimPos * 2.0) - 1.0, 0)
@@ -252,19 +252,21 @@ Column {
         Shared.ExpandingButton {
             id: padlockIcon
 
-            property bool danger: webView.security && webView.security.validState && !webView.security.allGood
+            readonly property var sec: webView.contentItem ? webView.contentItem.security : null
+            property bool danger: sec && sec.validState && !sec.allGood
             property real glow
 
             height: parent.height
             expandedWidth: toolBarRow.smallIconWidth
             icon.source: danger ? "image://theme/icon-s-filled-warning" : "image://theme/icon-s-outline-secure"
-            active: webView.security && webView.security.validState && !findInPageActive
+            active: sec && sec.validState && !findInPageActive
                     && !(webView.url.indexOf("about:") === 0)
+                    && (!webView.contentItem || !webView.contentItem.textSelectionActive)
             icon.color: danger ? Qt.tint(Theme.primaryColor,
                                          Qt.rgba(Theme.errorColor.r, Theme.errorColor.g,
                                                  Theme.errorColor.b, glow))
                                : Theme.primaryColor
-            enabled: webView.security
+            enabled: !!sec
             onTapped: {
                 if (certOverlayActive) {
                     showChrome()
@@ -381,7 +383,7 @@ Column {
                 }
 
                 onTapped: {
-                    webView.sendAsyncMessage("embedui:find", { text: findText, backwards: true, again: true })
+                    if (webView.contentItem) webView.contentItem.findText(findText, true)
                 }
             }
 
@@ -396,7 +398,7 @@ Column {
                 }
 
                 onTapped: {
-                    webView.sendAsyncMessage("embedui:find", { text: findText, backwards: false, again: true })
+                    if (webView.contentItem) webView.contentItem.findText(findText, false)
                 }
             }
         }
