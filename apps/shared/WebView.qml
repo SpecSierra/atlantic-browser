@@ -46,7 +46,7 @@ WebContainer {
         model: tabModel
     }
 
-    property Component textSelectionControllerComponent: Component {
+    property Component _selectionUIComponent: Component {
         TextSelectionController {
             opacity: canShowSelectionMarkers ? 1.0 : 0.0
             contentWidth: webView.rotationHandler ? webView.rotationHandler.width : 0
@@ -156,8 +156,8 @@ WebContainer {
             property bool acceptedTouchIcon
             property int frameCounter
             property bool rendered
-            readonly property bool textSelectionActive: textSelectionController && textSelectionController.active
-            property Item textSelectionController: null
+            // textSelectionActive and textSelectionController are FINAL in WPEWebPage C++
+            property Item _selectionUI: null
             readonly property bool activeWebPage: container.tabId == tabId
             property bool userHasDraggedWhileLoading
             property string favicon
@@ -213,8 +213,8 @@ WebContainer {
             }
 
             function clearSelection() {
-                if (textSelectionController) {
-                    textSelectionController.clearSelection()
+                if (_selectionUI) {
+                    _selectionUI.clearSelection()
                     browserPage.inputRegion.selectionStartHandleMask = Qt.rect(0, 0, 0, 0)
                     browserPage.inputRegion.selectionEndHandleMask = Qt.rect(0, 0, 0, 0)
                 }
@@ -264,15 +264,13 @@ WebContainer {
                 }
             }
 
-            onBackgroundColorChanged: {
-                // Update only webPage
-                if (container.contentItem === webPage) {
-                    sendAsyncMessage("Browser:SelectionColorUpdate",
-                                     {
-                                         "color": Theme.secondaryHighlightColor
-                                     })
-                }
-            }
+            // onBackgroundColorChanged not available in WPEWebPage
+            // onBackgroundColorChanged: {
+            //     if (container.contentItem === webPage) {
+            //         sendAsyncMessage("Browser:SelectionColorUpdate",
+            //                          { "color": Theme.secondaryHighlightColor })
+            //     }
+            // }
 
             onDraggingChanged: {
                 if (dragging && loading) {
@@ -346,16 +344,16 @@ WebContainer {
                     break
                 }
                 case "Content:SelectionRange": {
-                    if (textSelectionController === null) {
-                        textSelectionController = textSelectionControllerComponent.createObject(browserPage,
+                    if (_selectionUI === null) {
+                        _selectionUI = _selectionUIComponent.createObject(browserPage,
                                                                                                 {"contentItem": webPage})
                     }
-                    textSelectionController.selectionRangeUpdated(data)
+                    _selectionUI.selectionRangeUpdated(data)
                     break
                 }
                 case "Content:SelectionSwap": {
-                    if (textSelectionController) {
-                        textSelectionController.swap()
+                    if (_selectionUI) {
+                        _selectionUI.swap()
                     }
 
                     break
@@ -382,8 +380,8 @@ WebContainer {
                 // sender expects that this handler will update `response` argument
                 switch (message) {
                 case "Content:SelectionCopied": {
-                    if (data.succeeded && textSelectionController) {
-                        textSelectionController.showNotification()
+                    if (data.succeeded && _selectionUI) {
+                        _selectionUI.showNotification()
                         response.message = {"": ""}
                     }
                     break
