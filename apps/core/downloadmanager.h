@@ -45,7 +45,6 @@ public slots:
     void cancel(int downloadId);
 
 private slots:
-    void recvObserve(const QString message, const QVariant data);
 
 private:
     explicit DownloadManager();
@@ -56,7 +55,6 @@ private:
     void cancelTransfer(int transferId);
     void restartTransfer(int transferId);
 
-    void setPreferences();
     void setPdfPrinting(const bool pdfPrinting);
 
     // TODO: unlike Gecko downloads and Sailfish transfers these mappings

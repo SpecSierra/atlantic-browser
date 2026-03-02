@@ -31,8 +31,6 @@
 
 #include <MDConfItem>
 
-#include <webengine.h>
-#include <webenginesettings.h>
 
 #include <math.h>
 #include "declarativewebutils.h"
@@ -52,10 +50,6 @@ DeclarativeWebUtils::DeclarativeWebUtils()
     : QObject()
     , m_homePage(new MDConfItem("/apps/sailfish-browser/settings/home_page", this))
 {
-    updateWebEngineSettings();
-    connect(SailfishOS::WebEngine::instance(), &SailfishOS::WebEngine::recvObserve,
-            this, &DeclarativeWebUtils::handleObserve);
-
     QString path = BrowserPaths::dataLocation() + QStringLiteral("/.firstUseDone");
     m_firstUseDone = fileExists(path);
 
@@ -106,42 +100,7 @@ void DeclarativeWebUtils::openSettings()
 
 void DeclarativeWebUtils::updateWebEngineSettings()
 {
-    SailfishOS::WebEngineSettings *webEngineSettings = SailfishOS::WebEngineSettings::instance();
-    SailfishOS::WebEngine *webEngine = SailfishOS::WebEngine::instance();
-
-    webEngineSettings->setPreference(QStringLiteral("general.useragent.updates.enabled"),
-                        MDConfItem(QStringLiteral("/apps/sailfish-browser/settings/useragent_update_enabled")).value(QVariant(true)));
-    webEngineSettings->setPreference(QStringLiteral("general.useragent.updates.url"),
-                        MDConfItem(QStringLiteral("/apps/sailfish-browser/settings/useragent_update_url")).value(defaultUserAgentUpdateUrl));
-    webEngineSettings->setPreference(QStringLiteral("general.useragent.updates.interval"),
-                        MDConfItem(QStringLiteral("/apps/sailfish-browser/settings/useragent_update_interval")).value(QVariant(172800))); // every 2nd day
-    webEngineSettings->setPreference(QStringLiteral("general.useragent.updates.retry"),
-                        MDConfItem(QStringLiteral("/apps/sailfish-browser/settings/useragent_update_retry")).value(QVariant(86400))); // 1 day
-
-    // Without this pref placeholders get cleaned as soon as a character gets committed
-    // by VKB and that happens only when Enter is pressed or comma/space/dot is entered.
-    webEngineSettings->setPreference(QString("dom.placeholder.show_on_focus"), QVariant(false));
-    webEngineSettings->setPreference(QString("geo.wifi.scan"), QVariant(false));
-    webEngineSettings->setPreference(QString("media.resource_handler_disabled"), QVariant(true));
-
-    // Ensure the renderer is configured correctly
-    webEngineSettings->setPreference(QStringLiteral("embedlite.compositor.external_gl_context"),
-                                     QVariant(true));
-    webEngineSettings->setPreference(QStringLiteral("embedlite.compositor.request_external_gl_context_early"),
-                                     QVariant(true));
-
-    // subscribe to gecko messages
-    std::vector<std::string> messages = { "clipboard:setdata",
-                                          "media-decoder-info",
-                                          "embed:download",
-                                          "embed:allprefs",
-                                          "embed:search" };
-    webEngine->addObservers(messages);
-
-    // Enable internet search
-    webEngineSettings->setPreference(QString("keyword.enabled"), QVariant(true));
-
-    setRenderingPreferences();
+    // WPE: browser settings applied via WebKit API
 }
 
 void DeclarativeWebUtils::setFirstUseDone(bool firstUseDone)
@@ -161,11 +120,9 @@ void DeclarativeWebUtils::setFirstUseDone(bool firstUseDone)
 
 qreal DeclarativeWebUtils::cssPixelRatio() const
 {
-    SailfishOS::WebEngineSettings *webEngineSettings = SailfishOS::WebEngineSettings::instance();
-    if (webEngineSettings) {
-        return webEngineSettings->pixelRatio();
-    }
-    return 1.0;
+    // WPE: return screen pixel ratio
+    QScreen *screen = QGuiApplication::primaryScreen();
+    return screen ? screen->devicePixelRatio() : 1.0;
 }
 
 bool DeclarativeWebUtils::firstUseDone() const
@@ -235,10 +192,5 @@ void DeclarativeWebUtils::handleObserve(const QString &message, const QVariant &
 
 void DeclarativeWebUtils::setRenderingPreferences()
 {
-    SailfishOS::WebEngineSettings *webEngineSettings = SailfishOS::WebEngineSettings::instance();
-
-    // Use external Qt window for rendering content
-    webEngineSettings->setPreference(QString("gfx.compositor.external-window"), QVariant(true));
-    webEngineSettings->setPreference(QString("gfx.compositor.clear-context"), QVariant(false));
-    webEngineSettings->setPreference(QString("embedlite.compositor.external_gl_context"), QVariant(true));
+    // WPE: rendering configured via WPEQtView
 }

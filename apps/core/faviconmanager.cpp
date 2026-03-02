@@ -22,7 +22,7 @@
 
 #include "faviconmanager.h"
 
-#include "declarativewebpage.h"
+#include "WPEWebPage.h"
 
 FaviconManager::FaviconManager(QObject *parent)
     : QObject(parent)
@@ -186,7 +186,7 @@ QString FaviconManager::get(const QString &type, const QString &hostname)
     return favicon;
 }
 
-void FaviconManager::grabIcon(const QString &type, DeclarativeWebPage *webPage, const QSize &size)
+void FaviconManager::grabIcon(const QString &type, WPEWebPage *webPage, const QSize &size)
 {
     if (!get(type, webPage->url().toString()).isEmpty()) {
         return; // favicon was previously already loaded.
@@ -203,7 +203,7 @@ void FaviconManager::grabIcon(const QString &type, DeclarativeWebPage *webPage, 
             add(type, webPage->url().toString(), dataFetcher->data(), true);
         } else {
             std::shared_ptr<QMetaObject::Connection> thumbConn = std::make_shared<QMetaObject::Connection>();
-            *thumbConn = connect(webPage, &DeclarativeWebPage::thumbnailResult,
+            *thumbConn = connect(webPage, &WPEWebPage::thumbnailResult,
                                  [this, type, webPage, thumbConn](const QString &data) {
                 qCDebug(lcFavoritesLog) << "Storing thumbnail for" << type;
                 QObject::disconnect(*thumbConn);

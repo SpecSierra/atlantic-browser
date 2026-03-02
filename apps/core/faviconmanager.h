@@ -14,7 +14,7 @@
 #include <QObject>
 #include <QMap>
 
-class DeclarativeWebPage;
+class WPEWebPage;
 
 class FaviconManager : public QObject
 {
@@ -29,7 +29,7 @@ public:
 
     QString get(const QString &type, const QString &hostname);
 
-    Q_INVOKABLE void grabIcon(const QString &type, DeclarativeWebPage *webPage, const QSize &size);
+    Q_INVOKABLE void grabIcon(const QString &type, WPEWebPage *webPage, const QSize &size);
     Q_INVOKABLE void clear(const QString &type);
 
     static QString defaultDesktopBookmarkIcon();

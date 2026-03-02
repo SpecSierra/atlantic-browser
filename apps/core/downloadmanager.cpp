@@ -1,12 +1,10 @@
-/****************************************************************************
-**
-** Copyright (c) 2013 - 2021 Jolla Ltd.
-**
-****************************************************************************/
-
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this file,
- * You can obtain one at http://mozilla.org/MPL/2.0/. */
+/*
+ * Copyright (c) 2013 - 2021 Jolla Ltd.
+ * SPDX-License-Identifier: MPL-2.0
+ *
+ * WPE replacement: Gecko download management removed.
+ * Downloads are handled via WebKit download delegates (future work).
+ */
 
 #include "downloadmanager.h"
 #include "browserpaths.h"
@@ -18,10 +16,7 @@
 #include <QFile>
 #include <QDebug>
 
-#include <webengine.h>
-#include <webenginesettings.h>
-
-static DownloadManager *gSingleton = 0;
+static DownloadManager *gSingleton = nullptr;
 
 DownloadManager::DownloadManager()
     : QObject(),
@@ -31,10 +26,6 @@ DownloadManager::DownloadManager()
                                                    "/org/nemo/transferengine",
                                                    QDBusConnection::sessionBus(),
                                                    this);
-    setPreferences();
-    SailfishOS::WebEngine *webEngine = SailfishOS::WebEngine::instance();
-    connect(webEngine, &SailfishOS::WebEngine::recvObserve,
-            this, &DownloadManager::recvObserve);
 
     // Ignore the download info argument of the downloadStatusChanged signal.
     connect(this, &DownloadManager::downloadStatusChanged, [=](int downloadId, int status) {
@@ -44,92 +35,7 @@ DownloadManager::DownloadManager()
 
 DownloadManager::~DownloadManager()
 {
-    gSingleton = 0;
-}
-
-void DownloadManager::recvObserve(const QString message, const QVariant data)
-{
-    if (message != "embed:download") {
-        // here we are interested in download messages only
-        return;
-    }
-
-    QVariantMap dataMap(data.toMap());
-    QString msg = dataMap.value(QStringLiteral("msg")).toString();
-    QString targetPath = dataMap.value(QStringLiteral("targetPath")).toString();
-    bool isSaveAsPdf = dataMap.value(QStringLiteral("saveAsPdf")).toBool();
-    qulonglong downloadId(dataMap.value(QStringLiteral("id")).toULongLong());
-
-    qCInfo(lcDownloadLog) << "Browser received embed:download message:" << msg
-                          << "target path:" << targetPath
-                          << "existing transfer:" << m_download2transferMap.contains(downloadId);
-
-    if (isSaveAsPdf) {
-        if (msg == QLatin1Literal("dl-start")) {
-            setPdfPrinting(true);
-        } else if (msg == QLatin1Literal("dl-done") ||
-                  msg == QLatin1Literal("dl-fail") ||
-                  msg == QLatin1Literal("dl-cancel")) {
-            setPdfPrinting(false);
-        }
-    }
-
-    if (msg == QLatin1Literal("dl-start")
-            && m_download2transferMap.contains(downloadId)) { // restart existing transfer
-        m_transferClient->startTransfer(m_download2transferMap.value(downloadId));
-        emit downloadStatusChanged(downloadId, DownloadStatus::Started, data);
-    } else if (msg == QLatin1Literal("dl-start")) { // create new transfer
-        emit downloadStarted();
-
-        QLatin1Literal browserInterface("org.sailfishos.browser");
-        QStringList callback;
-        callback << browserInterface << QLatin1Literal("/") << browserInterface;
-        QDBusPendingReply<int> reply = m_transferClient->createDownload(dataMap.value("displayName").toString(),
-                                                                        QString("image://theme/icon-launcher-browser"),
-                                                                        QString("image://theme/icon-launcher-browser"),
-                                                                        targetPath,
-                                                                        dataMap.value("mimeType").toString(),
-                                                                        dataMap.value("size").toULongLong(),
-                                                                        callback,
-                                                                        QString("cancelTransfer"),
-                                                                        QString("restartTransfer"));
-        reply.waitForFinished();
-
-        if (reply.isError()) {
-            qWarning() << "DownloadManager::recvObserve: failed to get transfer ID!" << reply.error();
-            return;
-        }
-
-        int transferId(reply.value());
-
-        m_download2transferMap.insert(downloadId, transferId);
-        m_transfer2downloadMap.insert(transferId, downloadId);
-        m_transferClient->startTransfer(transferId);
-        emit downloadStatusChanged(downloadId, DownloadStatus::Started, data);
-    } else if (msg == QLatin1Literal("dl-progress")) {
-        qreal progress(dataMap.value(QStringLiteral("percent")).toULongLong() / 100.0);
-        qCInfo(lcDownloadLog) << "Browser update download progress:" << progress;
-        m_transferClient->updateTransferProgress(m_download2transferMap.value(downloadId), progress);
-    } else if (msg == QLatin1Literal("dl-done")) {
-        qCInfo(lcDownloadLog) << "Browser download done.";
-        m_transferClient->finishTransfer(m_download2transferMap.value(downloadId),
-                                         TransferEngineData::TransferFinished,
-                                         QString("success"));
-        emit downloadStatusChanged(downloadId, DownloadStatus::Done, data);
-        checkAllTransfers();
-    } else if (msg == QLatin1Literal("dl-fail")) {
-        m_transferClient->finishTransfer(m_download2transferMap.value(downloadId),
-                                         TransferEngineData::TransferInterrupted,
-                                         QString("browser failure"));
-        emit downloadStatusChanged(downloadId, DownloadStatus::Failed, data);
-        checkAllTransfers();
-    } else if (msg == QLatin1Literal("dl-cancel")) {
-        m_transferClient->finishTransfer(m_download2transferMap.value(downloadId),
-                                         TransferEngineData::TransferCanceled,
-                                         QString("download canceled"));
-        emit downloadStatusChanged(downloadId, DownloadStatus::Canceled, data);
-        checkAllTransfers();
-    }
+    gSingleton = nullptr;
 }
 
 void DownloadManager::cancelActiveTransfers()
@@ -143,47 +49,22 @@ void DownloadManager::cancelActiveTransfers()
 
 void DownloadManager::cancel(int downloadId)
 {
-    QVariantMap data;
-    data.insert("msg", "cancelDownload");
-    data.insert("id", downloadId);
-    SailfishOS::WebEngine *webEngine = SailfishOS::WebEngine::instance();
-    webEngine->notifyObservers(QString("embedui:download"), QVariant(data));
+    Q_UNUSED(downloadId)
+    // WPE: no-op; WebKit downloads handled separately
 }
 
 void DownloadManager::cancelTransfer(int transferId)
 {
-    if (m_transfer2downloadMap.contains(transferId)) {
-        cancel(m_transfer2downloadMap.value(transferId));
-    } else {
-        m_transferClient->finishTransfer(transferId,
-                                         TransferEngineData::TransferInterrupted,
-                                         QString("Transfer got unavailable"));
-    }
+    m_transferClient->finishTransfer(transferId,
+                                     TransferEngineData::TransferInterrupted,
+                                     QString("Transfer got unavailable"));
 }
 
 void DownloadManager::restartTransfer(int transferId)
 {
-    if (m_transfer2downloadMap.contains(transferId)) {
-        QVariantMap data;
-        data.insert("msg", "retryDownload");
-        data.insert("id", m_transfer2downloadMap.value(transferId));
-        SailfishOS::WebEngine *webEngine = SailfishOS::WebEngine::instance();
-        webEngine->notifyObservers(QString("embedui:download"), QVariant(data));
-    } else {
-        m_transferClient->finishTransfer(transferId,
-                                         TransferEngineData::TransferInterrupted,
-                                         QString("Transfer got unavailable"));
-    }
-}
-
-void DownloadManager::setPreferences()
-{
-    SailfishOS::WebEngineSettings *webEngineSettings = SailfishOS::WebEngineSettings::instance();
-    webEngineSettings->setPreference(QString("browser.download.useJSTransfer"), QVariant(true));
-    // see https://developer.mozilla.org/en-US/docs/Download_Manager_preferences
-
-    // NS_PREF_DOWNLOAD_FOLDERLIST of nsExternalHelperAppService
-    webEngineSettings->setPreference(QString("browser.download.folderList"), QVariant(2));
+    m_transferClient->finishTransfer(transferId,
+                                     TransferEngineData::TransferInterrupted,
+                                     QString("Transfer got unavailable"));
 }
 
 void DownloadManager::setPdfPrinting(const bool pdfPrinting)
@@ -204,15 +85,10 @@ DownloadManager *DownloadManager::instance()
 
 bool DownloadManager::existActiveTransfers()
 {
-    bool exists(false);
-
     for (DownloadStatus::Status status : m_statusCache) {
-        if (status == DownloadStatus::Started) {
-            exists = true;
-            break;
-        }
+        if (status == DownloadStatus::Started) return true;
     }
-    return exists;
+    return false;
 }
 
 bool DownloadManager::pdfPrinting() const

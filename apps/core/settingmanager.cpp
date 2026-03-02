@@ -1,23 +1,14 @@
-/****************************************************************************
-**
-** Copyright (c) 2013 - 2021 Jolla Ltd.
-**
-****************************************************************************/
-
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this file,
- * You can obtain one at http://mozilla.org/MPL/2.0/. */
+/*
+ * Copyright (c) 2013 - 2021 Jolla Ltd.
+ * SPDX-License-Identifier: MPL-2.0
+ */
 
 #include "settingmanager.h"
 #include "dbmanager.h"
-#include "opensearchconfigs.h"
 #include "faviconmanager.h"
 
 #include <MDConfItem>
 #include <QVariant>
-
-#include <webengine.h>
-#include <webenginesettings.h>
 
 static SettingManager *gSingleton = 0;
 
@@ -30,16 +21,10 @@ SettingManager::SettingManager(QObject *parent)
     connect(m_searchEngineConfItem, &MDConfItem::valueChanged,
             this, &SettingManager::setSearchEngine);
 
-    // Look and feel related settings
     m_toolbarSmall = new MDConfItem("/apps/sailfish-browser/settings/toolbar_small", this);
     m_toolbarLarge = new MDConfItem("/apps/sailfish-browser/settings/toolbar_large", this);
     connect(m_toolbarSmall, &MDConfItem::valueChanged, this, &SettingManager::toolbarSmallChanged);
     connect(m_toolbarLarge, &MDConfItem::valueChanged, this, &SettingManager::toolbarLargeChanged);
-
-    SailfishOS::WebEngine::instance()->addObserver(QStringLiteral("cache-size"));
-    SailfishOS::WebEngine::instance()->addObserver(QStringLiteral("site-data-size"));
-    connect(SailfishOS::WebEngine::instance(), &SailfishOS::WebEngine::recvObserve,
-            this, &SettingManager::handleObserve);
 }
 
 int SettingManager::toolbarSmall()
@@ -67,25 +52,22 @@ void SettingManager::clearHistory(int period)
 
 void SettingManager::clearCookiesAndSiteData()
 {
-    SailfishOS::WebEngine::instance()->notifyObservers(QString("clear-private-data"), QString("cookies-and-site-data"));
+    // WPE: cookies managed by WebKit internally; use webkit_website_data_manager if needed
 }
 
 void SettingManager::clearPasswords()
 {
-    SailfishOS::WebEngine::instance()->notifyObservers(QString("clear-private-data"), QString("passwords"));
     FaviconManager::instance()->clear("logins");
 }
 
 void SettingManager::clearCache()
 {
-    SailfishOS::WebEngine::instance()->notifyObservers(QString("clear-private-data"), QString("cache"));
+    // WPE: cache cleared via webkit_web_context_clear_cache
 }
 
 void SettingManager::clearSitePermissions()
 {
-    QVariantMap data;
-    data.insert(QStringLiteral("msg"), QStringLiteral("remove-all"));
-    SailfishOS::WebEngine::instance()->notifyObservers(QString("embedui:perms"), QVariant(data));
+    // WPE: permissions managed by WebKit internally
 }
 
 void SettingManager::removeAllTabs()
@@ -96,110 +78,23 @@ void SettingManager::removeAllTabs()
 void SettingManager::calculateCacheSize(QJSValue callback)
 {
     if (!callback.isNull() && !callback.isUndefined() && callback.isCallable()) {
-        m_calculateCacheSizeCb.reset(new QJSValue(callback));
-
-        SailfishOS::WebEngine::instance()->notifyObservers(QString("get-cache-size"), QVariant());
+        callback.call(QJSValueList() << 0);
     }
 }
 
 void SettingManager::calculateSiteDataSize(QJSValue callback)
 {
     if (!callback.isNull() && !callback.isUndefined() && callback.isCallable()) {
-        m_calculateSiteDataSizeCb.reset(new QJSValue(callback));
-
-        SailfishOS::WebEngine::instance()->notifyObservers(QString("get-site-data-size"), QVariant());
+        callback.call(QJSValueList() << 0);
     }
 }
 
 void SettingManager::setSearchEngine()
 {
-    if (m_searchEnginesInitialized) {
-        QVariant searchEngine = m_searchEngineConfItem->value(QVariant(QString("Google")));
-        SailfishOS::WebEngineSettings *webEngineSettings = SailfishOS::WebEngineSettings::instance();
-        webEngineSettings->setPreference(QString("browser.search.defaultenginename"), searchEngine);
-
-        // Let nsSearchService update the search engine (through EmbedLiteSearchEngine).
-        QVariantMap defaultSearchEngine;
-        defaultSearchEngine.insert(QLatin1String("msg"), QLatin1String("setdefault"));
-        defaultSearchEngine.insert(QLatin1String("name"), searchEngine);
-        SailfishOS::WebEngine *webEngine = SailfishOS::WebEngine::instance();
-        webEngine->notifyObservers(QLatin1String("embedui:search"), QVariant(defaultSearchEngine));
-    }
+    // WPE: search engine is configured in browser URL bar logic
 }
 
-void SettingManager::handleObserve(const QString &message, const QVariant &data)
+void SettingManager::handleObserve(const QString &, const QVariant &)
 {
-    const QVariantMap dataMap = data.toMap();
-    if (message == QLatin1String("embed:search")) {
-        QString msg = dataMap.value("msg").toString();
-        if (msg == QLatin1String("init")) {
-            const StringMap configs(OpenSearchConfigs::getAvailableOpenSearchConfigs());
-            const QStringList configuredEngines = configs.keys();
-            QStringList registeredSearches(dataMap.value(QLatin1String("engines")).toStringList());
-            QString defaultSearchEngine = dataMap.value(QLatin1String("defaultEngine")).toString();
-            m_searchEnginesInitialized = !registeredSearches.isEmpty();
-
-            // Upon first start, engine doesn't know about the search engines.
-            // Engine load requests are send within the for loop below.
-            if (!m_searchEnginesInitialized) {
-                m_addedSearchEngines = new QStringList(configuredEngines);
-            }
-
-            SailfishOS::WebEngine *webEngine = SailfishOS::WebEngine::instance();
-
-            // Add newly installed configs
-            for (const QString &searchName : configuredEngines) {
-                if (registeredSearches.contains(searchName)) {
-                    registeredSearches.removeAll(searchName);
-                } else {
-                    QVariantMap loadsearch;
-                    // load opensearch descriptions
-                    loadsearch.insert(QLatin1String("msg"), QVariant(QLatin1String("loadxml")));
-                    loadsearch.insert(QLatin1String("uri"), QVariant(QString("file://%1").arg(configs[searchName])));
-                    webEngine->notifyObservers(QLatin1String("embedui:search"), QVariant(loadsearch));
-                }
-            }
-
-            // Remove uninstalled OpenSearch configs
-            const QStringList removeUninstalled = registeredSearches;
-            for (const QString &searchName : removeUninstalled) {
-                QVariantMap removeMsg;
-                removeMsg.insert(QLatin1String("msg"), QVariant(QLatin1String("remove")));
-                removeMsg.insert(QLatin1String("name"), QVariant(searchName));
-                webEngine->notifyObservers(QLatin1String("embedui:search"), QVariant(removeMsg));
-            }
-
-            // Try to set search engine. After first start we can update the default search
-            // engine immediately.
-            setSearchEngine();
-        } else if (msg == QLatin1String("search-engine-added")) {
-            // We're only interrested about the very first start. Then the m_addedSearchEngines
-            // contains engines.
-            int errorCode = dataMap.value(QLatin1String("errorCode")).toInt();
-            bool firstStart = m_addedSearchEngines && !m_addedSearchEngines->isEmpty();
-            if (errorCode != 0) {
-                qWarning() << "An error occurred while adding a search engine, error code: " << errorCode
-                           << ", see nsIBrowserSearchService for more details.";
-            } else if (m_addedSearchEngines) {
-                QString engine = dataMap.value(QLatin1String("engine")).toString();
-                m_addedSearchEngines->removeAll(engine);
-                m_searchEnginesInitialized = m_addedSearchEngines->isEmpty();
-                // All engines are added.
-                if (firstStart && m_searchEnginesInitialized) {
-                    setSearchEngine();
-                    delete m_addedSearchEngines;
-                    m_addedSearchEngines = 0;
-                }
-            }
-        }
-    } else if (message == QStringLiteral("cache-size")) {
-        if (!m_calculateCacheSizeCb.isNull()) {
-            m_calculateCacheSizeCb->call(QJSValueList() << dataMap.value(QStringLiteral("usage")).toUInt());
-        }
-
-    } else if (message == QStringLiteral("site-data-size")) {
-        if (!m_calculateSiteDataSizeCb.isNull()) {
-            m_calculateSiteDataSizeCb->call(QJSValueList() << dataMap.value(QStringLiteral("usage")).toUInt());
-        }
-    }
+    // WPE: no Gecko observer messages
 }

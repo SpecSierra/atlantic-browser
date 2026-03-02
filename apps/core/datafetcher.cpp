@@ -9,10 +9,8 @@
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "datafetcher.h"
-#include "opensearchconfigs.h"
 #include "faviconmanager.h"
-
-#include <webengine.h>
+#include "opensearchconfigs.h"
 
 #include <QImage>
 #include <QUrl>
@@ -164,12 +162,7 @@ void DataFetcher::saveAsSearchEngine()
             if (file.write(m_networkData) > 0) {
                 file.close();
 
-                // Inform WebEngine there's a new search xml
-                QVariantMap loadsearch;
-                loadsearch.insert(QLatin1String("msg"), QVariant(QLatin1String("loadxml")));
-                loadsearch.insert(QLatin1String("uri"), QVariant(url.toString()));
-                SailfishOS::WebEngine::instance()->notifyObservers(QLatin1String("embedui:search"), QVariant(loadsearch));
-
+                // Inform WebEngine there's a new search xml (WPE: no-op, search engine managed differently)
                 updateStatus(Ready);
             } else {
                 file.close();
