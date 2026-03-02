@@ -41,6 +41,7 @@ Page {
     property alias inputRegion: inputRegion
 
     function load(url, title) {
+        overlay.dismiss(true)
         webView.load(url, title)
     }
 
@@ -139,7 +140,7 @@ Page {
     Shared.WebView {
         id: webView
 
-        enabled: overlay.animator.allowContentUse
+        enabled: true // DEBUG: was overlay.animator.allowContentUse
         fullscreenHeight: portrait ? Screen.height : Screen.width
         portrait: browserPage.isPortrait
         maxLiveTabCount: maxliveTabs.value
@@ -152,6 +153,13 @@ Page {
         // Show overlay immediately at top if needed.
         onTabModelChanged: handleModelChanges(true)
 
+        // When a page starts loading, dismiss the overlay so the user can see/interact with content.
+        onLoadingChanged: {
+            console.log("[BrowserPage] loadingChanged: loading=" + loading + " allowContentUse=" + overlay.animator.allowContentUse + " overlayState=" + overlay.animator.state + " webViewEnabled=" + webView.enabled)
+            if (loading && !overlay.animator.allowContentUse) {
+                overlay.dismiss(true)
+            }
+        }
         onChromeExposed: {
             if (overlay.animator.atTop && overlay.searchField.focus && !WebUtils.firstUseDone) {
                 webView.chromeWindow.raise()
@@ -167,6 +175,14 @@ Page {
         onTouched: {
             if (contentFullscreen) {
                 fullscreenCloseVisibleTimer.restart()
+            }
+        }
+
+        onNeedChromeChanged: {
+            if (needChrome) {
+                overlay.animator.showChrome()
+            } else {
+                overlay.animator.showFullscreen()
             }
         }
 
@@ -240,9 +256,10 @@ Page {
 
         window: webView.chromeWindow
         orientation: browserPage.orientation // Qt and Silica orientations match
-        overlayMask: (webView.enabled && browserPage.active && !webView.touchBlocked && !downloadPopup.visible)
-                     ? Qt.rect(0, overlay.y, browserPage.width, browserPage.height - overlay.y)
-                     : Qt.rect(0, 0, browserPage.width, browserPage.height)
+        // WPE uses a single QWindow for both chrome and web content (unlike Gecko which
+        // used a separate QWindow for the web view).  Always expose the full screen so
+        // Wayland delivers touch events for the web content area to this window.
+        overlayMask: Qt.rect(0, 0, browserPage.width, browserPage.height)
         closeButtonMask: fullscreenClose.visible ? Qt.rect(fullscreenClose.x, fullscreenClose.y,
                                                            fullscreenClose.width, fullscreenClose.height)
                                                  : Qt.rect(0, 0, 0, 0)
@@ -416,6 +433,7 @@ Page {
                 webView.releaseActiveTabOwnership()
             } else if (!webView.tabModel.loaded) {
                 webView.load(url)
+                overlay.dismiss(true, !Qt.application.active /* immediate */)
             } else {
                 webView.clearSelection()
                 webView.tabModel.newTab(url, true)
@@ -438,6 +456,19 @@ Page {
             window.activate()
         }
         onFirstUseDoneChanged: window.setBrowserCover(webView.tabModel)
+    }
+
+    // DEBUG: diagnostic touch detector to check if QML receives touches at all
+    MouseArea {
+        id: debugTouchArea
+        anchors.fill: parent
+        z: 999
+        propagateComposedEvents: true
+        onPressed: {
+            console.log("[DEBUG-TOUCH] MouseArea pressed at " + mouse.x + "," + mouse.y + " webViewEnabled=" + webView.enabled + " overlayState=" + overlay.animator.state)
+            mouse.accepted = false
+        }
+        onReleased: mouse.accepted = false
     }
 
     Component.onCompleted: {
