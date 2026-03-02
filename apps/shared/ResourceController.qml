@@ -13,7 +13,6 @@
 
 import QtQuick 2.0
 import Nemo.KeepAlive 1.2
-import Sailfish.WebEngine 1.0
 import Nemo.DBus 2.0
 import Nemo.Policy 1.0
 import Nemo.Connectivity 1.0
@@ -82,34 +81,7 @@ Item {
         }
     }
 
-    Connections {
-        target: WebEngine
-
-        onInitialized: {
-          WebEngine.addObserver("network-enable")
-          WebEngine.addObserver("webrtc-media-info")
-          connectionHelper.notifyOfflineStatus()
-        }
-        onRecvObserve: {
-            if (message === "media-decoder-info") {
-                if (data.state === "meta") {
-                    _isAudioStream = data.a
-                    _isVideoStream = data.v
-                    _lastMetaOwner = data.owner
-                } else {
-                    _mediaState = data.state
-                    _lastStateOwner = data.owner
-                }
-                calculateStatus()
-            } else if (message === "webrtc-media-info") {
-                _webrtcAudioActive = data.audio
-                _webrtcVideoActive = data.video
-                calculateStatus()
-            } else if (message === "network-enable") {
-                connectionHelper.attemptToConnectNetwork()
-            }
-        }
-    }
+    // WPE: Gecko WebEngine observer removed — WPE handles network internally
 
     ConnectionHelper {
         id: connectionHelper
@@ -117,12 +89,7 @@ Item {
         readonly property bool connected: status >= ConnectionHelper.Connected
 
         function notifyOfflineStatus() {
-            if (WebEngine.initialized) {
-                WebEngine.notifyObservers("embed-network-link-status",
-                                          {
-                                              "offline": !connectionHelper.connected
-                                          })
-            }
+            // WPE: network status handled internally by WPE
         }
 
         onConnectedChanged: notifyOfflineStatus()

@@ -33,7 +33,7 @@ WebContainer {
     property bool imOpened
     property real toolbarHeight
     property string favicon: contentItem ? contentItem.favicon : ""
-    property bool findInPageHasResult
+    property bool findInPageHasResult: contentItem ? contentItem.findInPageHasResult : false
     property bool canShowSelectionMarkers: true
 
     property var resourceController: ResourceController {
@@ -250,7 +250,7 @@ WebContainer {
                 if (url == "about:blank")
                     return
 
-                webView.findInPageHasResult = false
+                // findInPageHasResult is bound to contentItem; C++ resets it on new navigation
                 var modelUrl = tabModel.url(tabId)
 
                 rendered = false
@@ -361,12 +361,7 @@ WebContainer {
                     break
                 }
                 case "embed:find": {
-                    // Found, or found wrapped
-                    if (data.r == 0 || data.r == 2) {
-                        webView.findInPageHasResult = true
-                    } else {
-                        webView.findInPageHasResult = false
-                    }
+                    // Dead code in WPE — Gecko find handler, kept for reference
                     break
                 }
                 // embed:OpenLink listener is registered only in the captive portal mode
