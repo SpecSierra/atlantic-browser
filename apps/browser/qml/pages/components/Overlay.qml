@@ -15,7 +15,6 @@ import Sailfish.Browser 1.0
 import Sailfish.Policy 1.0
 import Sailfish.WebView.Controls 1.0
 import Sailfish.WebView.Popups 1.0
-import Sailfish.WebEngine 1.0
 import com.jolla.settings.system 1.0
 import "." as Browser
 import "../../shared" as Shared
@@ -51,6 +50,17 @@ Shared.Background {
                                             ? (Screen.topCutout.height + Theme.paddingSmall)
                                             : 0)
 
+    // WPE: detect whether input is a URL or a search query
+    function _isUrl(text) {
+        text = text.trim()
+        if (text.indexOf("://") !== -1) return true
+        if (text.indexOf("about:") === 0) return true
+        if (/^[a-zA-Z0-9\-]+\.[a-zA-Z]{2,}/.test(text)) return true
+        if (/^localhost(:[0-9]+)?/.test(text)) return true
+        if (/^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/.test(text)) return true
+        return false
+    }
+
     function loadPage(url, newTab) {
         if (url == "about:config") {
             pageStack.animatorPush(Qt.resolvedUrl("ConfigWarning.qml"), {"browserPage": browserPage})
@@ -60,10 +70,12 @@ Shared.Background {
             if (webView && webView.tabModel.count === 0) {
                 webView.clearSurface()
             }
-            // let gecko figure out how to handle malformed URLs
-            var pageUrl = url
-            if (!isNaN(pageUrl) && pageUrl.trim()) {
-                pageUrl = "\"" + pageUrl.trim() + "\""
+            var pageUrl = url.trim()
+            // WPE: convert search keywords to search URL
+            if (pageUrl && !_isUrl(pageUrl)) {
+                pageUrl = "https://www.google.com/search?q=" + encodeURIComponent(pageUrl)
+            } else if (pageUrl && pageUrl.indexOf("://") === -1 && pageUrl.indexOf("about:") !== 0) {
+                pageUrl = "https://" + pageUrl
             }
 
             if (!searchField.enteringNewTabUrl && !newTab) {
@@ -275,7 +287,7 @@ Shared.Background {
 
                 width: parent.width
                 height: isPortrait ? toolBar.scaledPortraitHeight : toolBar.scaledLandscapeHeight
-                active: webView.contentItem && webView.contentItem.textSelectionActive
+                active: webView.contentItem && webView.contentItem.textSelectionActive && !toolBar.findInPageActive
 
                 opacity: active ? 1.0 : 0.0
                 Behavior on opacity {
@@ -288,7 +300,7 @@ Shared.Background {
                         if (webView.contentItem) {
                             webView.contentItem.forceChrome(true)
                         }
-                    } else {
+                    } else if (!toolBar.findInPageActive) {
                         if (webView.contentItem) {
                             webView.contentItem.forceChrome(false)
                         }
@@ -395,7 +407,7 @@ Shared.Background {
 
                     if (toolBar.findInPageActive) {
                         lastFindText = text
-                        webView.sendAsyncMessage("embedui:find", { text: text, backwards: false, again: false })
+                        if (webView.contentItem) webView.contentItem.findText(text, false)
                         overlayAnimator.showChrome()
                     } else {
                         overlay.loadPage(text)
@@ -570,21 +582,14 @@ Shared.Background {
                 onRemoveActivePageFromBookmarks: bookmarkModel.remove(webView.url)
 
                 onShowCertDetail: {
-                    if (webView.security && !webView.security.certIsNull) {
-                        pageStack.animatorPush("com.jolla.settings.system.CertificateDetailsPage",
-                                               {"website": webView.security.subjectDisplayName,
-                                                   "details": webView.security.serverCertDetails})
+                    var sec = webView.contentItem ? webView.contentItem.security : null
+                    if (sec && !sec.certIsNull) {
+                        pageStack.push(Qt.resolvedUrl("CertificateDetailsPage.qml"), { "security": sec })
                     }
                 }
                 onSavePageAsPDF: {
-                    var filename = ((webView.title && webView.title.length !== 0)
-                                    ? webView.title : (WebUtils.pageName(webView.url) || "unnamed_file")) + ".pdf"
-                    var targetUrl = DownloadHelper.createUniqueFileUrl(filename, StandardPaths.download)
-                    WebEngine.notifyObservers("embedui:download",
-                                              {
-                                                  "msg": "saveAsPdf",
-                                                  "to": targetUrl
-                                              })
+                    // WPE: PDF save not supported via Gecko embedui:download
+                    console.log("[WPE] PDF save not available")
                 }
             }
 
