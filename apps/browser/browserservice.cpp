@@ -142,12 +142,16 @@ BrowserUIService::BrowserUIService(QObject *parent)
 {
     Q_D(BrowserUIService);
 
+    fprintf(stderr, "[BROWSER] UIServiceDBusAdaptor start\n"); fflush(stderr);
     new UIServiceDBusAdaptor(this);
     QDBusConnection connection = QDBusConnection::sessionBus();
-    if (!connection.registerObject("/ui", this) ||
-            !connection.registerService(SailfishBrowserUiService)) {
+    // Name is pre-registered in main() to avoid D-Bus reentrancy during activation.
+    // Do NOT call registerService or isServiceRegistered here — either will process
+    // pending D-Bus messages during construction, causing reentrancy crashes.
+    if (!connection.registerObject("/ui", this)) {
         d->registered = false;
     }
+    fprintf(stderr, "[BROWSER] UIService registered=%d\n", (int)d->registered); fflush(stderr);
 }
 
 bool BrowserUIService::registered() const
