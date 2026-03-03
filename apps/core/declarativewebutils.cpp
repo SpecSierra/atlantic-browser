@@ -48,7 +48,7 @@ static bool fileExists(QString fileName)
 
 DeclarativeWebUtils::DeclarativeWebUtils()
     : QObject()
-    , m_homePage(new MDConfItem("/apps/sailfish-browser/settings/home_page", this))
+    , m_homePage(new MDConfItem("/apps/atlantic-browser/settings/home_page", this))
 {
     QString path = BrowserPaths::dataLocation() + QStringLiteral("/.firstUseDone");
     m_firstUseDone = fileExists(path);

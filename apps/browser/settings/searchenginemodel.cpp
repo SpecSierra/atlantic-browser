@@ -18,8 +18,8 @@
 
 #include <MDConfItem>
 
-const auto SEARCH_ENGINE_CONFIG = QStringLiteral("/apps/sailfish-browser/settings/search_engine");
-const auto SEARCH_ENGINES_AVAILABLE_CONFIG = QStringLiteral("/apps/sailfish-browser/settings/search_engines_available");
+const auto SEARCH_ENGINE_CONFIG = QStringLiteral("/apps/atlantic-browser/settings/search_engine");
+const auto SEARCH_ENGINES_AVAILABLE_CONFIG = QStringLiteral("/apps/atlantic-browser/settings/search_engines_available");
 
 SearchEngineModel::SearchEngineModel(QObject *parent)
     : QAbstractListModel(parent)

@@ -35,10 +35,10 @@ Page {
         property string downloadDir: downloadDirConf.value || StandardPaths.download
         property int colorScheme: 0
     }
-    ConfigurationValue { id: doNotTrackConf; key: "/apps/sailfish-browser/settings/do_not_track"; defaultValue: false }
-    ConfigurationValue { id: jsEnabledConf; key: "/apps/sailfish-browser/settings/javascript_enabled"; defaultValue: true }
-    ConfigurationValue { id: useDownloadDirConf; key: "/apps/sailfish-browser/settings/use_download_dir"; defaultValue: false }
-    ConfigurationValue { id: downloadDirConf; key: "/apps/sailfish-browser/settings/download_dir"; defaultValue: "" }
+    ConfigurationValue { id: doNotTrackConf; key: "/apps/atlantic-browser/settings/do_not_track"; defaultValue: false }
+    ConfigurationValue { id: jsEnabledConf; key: "/apps/atlantic-browser/settings/javascript_enabled"; defaultValue: true }
+    ConfigurationValue { id: useDownloadDirConf; key: "/apps/atlantic-browser/settings/use_download_dir"; defaultValue: false }
+    ConfigurationValue { id: downloadDirConf; key: "/apps/atlantic-browser/settings/download_dir"; defaultValue: "" }
 
     readonly property int _textSwitchIconCenter: Math.round((permissionIcon.width - Theme.itemSizeExtraSmall) / 2.0)
 
@@ -400,35 +400,35 @@ Page {
     ConfigurationValue {
         id: closeAllTabsConfig
 
-        key: "/apps/sailfish-browser/settings/close_all_tabs"
+        key: "/apps/atlantic-browser/settings/close_all_tabs"
         defaultValue: false
     }
 
     ConfigurationValue {
         id: searchEngineConfig
 
-        key: "/apps/sailfish-browser/settings/search_engine"
+        key: "/apps/atlantic-browser/settings/search_engine"
         defaultValue: "Google"
     }
 
     ConfigurationValue {
         id: homePageConfig
 
-        key: "/apps/sailfish-browser/settings/home_page"
+        key: "/apps/atlantic-browser/settings/home_page"
         defaultValue: "http://jolla.com/"
     }
 
     ConfigurationValue {
         id: fixedToolbarConfig
 
-        key: "/apps/sailfish-browser/settings/fixed_toolbar"
+        key: "/apps/atlantic-browser/settings/fixed_toolbar"
         defaultValue: false
     }
 
     ConfigurationValue {
         id: autoStartPrivateBrowser
 
-        key: "/apps/sailfish-browser/settings/browser_privatebrowsing_autostart"
+        key: "/apps/atlantic-browser/settings/browser_privatebrowsing_autostart"
         defaultValue: false
     }
 

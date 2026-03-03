@@ -44,10 +44,10 @@ public:
         Q_UNUSED(uri)
 
         AppTranslator *engineeringEnglish = new AppTranslator(engine);
-        engineeringEnglish->load("settings-sailfish-browser_eng_en", "/usr/share/translations");
+        engineeringEnglish->load("settings-atlantic-browser_eng_en", "/usr/share/translations");
 
         AppTranslator *translator = new AppTranslator(engine);
-        translator->load(QLocale(), "settings-sailfish-browser", "-", "/usr/share/translations");
+        translator->load(QLocale(), "settings-atlantic-browser", "-", "/usr/share/translations");
     }
 
     void registerTypes(const char *uri)

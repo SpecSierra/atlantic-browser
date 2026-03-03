@@ -263,7 +263,7 @@ SilicaControl {
     ConfigurationValue {
         id: showCloseAllAction
 
-        key: "/apps/sailfish-browser/settings/show_close_all"
+        key: "/apps/atlantic-browser/settings/show_close_all"
         defaultValue: true
     }
 }

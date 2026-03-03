@@ -80,7 +80,7 @@ static void sigAbrtHandler(int)
     sleep(2);
     for (int fd = 3; fd < 256; fd++)
         close(fd);
-    execv("/usr/bin/sailfish-browser", g_restartArgv);
+    execv("/usr/bin/atlantic-browser.bin", g_restartArgv);
     _exit(1);
 }
 
@@ -105,7 +105,7 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     {
         int logfd = open("/home/defaultuser/wpe-sfos-artifacts/browser-startup.log", O_WRONLY|O_CREAT|O_APPEND, 0644);
         if (logfd >= 0) {
-            const char *hdr = "=== sailfish-browser main() started ===\n";
+            const char *hdr = "=== atlantic-browser main() started ===\n";
             write(logfd, hdr, __builtin_strlen(hdr));
             // Log argv
             for (int i = 0; i < argc; i++) {
@@ -209,20 +209,20 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     // Claim the .ui D-Bus name NOW (before event loop starts processing messages).
     // registerService is safe here because no pending D-Bus messages exist yet.
     // BrowserUIService constructor will detect the name is already claimed and skip registerService.
-    QDBusConnection::sessionBus().registerService(QStringLiteral("org.sailfishos.browser.ui"));
+    QDBusConnection::sessionBus().registerService(QStringLiteral("org.atlantic.browser.ui"));
     BrowserUIService *uiService = new BrowserUIService(app.data());
 
     QString translationPath("/usr/share/translations/");
     QTranslator engineeringEnglish;
-    engineeringEnglish.load("sailfish-browser_eng_en", translationPath);
+    engineeringEnglish.load("atlantic-browser_eng_en", translationPath);
     qApp->installTranslator(&engineeringEnglish);
 
     QTranslator translator;
-    translator.load(QLocale(), "sailfish-browser", "-", translationPath);
+    translator.load(QLocale(), "atlantic-browser", "-", translationPath);
     qApp->installTranslator(&translator);
 
-    //% "Browser"
-    view->setTitle(qtTrId("sailfish-browser-ap-name"));
+    //% "Atlantic"
+    view->setTitle(qtTrId("atlantic-browser-ap-name"));
 
     app->setApplicationName(QStringLiteral("browser"));
     app->setOrganizationName(QStringLiteral("org.sailfishos"));

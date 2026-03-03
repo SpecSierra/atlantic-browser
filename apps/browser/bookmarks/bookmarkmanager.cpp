@@ -79,7 +79,7 @@ QList<Bookmark*> BookmarkManager::load() {
     if (!file->open(QIODevice::ReadOnly | QIODevice::Text)) {
         qWarning() << "Unable to open bookmarks " << bookmarkFile;
 
-        file.reset(new QFile(QLatin1Literal("/usr/share/sailfish-browser/default-content/bookmarks.json")));
+        file.reset(new QFile(QLatin1Literal("/usr/share/atlantic-browser/default-content/bookmarks.json")));
         if (!file->open(QIODevice::ReadOnly | QIODevice::Text)) {
             qWarning() << "Unable to open bookmarks defaults";
             return bookmarks;
@@ -108,7 +108,7 @@ QList<Bookmark*> BookmarkManager::load() {
 
     // Cleanup after next stop release. See JB#53083 and JB#52736
     bookmarkFile = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation)
-            + QLatin1String("/org.sailfishos/sailfish-browser/bookmarks.json");
+            + QLatin1String("/org.atlantic/atlantic-browser/bookmarks.json");
     file.reset(new QFile(bookmarkFile));
     if (file->exists() && file->open(QIODevice::ReadOnly | QIODevice::Text)) {
         QJsonDocument doc = QJsonDocument::fromJson(file->readAll());

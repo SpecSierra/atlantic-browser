@@ -26,6 +26,6 @@ OTHER_FILES += *.qml *.json
 
 # Translations
 TS_PATH = $$PWD
-TS_FILE = $$OUT_PWD/settings-sailfish-browser.ts
-EE_QM = $$OUT_PWD/settings-sailfish-browser_eng_en.qm
+TS_FILE = $$OUT_PWD/settings-atlantic-browser.ts
+EE_QM = $$OUT_PWD/settings-atlantic-browser_eng_en.qm
 include(../translations/translations.pri)

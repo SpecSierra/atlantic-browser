@@ -21,7 +21,7 @@ oneshots.path  = /usr/lib/oneshot.d
 
 data.files = data/prefs.js \
              data/ua-update.json.in
-data.path = /usr/share/sailfish-browser/data
+data.path = /usr/share/atlantic-browser/data
 
 INSTALLS += desktop dbus_service chrome_scripts oneshots data
 

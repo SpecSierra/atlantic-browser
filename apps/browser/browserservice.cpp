@@ -26,7 +26,7 @@ const auto ProcDir = QStringLiteral("/proc/%1");
 const auto ErrorPidIsNotPrivileged = QStringLiteral("PID %1 is not in privileged group");
 const auto ErrorPidIsNotOwnerService = QStringLiteral("PID %1 is not the owner of '%2'");
 const auto ErrorPidIsNotTabOwner = QStringLiteral("PID %1 is not the owner of the tab");
-const auto SailfishBrowserUiService = QStringLiteral("org.sailfishos.browser.ui");
+const auto SailfishBrowserUiService = QStringLiteral("org.atlantic.browser.ui");
 const auto TransferEngine = QStringLiteral("org.nemo.transferengine");
 }
 
@@ -54,7 +54,7 @@ bool BrowserService::registered() const
 
 QString BrowserService::serviceName() const
 {
-    return QStringLiteral("org.sailfishos.browser");
+    return QStringLiteral("org.atlantic.browser");
 }
 
 void BrowserService::openUrl(const QStringList &args)

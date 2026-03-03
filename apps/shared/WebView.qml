@@ -68,7 +68,7 @@ WebContainer {
     property var linkHandler: LinkHandler {}
 
     property ConfigurationValue fixedToolbarConfig: ConfigurationValue {
-        key: "/apps/sailfish-browser/settings/fixed_toolbar"
+        key: "/apps/atlantic-browser/settings/fixed_toolbar"
         defaultValue: false
     }
 

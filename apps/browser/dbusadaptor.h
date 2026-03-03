@@ -19,7 +19,7 @@
 class DBusAdaptor : public QDBusAbstractAdaptor
 {
     Q_OBJECT
-    Q_CLASSINFO("D-Bus Interface", "org.sailfishos.browser")
+    Q_CLASSINFO("D-Bus Interface", "org.atlantic.browser")
 
 public:
     DBusAdaptor(BrowserService *browserService);
@@ -41,7 +41,7 @@ private:
 class UIServiceDBusAdaptor : public QDBusAbstractAdaptor
 {
     Q_OBJECT
-    Q_CLASSINFO("D-Bus Interface", "org.sailfishos.browser.ui")
+    Q_CLASSINFO("D-Bus Interface", "org.atlantic.browser.ui")
 
 public:
     UIServiceDBusAdaptor(BrowserUIService *browserService);

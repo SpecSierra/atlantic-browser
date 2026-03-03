@@ -37,7 +37,7 @@ void CloseEventFilter::closeApplication()
         return;
     }
 
-    MDConfItem closeAllTabsConf("/apps/sailfish-browser/settings/close_all_tabs");
+    MDConfItem closeAllTabsConf("/apps/atlantic-browser/settings/close_all_tabs");
     if (closeAllTabsConf.value(false).toBool()) {
         DBManager::instance()->removeAllTabs();
     }
