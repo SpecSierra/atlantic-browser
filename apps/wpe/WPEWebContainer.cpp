@@ -20,6 +20,11 @@
 #include <QDebug>
 #include <QWindow>
 
+#pragma push_macro("signals")
+#undef signals
+#include <wpe/webkit.h>
+#pragma pop_macro("signals")
+
 WPEWebContainer::WPEWebContainer(QQuickItem *parent)
     : QQuickItem(parent)
 {
@@ -164,6 +169,18 @@ void WPEWebContainer::classBegin()
 
 void WPEWebContainer::componentComplete()
 {
+    // Configure WebKit process sandbox paths before any web view is created.
+    // bubblewrap requires explicit allowlisting of paths needed by the subprocesses.
+    WebKitWebContext *ctx = webkit_web_context_get_default();
+    webkit_web_context_add_path_to_sandbox(ctx, "/opt/wpe-sfos",              TRUE);
+    webkit_web_context_add_path_to_sandbox(ctx, "/usr/lib64/gstreamer-1.0",   TRUE);
+    webkit_web_context_add_path_to_sandbox(ctx, "/usr/lib64/wpe-compat",      TRUE);
+    webkit_web_context_add_path_to_sandbox(ctx, "/usr/share/atlantic-browser", TRUE);
+    webkit_web_context_add_path_to_sandbox(ctx, "/usr/share/qt5",             TRUE);
+    webkit_web_context_add_path_to_sandbox(ctx, "/usr/lib64/qt5",             TRUE);
+    webkit_web_context_add_path_to_sandbox(ctx, "/usr/lib64",                 TRUE);
+    webkit_web_context_add_path_to_sandbox(ctx, "/run/user/100000",           FALSE);
+    qDebug() << "[WPE] Sandbox paths configured";
 
     // Qt Quick routes input events based on item bounding-box.  If the
     // container has size 0×0 (no QML anchor/size binding from the page),
