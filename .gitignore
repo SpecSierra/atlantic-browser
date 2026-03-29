@@ -10,3 +10,4 @@ Makefile
 *.ts
 RPMS/*
 sailfish-browser.pro.user
+build/
