@@ -11,7 +11,6 @@
 
 import QtQuick 2.2
 import QtQuick.Window 2.2 as QuickWindow
-import Nemo.Configuration 1.0
 import Sailfish.Silica 1.0
 import Sailfish.Browser 1.0
 import Sailfish.WebView.Pickers 1.0 as Pickers
@@ -67,9 +66,8 @@ WebContainer {
 
     property var linkHandler: LinkHandler {}
 
-    property ConfigurationValue fixedToolbarConfig: ConfigurationValue {
-        key: "/apps/atlantic-browser/settings/fixed_toolbar"
-        defaultValue: false
+    property QtObject fixedToolbarConfig: QtObject {
+        property bool value: false
     }
 
     function stop() {

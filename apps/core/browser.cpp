@@ -46,7 +46,14 @@ Browser::Browser(QQuickView *view, const QString &dataPath, QObject *parent)
     d->view->rootContext()->setContextProperty("Settings", SettingManager::instance());
     d->view->rootContext()->setContextProperty("DownloadManager", downloadManager);
 
-    QString mainQml = BrowserAppInfo::captivePortal() ? "captiveportal.qml" : "browser.qml";
+    QString mainQml;
+    if (BrowserAppInfo::captivePortal()) {
+        mainQml = QStringLiteral("captiveportal.qml");
+    } else if (!qEnvironmentVariableIsEmpty("ATLANTIC_MINIMAL_UI")) {
+        mainQml = QStringLiteral("browser-minimal.qml");
+    } else {
+        mainQml = QStringLiteral("browser.qml");
+    }
 
 #ifdef USE_RESOURCES
     d->view->setSource(QUrl(QString("qrc:///") + mainQml));

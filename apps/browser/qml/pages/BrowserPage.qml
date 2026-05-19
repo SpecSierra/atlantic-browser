@@ -16,7 +16,6 @@ import Sailfish.Silica 1.0
 import Sailfish.Silica.private 1.0 as Private
 import Sailfish.Browser 1.0
 import Sailfish.Policy 1.0
-import Nemo.Configuration 1.0
 import "components" as Browser
 import "../shared" as Shared
 
@@ -128,11 +127,9 @@ Page {
         }
     }
 
-    ConfigurationValue {
+    QtObject {
         id: maxliveTabs
-
-        key: "/apps/atlantic-browser/settings/max_live_tab_count"
-        defaultValue: 3
+        property int value: 3
     }
 
     Browser.DownloadRemorsePopup { id: downloadPopup }

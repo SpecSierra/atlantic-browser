@@ -17,6 +17,7 @@ DEFINES += DEPLOYMENT_PATH=\"\\\"\"$${DEPLOYMENT_PATH}/\"\\\"\"
 packagesExist(qdeclarative5-boostable) {
     PKGCONFIG += qdeclarative5-boostable
 }
+PKGCONFIG += sailfishapp
 
 
 # Translations

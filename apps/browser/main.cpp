@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <fcntl.h>
+#include <sailfishapp/sailfishapp.h>
 
 #include "browser.h"
 // Registered QML types
@@ -46,10 +47,6 @@
 #include "secureaction.h"
 #include "faviconmanager.h"
 #include "bookmarkmanager.h"
-
-#ifdef HAS_BOOSTER
-#include <MDeclarativeCache>
-#endif
 
 static QObject *search_model_factory(QQmlEngine *, QJSEngine *)
 {
@@ -159,13 +156,8 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
         QQmlDebuggingEnabler qmlDebuggingEnabler;
     }
 
-#ifdef HAS_BOOSTER
-    QScopedPointer<QGuiApplication> app(MDeclarativeCache::qApplication(argc, argv));
-    QScopedPointer<QQuickView> view(MDeclarativeCache::qQuickView());
-#else
-    QScopedPointer<QGuiApplication> app(new QGuiApplication(argc, argv));
-    QScopedPointer<QQuickView> view(new QQuickView);
-#endif
+    QScopedPointer<QGuiApplication> app(SailfishApp::application(argc, argv));
+    QScopedPointer<QQuickView> view(SailfishApp::createView());
     // Allow Qt to quit when the last window is closed (e.g. user closes from task switcher).
     // Backgrounding (swipe to side) only hides the window surface — it does NOT close it —
     // so this does not affect normal background/cover behaviour.
@@ -221,11 +213,11 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     translator.load(QLocale(), "atlantic-browser", "-", translationPath);
     qApp->installTranslator(&translator);
 
-    //% "Atlantic"
-    view->setTitle(qtTrId("atlantic-browser-ap-name"));
-
     app->setApplicationName(QStringLiteral("browser"));
     app->setOrganizationName(QStringLiteral("org.sailfishos"));
+
+    //% "Atlantic"
+    view->setTitle(qtTrId("atlantic-browser-ap-name"));
 
     const char *uri = "Sailfish.Browser";
 
@@ -282,6 +274,9 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     }
 
     browser->load();
+    view->showFullScreen();
+    view->raise();
+    view->requestActivate();
     // Install SIGABRT handler AFTER all Qt init (Qt installs its own during QGuiApplication
     // construction which would override an earlier install).
     ++g_restartCount;
