@@ -8,16 +8,14 @@ TARGETPATH = /usr/bin
 target.path = $$TARGETPATH
 
 INSTALLS += target
-include(../use_lib.pri)
 
 DEPLOYMENT_PATH = /usr/share/$$TARGET
 DEFINES += DEPLOYMENT_PATH=\"\\\"\"$${DEPLOYMENT_PATH}/\"\\\"\"
 
-# Link against boostable but do NOT define HAS_BOOSTER (use standalone QGuiApplication)
-packagesExist(qdeclarative5-boostable) {
-    PKGCONFIG += qdeclarative5-boostable
+!isEmpty(SFOS_SYSROOT) {
+    QMAKE_LIBDIR += $${SFOS_SYSROOT}/usr/lib64
+    QMAKE_LFLAGS += -Wl,-rpath-link,$${SFOS_SYSROOT}/usr/lib64
 }
-PKGCONFIG += sailfishapp
 
 
 # Translations
@@ -30,10 +28,7 @@ EE_QM = $$OUT_PWD/atlantic-browser_eng_en.qm
 include(../../translations/translations.pri)
 
 include(../../defaults.pri)
-include(../browser/browser.pri)
 include(../shared/shared.pri)
-include(settings/settings.pri)
-include(bookmarks/bookmarks.pri)
 
 # QML files and folders of browser
 qml.path = $$DEPLOYMENT_PATH
