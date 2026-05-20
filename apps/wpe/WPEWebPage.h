@@ -9,6 +9,7 @@
 #ifndef WPEWEBPAGE_H
 #define WPEWEBPAGE_H
 
+#include <QHash>
 #include <QSharedPointer>
 #include <QVariant>
 #include <qqml.h>
@@ -249,6 +250,7 @@ signals:
 
 protected:
     void itemChange(ItemChange change, const ItemChangeData &value) override;
+    void touchEvent(QTouchEvent *event) override;
 
 private slots:
     void onLoadingChanged(WPEQtViewLoadRequest *loadRequest);
@@ -289,6 +291,12 @@ private:
     bool m_findInPageHasResult = false;
     bool m_findInitialized = false;
     QObject *m_security = nullptr;
+    bool m_pinchZoomActive = false;
+    qreal m_pinchStartDistance = 0.0;
+    double m_pinchStartZoomLevel = 1.0;
+    double m_defaultZoomLevel = 1.0;
+    bool m_defaultZoomLevelInitialized = false;
+    QHash<int, QTouchEvent::TouchPoint> m_trackedTouchPoints;
 };
 
 QML_DECLARE_TYPE(WPEWebPage)

@@ -13,6 +13,7 @@
 #include <QDir>
 #include <QGuiApplication>
 #include <QImage>
+#include <QLineF>
 #include <QQuickItemGrabResult>
 #include <QQuickWindow>
 #include <QRegularExpression>
@@ -24,6 +25,57 @@
 
 #include <wpe/webkit.h>
 #include <gio/gio.h>
+
+namespace {
+
+constexpr double kMinimumPinchZoomFactor = 0.5;
+constexpr double kMaximumPinchZoomFactor = 3.0;
+
+QList<QTouchEvent::TouchPoint> activeTouchPoints(const QList<QTouchEvent::TouchPoint> &touchPoints)
+{
+    QList<QTouchEvent::TouchPoint> activePoints;
+    activePoints.reserve(touchPoints.size());
+    for (const QTouchEvent::TouchPoint &touchPoint : touchPoints) {
+        if (touchPoint.state() != Qt::TouchPointReleased) {
+            activePoints.append(touchPoint);
+        }
+    }
+    return activePoints;
+}
+
+QList<QTouchEvent::TouchPoint> mergeTrackedTouchPoints(
+        QHash<int, QTouchEvent::TouchPoint> &trackedTouchPoints,
+        const QList<QTouchEvent::TouchPoint> &touchPoints,
+        QEvent::Type eventType)
+{
+    for (const QTouchEvent::TouchPoint &touchPoint : touchPoints) {
+        if (touchPoint.state() == Qt::TouchPointReleased) {
+            trackedTouchPoints.remove(touchPoint.id());
+        } else {
+            trackedTouchPoints.insert(touchPoint.id(), touchPoint);
+        }
+    }
+
+    if (eventType == QEvent::TouchCancel) {
+        trackedTouchPoints.clear();
+        return {};
+    }
+
+    QList<QTouchEvent::TouchPoint> activePoints = trackedTouchPoints.values();
+    std::sort(activePoints.begin(), activePoints.end(), [](const QTouchEvent::TouchPoint &lhs, const QTouchEvent::TouchPoint &rhs) {
+        return lhs.id() < rhs.id();
+    });
+    return activePoints;
+}
+
+void resetPinchZoomState(bool &pinchZoomActive, qreal &pinchStartDistance, double &pinchStartZoomLevel)
+{
+    pinchZoomActive = false;
+    pinchStartDistance = 0.0;
+    pinchStartZoomLevel = 1.0;
+}
+
+} // namespace
 
 WPEWebPage::WPEWebPage(QQuickItem *parent)
     : WPEQtView(parent)
@@ -460,6 +512,74 @@ void WPEWebPage::itemChange(ItemChange change, const ItemChangeData &value)
                 this, &WPEWebPage::onFrameSwapped,
                 Qt::UniqueConnection);
     }
+}
+
+void WPEWebPage::touchEvent(QTouchEvent *event)
+{
+    if (!event) {
+        return;
+    }
+
+    const QList<QTouchEvent::TouchPoint> activePoints = mergeTrackedTouchPoints(
+        m_trackedTouchPoints,
+        activeTouchPoints(event->touchPoints()),
+        event->type());
+    if (activePoints.size() >= 2) {
+        const qreal pinchDistance = QLineF(activePoints.at(0).pos(), activePoints.at(1).pos()).length();
+        WebKitWebView *wv = webView();
+        if (wv && pinchDistance > 0.0) {
+            if (!m_pinchZoomActive) {
+                m_pinchZoomActive = true;
+                m_pinchStartDistance = pinchDistance;
+                m_pinchStartZoomLevel = webkit_web_view_get_zoom_level(wv);
+                if (!m_defaultZoomLevelInitialized && m_pinchStartZoomLevel > 0.0) {
+                    m_defaultZoomLevel = m_pinchStartZoomLevel;
+                    m_defaultZoomLevelInitialized = true;
+                }
+
+                QTouchEvent endEvent(QEvent::TouchEnd,
+                                     event->device(),
+                                     event->modifiers(),
+                                     event->touchPointStates(),
+                                     event->touchPoints());
+                WPEQtView::touchEvent(&endEvent);
+            } else if (m_pinchStartDistance > 0.0) {
+                const double minimumZoomLevel = m_defaultZoomLevelInitialized
+                    ? m_defaultZoomLevel * kMinimumPinchZoomFactor
+                    : kMinimumPinchZoomFactor;
+                const double maximumZoomLevel = m_defaultZoomLevelInitialized
+                    ? m_defaultZoomLevel * kMaximumPinchZoomFactor
+                    : kMaximumPinchZoomFactor;
+                const double targetZoomLevel = std::clamp(
+                    m_pinchStartZoomLevel * static_cast<double>(pinchDistance / m_pinchStartDistance),
+                    minimumZoomLevel,
+                    maximumZoomLevel);
+                if (!qFuzzyCompare(targetZoomLevel, webkit_web_view_get_zoom_level(wv))) {
+                    webkit_web_view_set_zoom_level(wv, targetZoomLevel);
+                }
+            }
+        }
+
+        event->accept();
+        return;
+    }
+
+    if (m_pinchZoomActive) {
+        if (activePoints.isEmpty() || event->type() == QEvent::TouchEnd || event->type() == QEvent::TouchCancel) {
+            resetPinchZoomState(m_pinchZoomActive, m_pinchStartDistance, m_pinchStartZoomLevel);
+            if (activePoints.isEmpty()) {
+                m_trackedTouchPoints.clear();
+            }
+        }
+        event->accept();
+        return;
+    }
+
+    if (activePoints.isEmpty() && (event->type() == QEvent::TouchEnd || event->type() == QEvent::TouchCancel)) {
+        m_trackedTouchPoints.clear();
+    }
+
+    WPEQtView::touchEvent(event);
 }
 
 void WPEWebPage::onFrameSwapped()
