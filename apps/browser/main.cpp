@@ -15,6 +15,8 @@
 #include <qqmldebug.h>
 #include <QTimer>
 #include <QTranslator>
+
+#include "../wpe/WPERuntimePaths.h"
 #include <memory>
 #include <unistd.h>
 #include <signal.h>
@@ -177,14 +179,17 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     unsetenv("MOZ_WEBGL_PREFER_EGL");
     setenv("WEBKIT_DISABLE_SANDBOX", "1", 1);
 
-    // GStreamer: disable system plugins (system libgstsoup uses libsoup-2.4, incompatible with
-    // our libsoup-3), use only our custom plugin dir.
-    setenv("GST_PLUGIN_SYSTEM_PATH_1_0", "", 1);
-    setenv("GST_PLUGIN_PATH", "/home/defaultuser/wpe-sfos-artifacts/gst-plugins", 1);
-    setenv("WEBKIT_GST_ENABLE_HLS_SUPPORT", "1", 1);
+    // Respect wrapper-provided runtime paths first; only fall back to the packaged defaults.
+    if (qgetenv("GST_PLUGIN_SYSTEM_PATH_1_0").isEmpty())
+        qputenv("GST_PLUGIN_SYSTEM_PATH_1_0", QByteArray());
+    if (qgetenv("GST_PLUGIN_PATH").isEmpty())
+        qputenv("GST_PLUGIN_PATH", WPERuntimePaths::kGStreamerPluginDir);
+    if (qgetenv("WEBKIT_GST_ENABLE_HLS_SUPPORT").isEmpty())
+        qputenv("WEBKIT_GST_ENABLE_HLS_SUPPORT", "1");
 
     // Mesa DRI driver path (needed so swrast/GBM drivers are found for GBM device init)
-    setenv("LIBGL_DRIVERS_PATH", "/usr/lib64/dri", 1);
+    if (qgetenv("LIBGL_DRIVERS_PATH").isEmpty())
+        qputenv("LIBGL_DRIVERS_PATH", WPERuntimePaths::kLibGLDriversDir);
 
     QQuickWindow::setDefaultAlphaBuffer(true);
 

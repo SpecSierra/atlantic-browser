@@ -6,6 +6,7 @@
 
 #include "WPEWebContainer.h"
 #include "WPEWebPage.h"
+#include "WPERuntimePaths.h"
 #include "WPEQtViewLoadRequest.h"
 #include "declarativehistorymodel.h"
 #include "declarativetabmodel.h"
@@ -172,14 +173,14 @@ void WPEWebContainer::componentComplete()
     // Configure WebKit process sandbox paths before any web view is created.
     // bubblewrap requires explicit allowlisting of paths needed by the subprocesses.
     WebKitWebContext *ctx = webkit_web_context_get_default();
-    webkit_web_context_add_path_to_sandbox(ctx, "/opt/wpe-sfos",              TRUE);
-    webkit_web_context_add_path_to_sandbox(ctx, "/usr/lib64/gstreamer-1.0",   TRUE);
-    webkit_web_context_add_path_to_sandbox(ctx, "/usr/lib64/wpe-compat",      TRUE);
-    webkit_web_context_add_path_to_sandbox(ctx, "/usr/share/atlantic-browser", TRUE);
-    webkit_web_context_add_path_to_sandbox(ctx, "/usr/share/qt5",             TRUE);
-    webkit_web_context_add_path_to_sandbox(ctx, "/usr/lib64/qt5",             TRUE);
-    webkit_web_context_add_path_to_sandbox(ctx, "/usr/lib64",                 TRUE);
-    webkit_web_context_add_path_to_sandbox(ctx, "/run/user/100000",           FALSE);
+    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kRuntimePrefix, TRUE);
+    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kGStreamerPluginDir, TRUE);
+    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kCompatLibDir, TRUE);
+    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kAtlanticShareDir, TRUE);
+    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kQtShareDir, TRUE);
+    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kQtLibDir, TRUE);
+    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kSystemLibDir, TRUE);
+    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kRuntimeDir, FALSE);
     qDebug() << "[WPE] Sandbox paths configured";
 
     // Qt Quick routes input events based on item bounding-box.  If the

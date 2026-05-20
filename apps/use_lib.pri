@@ -1,10 +1,10 @@
 QT += quick
 
 # Configurable paths — override on qmake command line if needed:
-#   qmake WPE_SFOS_PREFIX=/opt/wpe-sfos WPE_SOURCE_DIR=/path/to/wpewebkit-2.50.5
+#   qmake WPE_SFOS_PREFIX=/opt/wpe-sfos WPE_SOURCE_DIR=/path/to/wpewebkit-2.52.3
 isEmpty(WPE_SFOS_PREFIX):  WPE_SFOS_PREFIX  = /opt/wpe-sfos
 isEmpty(SFOS_SYSROOT):     SFOS_SYSROOT     = /opt/sfos-sysroot
-isEmpty(WPE_SOURCE_DIR):   WPE_SOURCE_DIR   = /workspace/wpewebkit-2.50.5
+isEmpty(WPE_SOURCE_DIR):   WPE_SOURCE_DIR   = /workspace/wpewebkit-2.52.3
 
 INCLUDEPATH += $$PWD/core $$PWD/storage $$PWD/history $$PWD/wpe $$PWD/factories $$PWD/../common
 exists($${WPE_SOURCE_DIR}/Source/WebKit/UIProcess/API/wpe/qt5/WPEQtView.h) {

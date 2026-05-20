@@ -36,8 +36,8 @@ BuildRequires:  pkgconfig(gmock)
 # --- Runtime dependencies ---
 Requires: sailfishsilica-qt5 >= 1.2.33
 Requires: sailfish-content-graphics
-Requires: wpewebkit2 >= 2.50.5
-Requires: wpewebkit2-qt5 >= 2.50.5
+Requires: wpewebkit2 >= 2.52.3
+Requires: wpewebkit2-qt5 >= 2.52.3
 Requires: wpe-sfos-compat >= 1.0.0
 Requires: qt5-plugin-imageformat-ico
 Requires: qt5-plugin-imageformat-gif
@@ -69,7 +69,7 @@ Conflicts: qtmozembed-qt5
 %description
 Sailfish Web Browser — WPE WebKit engine build.
 
-Replaces the Gecko/EmbedLite engine with WPE WebKit 2.50.5.
+Replaces the Gecko/EmbedLite engine with WPE WebKit 2.52.3.
 All Silica QML UI is preserved; only the engine layer is swapped.
 
 %package ts-devel
