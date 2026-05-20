@@ -7,21 +7,20 @@ Maintainer
 ----------
 - SpecSierra
 
-Engine and adaptation
----------------------
-- Sailfish WebView - https://github.com/sailfishos/sailfish-components-webview
-- QtMozEmbed - Qt bindings - https://github.com/sailfishos/qtmozembed
-- Embedlite components - https://github.com/sailfishos/embedlite-components
-- Gecko browser engine with embedlite API - https://github.com/sailfishos/gecko-dev
+Current architecture
+--------------------
+- Sailfish Silica / Qt browser UI remains in this repository.
+- Web content is provided by the carried-forward **WPE WebKit** Qt5 bridge and runtime under `apps/wpe/`.
+- Shared browser startup/runtime glue lives under `apps/lib/` and `apps/browser/`.
+- Build, packaging, runtime wrapper, and compatibility work now live in the companion repo: https://github.com/SpecSierra/wpe-sfos-build
 
 Tools
 -----
-All tools are located in source tree under [tools](https://github.com/SpecSierra/atlantic-browser/tree/main/tools).
+The remaining standalone tools are located under [tools](https://github.com/SpecSierra/atlantic-browser/tree/main/tools). They are auxiliary developer utilities, not the main browser build flow.
 
 #### [memory-dump-reader](https://github.com/SpecSierra/atlantic-browser/tree/main/tools/memory-dump-reader)
 
-Memory dump reader is a simple desktop utility for dumping and collecting memory information of the Sailfish Browser.
-Current version of the memory-dump-reader is a work-in-progress version.
+Memory dump reader is a small desktop utility for dumping and collecting browser memory information from a device. It is useful for debugging/investigation, but it is not part of the normal Atlantic Browser build or packaging path.
 
 ##### Compilation
 
@@ -31,9 +30,9 @@ Current version of the memory-dump-reader is a work-in-progress version.
 
 ##### Reading and collecting
 
-Once memory-dump-reader is compiled, run it like: ```dumpMemoryInfo /tmp/fileName.gz ip-of-the-device```.
-The script dumps remotely memory information of the browser and copies the dump to the desktop.
-The ```dumpMemoryInfo``` script works best when you have added your public ssh key as an authorized key of the device.
+Once memory-dump-reader is compiled, run it like: `dumpMemoryInfo /tmp/fileName.gz ip-of-the-device`.
+The script collects browser memory information from the device and copies the dump back to the host.
+`dumpMemoryInfo` works best when your public SSH key is already authorized on the device.
 
 License
 -------
