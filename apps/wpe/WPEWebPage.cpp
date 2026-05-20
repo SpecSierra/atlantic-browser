@@ -309,6 +309,57 @@ void WPEWebPage::setDesktopMode(bool desktop)
     // Reload so the server sends the correct page variant
     setUrl(url());
 }
+
+void WPEWebPage::applyInitialDeviceScale(qreal scale)
+{
+    setDeviceScaleFactor(scale);
+    rememberDefaultZoomLevel(scale);
+}
+
+double WPEWebPage::currentPageZoomLevel() const
+{
+    WebKitWebView *wv = webView();
+    if (wv) {
+        return webkit_web_view_get_zoom_level(wv);
+    }
+    if (m_defaultZoomLevelInitialized) {
+        return m_defaultZoomLevel;
+    }
+    return 1.0;
+}
+
+void WPEWebPage::setPageZoomLevel(double zoomLevel)
+{
+    WebKitWebView *wv = webView();
+    if (!wv) {
+        return;
+    }
+    webkit_web_view_set_zoom_level(wv, zoomLevel);
+}
+
+void WPEWebPage::rememberDefaultZoomLevel(double zoomLevel)
+{
+    if (zoomLevel <= 0.0) {
+        return;
+    }
+    m_defaultZoomLevel = zoomLevel;
+    m_defaultZoomLevelInitialized = true;
+}
+
+double WPEWebPage::minimumPinchZoomLevel() const
+{
+    return m_defaultZoomLevelInitialized
+        ? m_defaultZoomLevel * kMinimumPinchZoomFactor
+        : kMinimumPinchZoomFactor;
+}
+
+double WPEWebPage::maximumPinchZoomLevel() const
+{
+    return m_defaultZoomLevelInitialized
+        ? m_defaultZoomLevel * kMaximumPinchZoomFactor
+        : kMaximumPinchZoomFactor;
+}
+
 void WPEWebPage::loadTab(const QString &url, bool force)
 {
     QUrl newUrl(url);
@@ -531,11 +582,8 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
             if (!m_pinchZoomActive) {
                 m_pinchZoomActive = true;
                 m_pinchStartDistance = pinchDistance;
-                m_pinchStartZoomLevel = webkit_web_view_get_zoom_level(wv);
-                if (!m_defaultZoomLevelInitialized && m_pinchStartZoomLevel > 0.0) {
-                    m_defaultZoomLevel = m_pinchStartZoomLevel;
-                    m_defaultZoomLevelInitialized = true;
-                }
+                m_pinchStartZoomLevel = currentPageZoomLevel();
+                rememberDefaultZoomLevel(m_pinchStartZoomLevel);
 
                 QTouchEvent endEvent(QEvent::TouchEnd,
                                      event->device(),
@@ -544,18 +592,12 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
                                      event->touchPoints());
                 WPEQtView::touchEvent(&endEvent);
             } else if (m_pinchStartDistance > 0.0) {
-                const double minimumZoomLevel = m_defaultZoomLevelInitialized
-                    ? m_defaultZoomLevel * kMinimumPinchZoomFactor
-                    : kMinimumPinchZoomFactor;
-                const double maximumZoomLevel = m_defaultZoomLevelInitialized
-                    ? m_defaultZoomLevel * kMaximumPinchZoomFactor
-                    : kMaximumPinchZoomFactor;
                 const double targetZoomLevel = std::clamp(
                     m_pinchStartZoomLevel * static_cast<double>(pinchDistance / m_pinchStartDistance),
-                    minimumZoomLevel,
-                    maximumZoomLevel);
-                if (!qFuzzyCompare(targetZoomLevel, webkit_web_view_get_zoom_level(wv))) {
-                    webkit_web_view_set_zoom_level(wv, targetZoomLevel);
+                    minimumPinchZoomLevel(),
+                    maximumPinchZoomLevel());
+                if (!qFuzzyCompare(targetZoomLevel, currentPageZoomLevel())) {
+                    setPageZoomLevel(targetZoomLevel);
                 }
             }
         }

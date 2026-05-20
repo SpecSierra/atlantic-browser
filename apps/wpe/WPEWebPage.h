@@ -174,6 +174,7 @@ public:
     bool dragging() const;
     bool desktopMode() const;
     void setDesktopMode(bool desktop);
+    void applyInitialDeviceScale(qreal scale);
 
     Q_INVOKABLE void loadTab(const QString &url, bool force = false);
     Q_INVOKABLE void grabToFile(const QSize &size);
@@ -258,6 +259,12 @@ private slots:
     void updateSecurityInfo();
 
 private:
+    double currentPageZoomLevel() const;
+    void setPageZoomLevel(double zoomLevel);
+    void rememberDefaultZoomLevel(double zoomLevel);
+    double minimumPinchZoomLevel() const;
+    double maximumPinchZoomLevel() const;
+
     int m_tabId = 0;
     bool m_painted = false;
     bool m_domContentLoaded = false;

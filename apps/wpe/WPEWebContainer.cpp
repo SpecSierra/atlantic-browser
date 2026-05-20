@@ -502,7 +502,7 @@ WPEWebPage *WPEWebContainer::getOrCreatePage(int tabId)
 
     // Keep the current zoom-backed device-scale bootstrap explicit here.
     if (screen) {
-        page->setDeviceScaleFactor(initialPageDeviceScaleFactor(screenSize));
+        page->applyInitialDeviceScale(initialPageDeviceScaleFactor(screenSize));
     }
 
     connectPage(page);
