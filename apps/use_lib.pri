@@ -7,7 +7,11 @@ isEmpty(SFOS_SYSROOT):     SFOS_SYSROOT     = /opt/sfos-sysroot
 isEmpty(WPE_SOURCE_DIR):   WPE_SOURCE_DIR   = /workspace/wpewebkit-2.50.5
 
 INCLUDEPATH += $$PWD/core $$PWD/storage $$PWD/history $$PWD/wpe $$PWD/factories $$PWD/../common
-INCLUDEPATH += $${WPE_SOURCE_DIR}/Source/WebKit/UIProcess/API/wpe/qt5
+exists($${WPE_SOURCE_DIR}/Source/WebKit/UIProcess/API/wpe/qt5/WPEQtView.h) {
+    INCLUDEPATH += $${WPE_SOURCE_DIR}/Source/WebKit/UIProcess/API/wpe/qt5
+} else:exists($${WPE_SFOS_PREFIX}/include/wpe-webkit-1.0/wpe/qt/WPEQtView.h) {
+    INCLUDEPATH += $${WPE_SFOS_PREFIX}/include/wpe-webkit-1.0/wpe/qt
+}
 INCLUDEPATH += $${WPE_SFOS_PREFIX}/include/wpe-webkit-2.0
 INCLUDEPATH += $${WPE_SFOS_PREFIX}/include/wpe-1.0
 INCLUDEPATH += $${SFOS_SYSROOT}/usr/include/glib-2.0
