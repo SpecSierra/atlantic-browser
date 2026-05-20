@@ -160,6 +160,14 @@ private Q_SLOTS:
     void onPagePaintedChanged();
 
 private:
+    void configureSandboxPaths();
+    void ensureContainerHasUsableSize();
+    void trackParentSize();
+    void initializeTabModels(int nextTabId);
+    void restoreInitialContent();
+    QSizeF preferredPageSize(const QSizeF &screenSize) const;
+    qreal initialPageDeviceScaleFactor(const QSizeF &screenSize) const;
+    void configurePageGeometry(WPEWebPage *page, const QSizeF &screenSize);
     WPEWebPage *getOrCreatePage(int tabId);
     void activatePage(int tabId);
     void setActiveTabRendered(bool r);

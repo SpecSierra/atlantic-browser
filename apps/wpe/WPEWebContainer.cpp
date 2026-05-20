@@ -26,6 +26,18 @@
 #include <wpe/webkit.h>
 #pragma pop_macro("signals")
 
+namespace {
+
+QSizeF screenSizeOrFallback(QScreen *screen)
+{
+    if (screen) {
+        return screen->size();
+    }
+    return QSizeF(WPERuntimePaths::kFallbackScreenWidth, WPERuntimePaths::kFallbackScreenHeight);
+}
+
+} // namespace
+
 WPEWebContainer::WPEWebContainer(QQuickItem *parent)
     : QQuickItem(parent)
 {
@@ -36,6 +48,127 @@ WPEWebContainer::WPEWebContainer(QQuickItem *parent)
 WPEWebContainer::~WPEWebContainer()
 {
     qDeleteAll(m_pages);
+}
+
+void WPEWebContainer::configureSandboxPaths()
+{
+    WebKitWebContext *ctx = webkit_web_context_get_default();
+    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kRuntimePrefix, TRUE);
+    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kGStreamerPluginDir, TRUE);
+    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kCompatLibDir, TRUE);
+    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kAtlanticShareDir, TRUE);
+    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kQtShareDir, TRUE);
+    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kQtLibDir, TRUE);
+    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kSystemLibDir, TRUE);
+    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kRuntimeDir, FALSE);
+    qDebug() << "[WPE] Sandbox paths configured";
+}
+
+void WPEWebContainer::trackParentSize()
+{
+    QQuickItem *p = parentItem();
+    if (!p) {
+        return;
+    }
+
+    connect(p, &QQuickItem::widthChanged, this, [this]() {
+        if (parentItem() && parentItem()->width() > 0) {
+            setWidth(parentItem()->width());
+        }
+    });
+    connect(p, &QQuickItem::heightChanged, this, [this]() {
+        if (parentItem() && parentItem()->height() > 0) {
+            setHeight(parentItem()->height());
+        }
+    });
+}
+
+void WPEWebContainer::ensureContainerHasUsableSize()
+{
+    if (width() != 0 && height() != 0) {
+        return;
+    }
+
+    const QSizeF screenSize = screenSizeOrFallback(QGuiApplication::primaryScreen());
+    QQuickItem *p = parentItem();
+    const qreal parentWidth = p && p->width() > 0 ? p->width() : screenSize.width();
+    const qreal parentHeight = p && p->height() > 0 ? p->height() : screenSize.height();
+
+    setWidth(parentWidth);
+    setHeight(parentHeight);
+    trackParentSize();
+}
+
+QSizeF WPEWebContainer::preferredPageSize(const QSizeF &screenSize) const
+{
+    return QSizeF(width() > 0 ? width() : screenSize.width(),
+                  height() > 0 ? height() : screenSize.height());
+}
+
+qreal WPEWebContainer::initialPageDeviceScaleFactor(const QSizeF &screenSize) const
+{
+    // The carried-forward Qt bridge still maps device scale to page zoom here.
+    // Keep that known-good behavior explicit until a faster device-scale path is proven.
+    return screenSize.width() / WPERuntimePaths::kReferenceViewportWidth;
+}
+
+void WPEWebContainer::configurePageGeometry(WPEWebPage *page, const QSizeF &screenSize)
+{
+    if (!page) {
+        return;
+    }
+
+    const QSizeF size = preferredPageSize(screenSize);
+    page->setWidth(size.width());
+    page->setHeight(size.height());
+    connect(this, &QQuickItem::widthChanged, page, [this, page]() { page->setWidth(width()); });
+    connect(this, &QQuickItem::heightChanged, page, [this, page]() { page->setHeight(height()); });
+}
+
+void WPEWebContainer::initializeTabModels(int nextTabId)
+{
+    m_persistentTabModel = new PersistentTabModel(nextTabId, nullptr);
+    m_privateTabModel = new PrivateTabModel(nextTabId + 100, nullptr);
+
+    m_tabModel = m_persistentTabModel;
+    connect(m_tabModel, SIGNAL(activeTabChanged(int)), this, SLOT(onActiveTabChanged(int)));
+    connect(m_tabModel, SIGNAL(tabAdded(int)), this, SLOT(onTabAdded(int)));
+    connect(m_tabModel, SIGNAL(tabClosed(int)), this, SLOT(onTabClosed(int)));
+    emit tabModelChanged();
+}
+
+void WPEWebContainer::restoreInitialContent()
+{
+    if (!m_persistentTabModel) {
+        return;
+    }
+
+    qDebug() << "[WPE-INIT] persistentLoaded: initialUrl=" << m_initialUrl
+             << "tabCount=" << m_persistentTabModel->count();
+    if (!m_initialUrl.isEmpty()) {
+        load(m_initialUrl);
+        return;
+    }
+
+    if (m_persistentTabModel->count() == 0) {
+        // DeclarativeTabModel::newTab() refuses about:blank when tabs are empty,
+        // so create a page directly without going through the tab model.
+        WPEWebPage *page = getOrCreatePage(1);
+        page->setActive(true);
+        page->setVisible(true);
+        m_contentItem = page;
+        emit contentItemChanged();
+        emit needChromeChanged();
+        qDebug() << "[WPE-INIT] created initial empty page directly";
+        return;
+    }
+
+    const int activeId = m_persistentTabModel->activeTabId();
+    if (activeId > 0) {
+        activatePage(activeId);
+    } else if (!m_persistentTabModel->tabs().isEmpty()) {
+        activatePage(m_persistentTabModel->tabs().first().tabId());
+    }
 }
 
 WPEWebPage *WPEWebContainer::contentItem() const
@@ -172,51 +305,18 @@ void WPEWebContainer::componentComplete()
 {
     // Configure WebKit process sandbox paths before any web view is created.
     // bubblewrap requires explicit allowlisting of paths needed by the subprocesses.
-    WebKitWebContext *ctx = webkit_web_context_get_default();
-    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kRuntimePrefix, TRUE);
-    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kGStreamerPluginDir, TRUE);
-    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kCompatLibDir, TRUE);
-    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kAtlanticShareDir, TRUE);
-    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kQtShareDir, TRUE);
-    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kQtLibDir, TRUE);
-    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kSystemLibDir, TRUE);
-    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kRuntimeDir, FALSE);
-    qDebug() << "[WPE] Sandbox paths configured";
+    configureSandboxPaths();
 
     // Qt Quick routes input events based on item bounding-box.  If the
     // container has size 0×0 (no QML anchor/size binding from the page),
     // touch events are never delivered to WPEQtView children.  Initialise
     // to screen size here; the OverlayAnimator may later animate height.
-    if (width() == 0 || height() == 0) {
-        QScreen *screen = QGuiApplication::primaryScreen();
-        qreal sw = screen ? screen->size().width()  : 1080.0;
-        qreal sh = screen ? screen->size().height() : 2520.0;
-        QQuickItem *p = parentItem();
-        qreal pw = p && p->width()  > 0 ? p->width()  : sw;
-        qreal ph = p && p->height() > 0 ? p->height() : sh;
-        setWidth(pw);
-        setHeight(ph);
-        // Track parent resizes (orientation changes, etc.)
-        if (p) {
-            connect(p, &QQuickItem::widthChanged,  this, [this]() {
-                if (parentItem() && parentItem()->width() > 0) setWidth(parentItem()->width());
-            });
-            connect(p, &QQuickItem::heightChanged, this, [this]() {
-                if (parentItem() && parentItem()->height() > 0) setHeight(parentItem()->height());
-            });
-        }
-    }
+    ensureContainerHasUsableSize();
+
     int maxTabId = DBManager::instance()->getMaxTabId();
     int nextTabId = maxTabId + 1;
 
-    m_persistentTabModel = new PersistentTabModel(nextTabId, nullptr);
-    m_privateTabModel = new PrivateTabModel(nextTabId + 100, nullptr);
-
-    m_tabModel = m_persistentTabModel;
-    connect(m_tabModel, SIGNAL(activeTabChanged(int)), this, SLOT(onActiveTabChanged(int)));
-    connect(m_tabModel, SIGNAL(tabAdded(int)), this, SLOT(onTabAdded(int)));
-    connect(m_tabModel, SIGNAL(tabClosed(int)), this, SLOT(onTabClosed(int)));
-    emit tabModelChanged();
+    initializeTabModels(nextTabId);
 
     m_completed = true;
     emit completedChanged();
@@ -224,36 +324,10 @@ void WPEWebContainer::componentComplete()
     // After the persistent model finishes its async DB load, make sure something is shown.
     // If an initial URL was requested, load it; otherwise activate the persisted tab, or
     // fall back to a blank page if there are no saved tabs.
-    auto onPersistentLoaded = [this]() {
-        qDebug() << "[WPE-INIT] persistentLoaded: initialUrl=" << m_initialUrl
-                 << "tabCount=" << m_persistentTabModel->count();
-        if (!m_initialUrl.isEmpty()) {
-            load(m_initialUrl);
-        } else if (m_persistentTabModel->count() == 0) {
-            // DeclarativeTabModel::newTab() refuses about:blank when tabs are empty,
-            // so create a page directly without going through the tab model.
-            WPEWebPage *page = getOrCreatePage(1);
-            page->setActive(true);
-            page->setVisible(true);
-            m_contentItem = page;
-            emit contentItemChanged();
-            emit needChromeChanged();
-            qDebug() << "[WPE-INIT] created initial empty page directly";
-        } else {
-            // Saved tabs exist — activate the current active tab explicitly
-            int activeId = m_persistentTabModel->activeTabId();
-            if (activeId > 0)
-                activatePage(activeId);
-            else if (!m_persistentTabModel->tabs().isEmpty())
-                activatePage(m_persistentTabModel->tabs().first().tabId());
-        }
-    };
-
     if (m_persistentTabModel->loaded()) {
-        QTimer::singleShot(0, this, [this, onPersistentLoaded]() { onPersistentLoaded(); });
+        QTimer::singleShot(0, this, &WPEWebContainer::restoreInitialContent);
     } else {
-        connect(m_persistentTabModel, &DeclarativeTabModel::loadedChanged,
-                this, onPersistentLoaded);
+        connect(m_persistentTabModel, &DeclarativeTabModel::loadedChanged, this, &WPEWebContainer::restoreInitialContent);
     }
 
     if (!m_initialUrl.isEmpty())
@@ -422,20 +496,13 @@ WPEWebPage *WPEWebContainer::getOrCreatePage(int tabId)
     page->setVisible(false);
     page->setActive(false);
 
-    // Size: use container bounds if valid, otherwise fall back to screen size.
-    // This ensures WPEQtViewBackend is created with a real size (not -1x-1).
-    QScreen *screen = QGuiApplication::primaryScreen();
-    qreal w = width() > 0 ? width() : (screen ? screen->size().width() : 360.0);
-    qreal h = height() > 0 ? height() : (screen ? screen->size().height() : 640.0);
-    page->setWidth(w);
-    page->setHeight(h);
-    connect(this, &QQuickItem::widthChanged, page, [this, page]() { page->setWidth(width()); });
-    connect(this, &QQuickItem::heightChanged, page, [this, page]() { page->setHeight(height()); });
+    const QScreen *screen = QGuiApplication::primaryScreen();
+    const QSizeF screenSize = screenSizeOrFallback(QGuiApplication::primaryScreen());
+    configurePageGeometry(page, screenSize);
 
-    // Connect deviceScaleFactor from screen
+    // Keep the current zoom-backed device-scale bootstrap explicit here.
     if (screen) {
-        qreal scale = screen->size().width() / 360.0;
-        page->setDeviceScaleFactor(scale);
+        page->setDeviceScaleFactor(initialPageDeviceScaleFactor(screenSize));
     }
 
     connectPage(page);
