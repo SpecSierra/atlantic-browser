@@ -29,6 +29,7 @@ Page {
                                                   - (Theme.iconSizeSmall + Theme.paddingMedium * 2))
     property Item debug
     property Component tabPageComponent
+    property string pendingOpenUrl: ""
 
     property alias overlay: overlay
     property alias tabs: webView.tabModel
@@ -97,7 +98,8 @@ Page {
         fadeTarget: overlay.animator.allowContentUse ? overlay : overlay.dragArea
         color: webView.contentItem ? (webView.resourceController.videoActive
                                       && webView.contentItem.fullscreen
-                                      ? "black" : webView.contentItem.backgroundColor)
+                                      ? "black"
+                                      : (webView.contentItem.backgroundColor || "white"))
                                    : "white"
 
         onApplyContentOrientation: webView.applyContentOrientation(browserPage.orientation)
@@ -137,7 +139,7 @@ Page {
     Shared.WebView {
         id: webView
 
-        enabled: true // DEBUG: was overlay.animator.allowContentUse
+        enabled: overlay.animator.allowContentUse
         fullscreenHeight: portrait ? Screen.height : Screen.width
         portrait: browserPage.isPortrait
         maxLiveTabCount: maxliveTabs.value
@@ -152,7 +154,6 @@ Page {
 
         // When a page starts loading, dismiss the overlay so the user can see/interact with content.
         onLoadingChanged: {
-            console.log("[BrowserPage] loadingChanged: loading=" + loading + " allowContentUse=" + overlay.animator.allowContentUse + " overlayState=" + overlay.animator.state + " webViewEnabled=" + webView.enabled)
             if (loading && !overlay.animator.allowContentUse) {
                 overlay.dismiss(true)
             }
@@ -391,7 +392,7 @@ Page {
                  || !webView.tabModel
                  || webView.tabModel.count === 0
         iconBackground: true
-        window: webView
+        window: webView.chromeWindow
 
         CoverAction {
             iconSource: "image://theme/icon-cover-new"
@@ -429,7 +430,7 @@ Page {
             if (webView.tabModel.activateTab(url)) {
                 webView.releaseActiveTabOwnership()
             } else if (!webView.tabModel.loaded) {
-                webView.load(url)
+                pendingOpenUrl = url
                 overlay.dismiss(true, !Qt.application.active /* immediate */)
             } else {
                 webView.clearSelection()
@@ -455,17 +456,23 @@ Page {
         onFirstUseDoneChanged: window.setBrowserCover(webView.tabModel)
     }
 
-    // DEBUG: diagnostic touch detector to check if QML receives touches at all
-    MouseArea {
-        id: debugTouchArea
-        anchors.fill: parent
-        z: 999
-        propagateComposedEvents: true
-        onPressed: {
-            console.log("[DEBUG-TOUCH] MouseArea pressed at " + mouse.x + "," + mouse.y + " webViewEnabled=" + webView.enabled + " overlayState=" + overlay.animator.state)
-            mouse.accepted = false
+    Connections {
+        target: webView.tabModel
+        onLoadedChanged: {
+            if (!webView.tabModel || !webView.tabModel.loaded || pendingOpenUrl === "") {
+                return
+            }
+
+            var url = pendingOpenUrl
+            pendingOpenUrl = ""
+
+            if (webView.tabModel.activateTab(url)) {
+                webView.releaseActiveTabOwnership()
+            } else {
+                webView.clearSelection()
+                webView.tabModel.newTab(url, true)
+            }
         }
-        onReleased: mouse.accepted = false
     }
 
     Component.onCompleted: {
