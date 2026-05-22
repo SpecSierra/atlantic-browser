@@ -31,18 +31,6 @@ namespace {
 constexpr double kMinimumPinchZoomFactor = 0.5;
 constexpr double kMaximumPinchZoomFactor = 3.0;
 
-QList<QTouchEvent::TouchPoint> activeTouchPoints(const QList<QTouchEvent::TouchPoint> &touchPoints)
-{
-    QList<QTouchEvent::TouchPoint> activePoints;
-    activePoints.reserve(touchPoints.size());
-    for (const QTouchEvent::TouchPoint &touchPoint : touchPoints) {
-        if (touchPoint.state() != Qt::TouchPointReleased) {
-            activePoints.append(touchPoint);
-        }
-    }
-    return activePoints;
-}
-
 QList<QTouchEvent::TouchPoint> mergeTrackedTouchPoints(
         QHash<int, QTouchEvent::TouchPoint> &trackedTouchPoints,
         const QList<QTouchEvent::TouchPoint> &touchPoints,
@@ -573,7 +561,7 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
 
     const QList<QTouchEvent::TouchPoint> activePoints = mergeTrackedTouchPoints(
         m_trackedTouchPoints,
-        activeTouchPoints(event->touchPoints()),
+        event->touchPoints(),
         event->type());
     if (activePoints.size() >= 2) {
         const qreal pinchDistance = QLineF(activePoints.at(0).pos(), activePoints.at(1).pos()).length();
@@ -607,14 +595,15 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
     }
 
     if (m_pinchZoomActive) {
-        if (activePoints.isEmpty() || event->type() == QEvent::TouchEnd || event->type() == QEvent::TouchCancel) {
+        if (activePoints.size() < 2 || event->type() == QEvent::TouchEnd || event->type() == QEvent::TouchCancel) {
             resetPinchZoomState(m_pinchZoomActive, m_pinchStartDistance, m_pinchStartZoomLevel);
             if (activePoints.isEmpty()) {
                 m_trackedTouchPoints.clear();
             }
+        } else {
+            event->accept();
+            return;
         }
-        event->accept();
-        return;
     }
 
     if (activePoints.isEmpty() && (event->type() == QEvent::TouchEnd || event->type() == QEvent::TouchCancel)) {
