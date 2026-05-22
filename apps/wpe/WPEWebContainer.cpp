@@ -260,6 +260,29 @@ void WPEWebContainer::setPrivateMode(bool p)
             connect(m_tabModel, SIGNAL(tabClosed(int)), this, SLOT(onTabClosed(int)));
         }
         emit tabModelChanged();
+
+        if (m_tabModel && m_tabModel->count() > 0) {
+            const int activeId = m_tabModel->activeTabId();
+            if (activeId > 0) {
+                activatePage(activeId);
+            } else if (!m_tabModel->tabs().isEmpty()) {
+                activatePage(m_tabModel->tabs().first().tabId());
+            }
+        } else if (m_contentItem) {
+            m_contentItem->setActive(false);
+            m_contentItem->setVisible(false);
+            m_contentItem = nullptr;
+            emit contentItemChanged();
+            emit needChromeChanged();
+            emit tabIdChanged();
+            emit urlChanged();
+            emit titleChanged();
+            emit loadingChanged();
+            emit loadProgressChanged();
+            emit canGoBackChanged();
+            emit canGoForwardChanged();
+        }
+
         emit privateModeChanged();
     }
 }
@@ -516,6 +539,16 @@ WPEWebPage *WPEWebContainer::getOrCreatePage(int tabId)
 
 void WPEWebContainer::connectPage(WPEWebPage *page)
 {
+    // Keep tab metadata (URL/title/mode) in sync with the tab model that created this page.
+    // Using the model captured at page-creation time avoids cross-updating when switching
+    // between persistent/private models later.
+    DeclarativeTabModel *pageModel = m_tabModel;
+    if (pageModel) {
+        connect(page, &WPEQtView::urlChanged, pageModel, &DeclarativeTabModel::onUrlChanged);
+        connect(page, &WPEQtView::titleChanged, pageModel, &DeclarativeTabModel::onTitleChanged);
+        connect(page, &WPEWebPage::desktopModeChanged, pageModel, &DeclarativeTabModel::onDesktopModeChanged);
+    }
+
     connect(page, &WPEQtView::urlChanged, this, &WPEWebContainer::onPageUrlChanged);
     connect(page, &WPEQtView::titleChanged, this, &WPEWebContainer::onPageTitleChanged);
     // WPEQtView::loadingChanged carries a WPEQtViewLoadRequest* — use a lambda to adapt
