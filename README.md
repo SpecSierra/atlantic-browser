@@ -1,6 +1,6 @@
 Atlantic Browser
 ================
-Atlantic Browser is the maintained Sailfish OS browser port in this repository. It keeps the Sailfish Silica Qt browser UI while replacing the old Gecko/EmbedLite engine stack with WPE WebKit.
+Atlantic Browser is the maintained Sailfish OS browser port in this repository. It keeps the Sailfish Silica Qt browser UI and uses the carried-forward WPE WebKit stack.
 More information about the older Sailfish Browser architecture can still be found at https://web.archive.org/web/20180830103541/http://blog.idempotent.info/posts/whats-behind-sailfish-browser.html .
 
 Maintainer

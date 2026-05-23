@@ -7,7 +7,7 @@ License:    MPLv2.0
 Url:        https://github.com/SpecSierra/sailfish-browser
 Source0:    %{name}-%{version}.tar.bz2
 
-# --- Build dependencies (WPE replaces Gecko/EmbedLite) ---
+# --- Build dependencies (WPE build) ---
 BuildRequires:  pkgconfig(Qt5Core)
 BuildRequires:  pkgconfig(Qt5Qml)
 BuildRequires:  pkgconfig(Qt5Gui)
@@ -53,11 +53,9 @@ Requires: jolla-settings >= 0.11.29
 Requires: jolla-settings-system >= 1.0.70
 Requires: sailfish-policy
 
-# Gecko engine packages obsoleted by this WPE build
+# Browser packaging replaces the legacy engine packages
 Obsoletes: sailfish-browser-settings <= 2.3.29
 Provides:  sailfish-browser-settings > 2.3.29
-Conflicts: xulrunner-qt5
-Conflicts: qtmozembed-qt5
 
 %{_oneshot_requires_post}
 
@@ -67,7 +65,7 @@ Conflicts: qtmozembed-qt5
 %description
 Sailfish Web Browser — WPE WebKit engine build.
 
-Replaces the Gecko/EmbedLite engine with WPE WebKit 2.52.3.
+WPE WebKit 2.52.3 browser build with the Sailfish UI preserved.
 All Silica QML UI is preserved; only the engine layer is swapped.
 
 %package ts-devel

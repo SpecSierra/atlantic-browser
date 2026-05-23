@@ -10,7 +10,6 @@ if [[ $PWD == /opt/* ]] ; then
         sleep 2
     done
 else
-    export LD_LIBRARY_PATH=$PWD/../../../qtmozembed/objdir-mer-dbg/src
     export LOW_MEMORY_DISABLED=1
 
     find $BASEDIR -name "*.gcda" | xargs rm
@@ -22,4 +21,3 @@ else
         sleep 2
     done
 fi
-

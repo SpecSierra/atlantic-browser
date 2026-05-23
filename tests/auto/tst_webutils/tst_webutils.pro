@@ -16,5 +16,3 @@ SOURCES += tst_webutils.cpp \
            $$CORESRCDIR/declarativewebutils.cpp
 
 HEADERS += $$CORESRCDIR/declarativewebutils.h
-
-INCLUDEPATH -= $$absolute_path(../../../../qtmozembed/src)
