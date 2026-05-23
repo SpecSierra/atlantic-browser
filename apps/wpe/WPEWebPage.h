@@ -252,6 +252,7 @@ signals:
 
 protected:
     void itemChange(ItemChange change, const ItemChangeData &value) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
     void touchEvent(QTouchEvent *event) override;
 
 private slots:

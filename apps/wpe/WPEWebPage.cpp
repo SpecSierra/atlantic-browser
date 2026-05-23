@@ -38,6 +38,10 @@ QList<QTouchEvent::TouchPoint> mergeTrackedTouchPoints(
         const QList<QTouchEvent::TouchPoint> &touchPoints,
         QEvent::Type eventType)
 {
+    if (eventType == QEvent::TouchBegin && touchPoints.size() == 1) {
+        trackedTouchPoints.clear();
+    }
+
     for (const QTouchEvent::TouchPoint &touchPoint : touchPoints) {
         if (touchPoint.state() == Qt::TouchPointReleased) {
             trackedTouchPoints.remove(touchPoint.id());
@@ -624,6 +628,14 @@ void WPEWebPage::updateFramePumpState()
     }
 }
 
+void WPEWebPage::mouseReleaseEvent(QMouseEvent *event)
+{
+    WPEQtView::mouseReleaseEvent(event);
+    QTimer::singleShot(0, this, [this]() {
+        syncVirtualKeyboardToFocusedElement();
+    });
+}
+
 void WPEWebPage::touchEvent(QTouchEvent *event)
 {
     if (!event) {
@@ -686,7 +698,9 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
 
     WPEQtView::touchEvent(event);
     if (shouldSyncKeyboard) {
-        syncVirtualKeyboardToFocusedElement();
+        QTimer::singleShot(0, this, [this]() {
+            syncVirtualKeyboardToFocusedElement();
+        });
     }
 }
 
