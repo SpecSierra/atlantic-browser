@@ -128,6 +128,9 @@ class WPEWebPage : public WPEQtView
     Q_PROPERTY(bool selectMenuActive READ selectMenuActive NOTIFY selectMenuActiveChanged FINAL)
     Q_PROPERTY(QStringList selectMenuOptions READ selectMenuOptions NOTIFY selectMenuOptionsChanged FINAL)
     Q_PROPERTY(int selectMenuSelectedIndex READ selectMenuSelectedIndex NOTIFY selectMenuSelectedIndexChanged FINAL)
+    Q_PROPERTY(bool fileChooserActive READ fileChooserActive NOTIFY fileChooserActiveChanged FINAL)
+    Q_PROPERTY(QStringList fileChooserNameFilters READ fileChooserNameFilters NOTIFY fileChooserNameFiltersChanged FINAL)
+    Q_PROPERTY(bool fileChooserSelectMultiple READ fileChooserSelectMultiple NOTIFY fileChooserSelectMultipleChanged FINAL)
 
     // Pinch zoom visual scale — compositor-level transform during gesture; WebKit zoom committed on end
     Q_PROPERTY(qreal visualScale READ visualScale NOTIFY visualScaleChanged)
@@ -219,10 +222,15 @@ public:
     // HTML <select> dropdown
     Q_INVOKABLE void selectMenuOption(int index);
     Q_INVOKABLE void closeSelectMenu();
+    Q_INVOKABLE void chooseFiles(const QStringList &filePaths);
+    Q_INVOKABLE void cancelFileChooser();
     void openSelectMenu(const QStringList &options, int selectedIndex);
     bool selectMenuActive() const { return m_selectMenuActive; }
     QStringList selectMenuOptions() const { return m_selectMenuOptions; }
     int selectMenuSelectedIndex() const { return m_selectMenuSelectedIdx; }
+    bool fileChooserActive() const { return m_fileChooserActive; }
+    QStringList fileChooserNameFilters() const { return m_fileChooserNameFilters; }
+    bool fileChooserSelectMultiple() const { return m_fileChooserSelectMultiple; }
 
     // Pinch zoom visual scale
     qreal visualScale() const { return m_visualScale; }
@@ -279,6 +287,9 @@ signals:
     void selectMenuActiveChanged();
     void selectMenuOptionsChanged();
     void selectMenuSelectedIndexChanged();
+    void fileChooserActiveChanged();
+    void fileChooserNameFiltersChanged();
+    void fileChooserSelectMultipleChanged();
 
     void visualScaleChanged();
     void pinchCenterChanged();
@@ -306,6 +317,8 @@ private:
     void rememberDefaultZoomLevel(double zoomLevel);
     double minimumPinchZoomLevel() const;
     double maximumPinchZoomLevel() const;
+    bool handleFileChooserRequest(WebKitFileChooserRequest *request);
+    void clearFileChooserRequest(bool cancelRequest);
 
     int m_tabId = 0;
     bool m_painted = false;
@@ -361,6 +374,10 @@ private:
     bool m_selectMenuActive = false;
     QStringList m_selectMenuOptions;
     int m_selectMenuSelectedIdx = 0;
+    WebKitFileChooserRequest *m_fileChooserRequest = nullptr;
+    bool m_fileChooserActive = false;
+    QStringList m_fileChooserNameFilters;
+    bool m_fileChooserSelectMultiple = false;
 };
 
 QML_DECLARE_TYPE(WPEWebPage)

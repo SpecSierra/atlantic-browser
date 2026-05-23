@@ -13,6 +13,7 @@
 import QtQuick 2.2
 import QtQuick.Window 2.2 as QuickWindow
 import Sailfish.Silica 1.0
+import Sailfish.Pickers 1.0
 import Sailfish.Silica.private 1.0 as Private
 import Sailfish.Browser 1.0
 import Sailfish.Policy 1.0
@@ -30,6 +31,7 @@ Page {
     property Item debug
     property Component tabPageComponent
     property string pendingOpenUrl: ""
+    property bool _filePickerOpen: false
 
     property alias overlay: overlay
     property alias tabs: webView.tabModel
@@ -60,6 +62,14 @@ Page {
         bringToForeground(webView.chromeWindow)
         // after bringToForeground, webView has focus => activate chrome
         window.activate()
+    }
+
+    function openFilePicker() {
+        if (_filePickerOpen || !webView.contentItem || !webView.contentItem.fileChooserActive) {
+            return
+        }
+        _filePickerOpen = true
+        pageStack.animatorPush(filePickerPage)
     }
 
     // for time being make this fullscreen. TODO: avoid drawing over cutout and corner areas.
@@ -466,6 +476,26 @@ Page {
         }
     }
 
+    Connections {
+        target: webView.contentItem
+        ignoreUnknownSignals: true
+        onFileChooserActiveChanged: {
+            if (!webView.contentItem) {
+                _filePickerOpen = false
+                return
+            }
+
+            if (webView.contentItem.fileChooserActive) {
+                openFilePicker()
+            } else {
+                _filePickerOpen = false
+                if (pageStack.currentPage && pageStack.currentPage.objectName === "atlanticFilePickerPage") {
+                    pageStack.pop(pageStack.currentPage, PageStackAction.Immediate)
+                }
+            }
+        }
+    }
+
     // HTML <select> dropdown overlay — driven by contentItem property bindings
     Item {
         id: selectOverlay
@@ -538,6 +568,36 @@ Page {
                         }
                     }
                     ScrollDecorator {}
+                }
+            }
+        }
+    }
+
+    Component {
+        id: filePickerPage
+
+        FilePickerPage {
+            id: filePicker
+            objectName: "atlanticFilePickerPage"
+            nameFilters: webView.contentItem ? webView.contentItem.fileChooserNameFilters : []
+
+            onSelectedContentPropertiesChanged: {
+                if (!webView.contentItem || !webView.contentItem.fileChooserActive
+                        || !selectedContentProperties || !selectedContentProperties.filePath) {
+                    return
+                }
+
+                webView.contentItem.chooseFiles([selectedContentProperties.filePath])
+                _filePickerOpen = false
+                pageStack.pop(filePicker, PageStackAction.Immediate)
+            }
+
+            onStatusChanged: {
+                if (status === PageStatus.Deactivating) {
+                    _filePickerOpen = false
+                    if (webView.contentItem && webView.contentItem.fileChooserActive) {
+                        webView.contentItem.cancelFileChooser()
+                    }
                 }
             }
         }

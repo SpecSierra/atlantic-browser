@@ -25,9 +25,11 @@
 #include <QQuickItemGrabResult>
 #include <QQuickWindow>
 #include <QRegularExpression>
+#include <QSet>
 #include <QStandardPaths>
 #include <QStringList>
 #include <QUrl>
+#include <QVector>
 
 #include "WPEQtViewLoadRequest.h"
 
@@ -38,6 +40,122 @@ namespace {
 
 constexpr double kMinimumPinchZoomFactor = 0.5;
 constexpr double kMaximumPinchZoomFactor = 3.0;
+
+QStringList wildcardFiltersForFamily(const QString &family)
+{
+    if (family == QStringLiteral("image")) {
+        return {
+            QStringLiteral("*.png"),
+            QStringLiteral("*.jpg"),
+            QStringLiteral("*.jpeg"),
+            QStringLiteral("*.gif"),
+            QStringLiteral("*.bmp"),
+            QStringLiteral("*.webp"),
+            QStringLiteral("*.svg"),
+            QStringLiteral("*.heif"),
+            QStringLiteral("*.heic")
+        };
+    }
+    if (family == QStringLiteral("audio")) {
+        return {
+            QStringLiteral("*.mp3"),
+            QStringLiteral("*.aac"),
+            QStringLiteral("*.m4a"),
+            QStringLiteral("*.ogg"),
+            QStringLiteral("*.wav"),
+            QStringLiteral("*.flac")
+        };
+    }
+    if (family == QStringLiteral("video")) {
+        return {
+            QStringLiteral("*.mp4"),
+            QStringLiteral("*.m4v"),
+            QStringLiteral("*.webm"),
+            QStringLiteral("*.mkv"),
+            QStringLiteral("*.mov"),
+            QStringLiteral("*.avi"),
+            QStringLiteral("*.3gp")
+        };
+    }
+    if (family == QStringLiteral("text")) {
+        return {
+            QStringLiteral("*.txt"),
+            QStringLiteral("*.md"),
+            QStringLiteral("*.csv"),
+            QStringLiteral("*.json"),
+            QStringLiteral("*.xml"),
+            QStringLiteral("*.html"),
+            QStringLiteral("*.htm")
+        };
+    }
+    return {};
+}
+
+QStringList mimeToFilters(const QString &mimeType)
+{
+    const QString mime = mimeType.trimmed().toLower();
+    if (mime.isEmpty() || mime == QStringLiteral("*") || mime == QStringLiteral("*/*")) {
+        return {};
+    }
+
+    const int slash = mime.indexOf(QLatin1Char('/'));
+    if (slash <= 0 || slash >= mime.size() - 1) {
+        return {};
+    }
+
+    const QString family = mime.left(slash);
+    const QString subtype = mime.mid(slash + 1);
+
+    if (subtype == QStringLiteral("*")) {
+        return wildcardFiltersForFamily(family);
+    }
+
+    if (subtype == QStringLiteral("jpeg")) {
+        return { QStringLiteral("*.jpg"), QStringLiteral("*.jpeg") };
+    }
+    if (subtype == QStringLiteral("svg+xml")) {
+        return { QStringLiteral("*.svg") };
+    }
+    if (subtype == QStringLiteral("x-m4a")) {
+        return { QStringLiteral("*.m4a") };
+    }
+    if (subtype == QStringLiteral("quicktime")) {
+        return { QStringLiteral("*.mov") };
+    }
+
+    return { QStringLiteral("*.%1").arg(subtype) };
+}
+
+QStringList requestNameFilters(WebKitFileChooserRequest *request)
+{
+    if (!request) {
+        return {};
+    }
+
+    const gchar* const* mimeTypes = webkit_file_chooser_request_get_mime_types(request);
+    if (!mimeTypes || !mimeTypes[0]) {
+        return {};
+    }
+
+    QSet<QString> filters;
+    for (guint i = 0; mimeTypes[i]; ++i) {
+        const QString mime = QString::fromUtf8(mimeTypes[i]).trimmed();
+        if (mime.isEmpty() || mime == QStringLiteral("*") || mime == QStringLiteral("*/*")) {
+            return {};
+        }
+        const QStringList mapped = mimeToFilters(mime);
+        if (mapped.isEmpty()) {
+            return {};
+        }
+        for (const QString &entry : mapped) {
+            filters.insert(entry);
+        }
+    }
+
+    QStringList ordered = filters.values();
+    std::sort(ordered.begin(), ordered.end());
+    return ordered;
+}
 
 QList<QTouchEvent::TouchPoint> mergeTrackedTouchPoints(
         QHash<int, QTouchEvent::TouchPoint> &trackedTouchPoints,
@@ -765,6 +883,13 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     connect(this, &WPEQtView::webViewCreated, this, [this]() {
         if (WebKitWebView* wv = webView()) {
             g_signal_connect(wv, "decide-policy", G_CALLBACK(onDecidePolicy), nullptr);
+            g_signal_connect(
+                wv, "run-file-chooser",
+                G_CALLBACK(+[](WebKitWebView*, WebKitFileChooserRequest* request, gpointer userData) -> gboolean {
+                    auto *page = static_cast<WPEWebPage*>(userData);
+                    return page && page->handleFileChooserRequest(request);
+                }),
+                this);
 
             // --- HTML <select> via JS bridge ---
             WebKitUserContentManager* ucm = webkit_web_view_get_user_content_manager(wv);
@@ -847,7 +972,10 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     updateFramePumpState();
 }
 
-WPEWebPage::~WPEWebPage() = default;
+WPEWebPage::~WPEWebPage()
+{
+    clearFileChooserRequest(true);
+}
 
 int WPEWebPage::tabId() const { return m_tabId; }
 
@@ -1290,6 +1418,7 @@ void WPEWebPage::onLoadingChanged(WPEQtViewLoadRequest *loadRequest)
 
     switch (loadRequest->status()) {
     case WPEQtView::LoadStartedStatus:
+        clearFileChooserRequest(true);
         m_domContentLoaded = false;
         m_loaded = false;
         m_favicon.clear();
@@ -1328,6 +1457,60 @@ void WPEWebPage::onLoadingChanged(WPEQtViewLoadRequest *loadRequest)
         m_loaded = false;
         emit loadedChanged();
         break;
+    }
+}
+
+bool WPEWebPage::handleFileChooserRequest(WebKitFileChooserRequest *request)
+{
+    if (!request) {
+        return false;
+    }
+
+    clearFileChooserRequest(true);
+
+    m_fileChooserRequest = WEBKIT_FILE_CHOOSER_REQUEST(g_object_ref(request));
+
+    const bool selectMultiple = webkit_file_chooser_request_get_select_multiple(request);
+    if (m_fileChooserSelectMultiple != selectMultiple) {
+        m_fileChooserSelectMultiple = selectMultiple;
+        emit fileChooserSelectMultipleChanged();
+    }
+
+    const QStringList filters = requestNameFilters(request);
+    if (m_fileChooserNameFilters != filters) {
+        m_fileChooserNameFilters = filters;
+        emit fileChooserNameFiltersChanged();
+    }
+
+    if (!m_fileChooserActive) {
+        m_fileChooserActive = true;
+        emit fileChooserActiveChanged();
+    }
+
+    return true;
+}
+
+void WPEWebPage::clearFileChooserRequest(bool cancelRequest)
+{
+    if (m_fileChooserRequest) {
+        if (cancelRequest) {
+            webkit_file_chooser_request_cancel(m_fileChooserRequest);
+        }
+        g_object_unref(m_fileChooserRequest);
+        m_fileChooserRequest = nullptr;
+    }
+
+    if (m_fileChooserActive) {
+        m_fileChooserActive = false;
+        emit fileChooserActiveChanged();
+    }
+    if (!m_fileChooserNameFilters.isEmpty()) {
+        m_fileChooserNameFilters.clear();
+        emit fileChooserNameFiltersChanged();
+    }
+    if (m_fileChooserSelectMultiple) {
+        m_fileChooserSelectMultiple = false;
+        emit fileChooserSelectMultipleChanged();
     }
 }
 
@@ -1888,4 +2071,53 @@ void WPEWebPage::closeSelectMenu()
         m_selectMenuActive = false;
         emit selectMenuActiveChanged();
     }
+}
+
+void WPEWebPage::chooseFiles(const QStringList &filePaths)
+{
+    if (!m_fileChooserRequest) {
+        return;
+    }
+
+    QStringList normalizedPaths;
+    normalizedPaths.reserve(filePaths.size());
+    for (const QString &entry : filePaths) {
+        if (entry.isEmpty()) {
+            continue;
+        }
+        const QUrl asUrl(entry);
+        const QString localPath = asUrl.isValid() && asUrl.isLocalFile() ? asUrl.toLocalFile() : entry;
+        if (!localPath.isEmpty()) {
+            normalizedPaths.append(localPath);
+        }
+    }
+
+    if (!m_fileChooserSelectMultiple && normalizedPaths.size() > 1) {
+        const QString firstPath = normalizedPaths.first();
+        normalizedPaths.clear();
+        normalizedPaths.append(firstPath);
+    }
+
+    if (normalizedPaths.isEmpty()) {
+        clearFileChooserRequest(true);
+        return;
+    }
+
+    QVector<QByteArray> utf8Paths;
+    utf8Paths.reserve(normalizedPaths.size());
+    QVector<const gchar*> selectedFiles;
+    selectedFiles.reserve(normalizedPaths.size() + 1);
+    for (const QString &path : normalizedPaths) {
+        utf8Paths.append(path.toUtf8());
+        selectedFiles.append(utf8Paths.constLast().constData());
+    }
+    selectedFiles.append(nullptr);
+
+    webkit_file_chooser_request_select_files(m_fileChooserRequest, selectedFiles.constData());
+    clearFileChooserRequest(false);
+}
+
+void WPEWebPage::cancelFileChooser()
+{
+    clearFileChooserRequest(true);
 }
