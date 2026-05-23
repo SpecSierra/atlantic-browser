@@ -10,6 +10,7 @@
 
 #include <QBuffer>
 #include <QClipboard>
+#include <QDateTime>
 #include <QDir>
 #include <QGuiApplication>
 #include <QImage>
@@ -856,12 +857,31 @@ void WPEWebPage::inputMethodEvent(QInputMethodEvent *event)
     bool handled = false;
     const QString committed = event->commitString();
     if (!committed.isEmpty()) {
-        handled = dispatchCommittedTextToFocusedElement(this, committed) || handled;
+        const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+        const bool duplicateOfRecentSoftKey =
+            (committed == m_lastSoftKeyboardText) &&
+            (nowMs - m_lastSoftKeyboardTextTimeMs >= 0) &&
+            (nowMs - m_lastSoftKeyboardTextTimeMs < 200);
+
+        if (!duplicateOfRecentSoftKey)
+            handled = dispatchCommittedTextToFocusedElement(this, committed) || handled;
+
+        m_lastSoftKeyboardText.clear();
+        m_lastSoftKeyboardTextTimeMs = 0;
     }
 
     const int deleteCount = event->replacementLength();
-    for (int i = 0; i < deleteCount; ++i) {
-        handled = dispatchBackspaceToFocusedElement(this) || handled;
+    if (deleteCount > 0) {
+        const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+        const bool duplicateOfRecentSoftBackspace =
+            (nowMs - m_lastSoftBackspaceTimeMs >= 0) &&
+            (nowMs - m_lastSoftBackspaceTimeMs < 200);
+        if (!duplicateOfRecentSoftBackspace) {
+            for (int i = 0; i < deleteCount; ++i) {
+                handled = dispatchBackspaceToFocusedElement(this) || handled;
+            }
+        }
+        m_lastSoftBackspaceTimeMs = 0;
     }
 
     if (handled) {
@@ -881,6 +901,11 @@ void WPEWebPage::keyPressEvent(QKeyEvent *event)
     if (shouldInterceptSoftKeyboardEvent(event)) {
         if (event->key() == Qt::Key_Backspace) {
             dispatchBackspaceToFocusedElement(this);
+            m_lastSoftBackspaceTimeMs = QDateTime::currentMSecsSinceEpoch();
+        } else if (!event->text().isEmpty()) {
+            dispatchCommittedTextToFocusedElement(this, event->text());
+            m_lastSoftKeyboardText = event->text();
+            m_lastSoftKeyboardTextTimeMs = QDateTime::currentMSecsSinceEpoch();
         }
         event->accept();
         return;

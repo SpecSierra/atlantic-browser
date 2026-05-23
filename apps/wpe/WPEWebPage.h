@@ -317,6 +317,9 @@ private:
     qreal m_lastInteractionX = -1.0;
     qreal m_lastInteractionY = -1.0;
     QHash<int, QTouchEvent::TouchPoint> m_trackedTouchPoints;
+    QString m_lastSoftKeyboardText;
+    qint64 m_lastSoftKeyboardTextTimeMs = 0;
+    qint64 m_lastSoftBackspaceTimeMs = 0;
 };
 
 QML_DECLARE_TYPE(WPEWebPage)
