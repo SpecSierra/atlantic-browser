@@ -15,7 +15,6 @@
 
 namespace BrowserAppInfo
 {
-    bool captivePortal();
     QString profileName();
 };
 

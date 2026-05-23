@@ -4,12 +4,11 @@ SUBDIRS += apps tests settings backup-unit
 tests.depends = apps
 
 # The .desktop file
-desktop.files = sailfish-browser.desktop sailfish-captiveportal.desktop
+desktop.files = sailfish-browser.desktop
 desktop.path = /usr/share/applications
 
 dbus_service.files = org.sailfishos.browser.service \
-                     org.sailfishos.browser.ui.service \
-                     org.sailfishos.captiveportal.service
+                     org.sailfishos.browser.ui.service
 dbus_service.path = /usr/share/dbus-1/services
 
 chrome_scripts.files = chrome/*.js

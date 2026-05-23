@@ -8,23 +8,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#include <QCoreApplication>
 #include <QStandardPaths>
+#include <QCoreApplication>
 #include "browserappinfo.h"
-
-bool BrowserAppInfo::captivePortal()
-{
-    static bool captivePortalMode = false;
-    static bool argsChecked = false;
-
-    if (!argsChecked) {
-        if (QCoreApplication::arguments().contains(QLatin1String("-captiveportal")))
-            captivePortalMode = true;
-        argsChecked = true;
-    }
-
-    return captivePortalMode;
-}
 
 QString BrowserAppInfo::profileName()
 {

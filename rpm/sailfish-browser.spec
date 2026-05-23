@@ -1,5 +1,3 @@
-%global captiveportal sailfish-captiveportal
-
 Name:       sailfish-browser
 
 Summary:    Sailfish Browser (WPE WebKit engine)
@@ -136,13 +134,9 @@ fi
 %files
 %license LICENSE.txt
 %{_bindir}/%{name}
-%{_bindir}/%{captiveportal}
 %{_datadir}/applications/%{name}.desktop
-%{_datadir}/applications/%{captiveportal}.desktop
 %{_datadir}/%{name}
-%{_datadir}/%{captiveportal}
 %{_datadir}/translations/%{name}*.qm
-%{_datadir}/translations/%{captiveportal}*.qm
 %{_datadir}/translations/settings-%{name}_eng_en.qm
 %{_datadir}/dbus-1/services/*.service
 %{_oneshotdir}/*

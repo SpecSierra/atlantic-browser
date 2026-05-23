@@ -10,7 +10,6 @@
 #include "declarativewebpage.h"
 #include "declarativewebcontainer.h"
 #include "dbmanager.h"
-#include "browserappinfo.h"
 #include "browserpaths.h"
 #include "faviconmanager.h"
 #include "logging.h"
@@ -29,8 +28,6 @@
 #define LINK_ADD_FEED "Link:AddFeed"
 #define LINK_ADD_SEARCH "Link:AddSearch"
 #define FIND_MESSAGE "embed:find"
-#define OPEN_LINK "embed:OpenLink"
-
 static bool isBlack(QRgb rgb)
 {
     return qRed(rgb) == 0 && qGreen(rgb) == 0 && qBlue(rgb) == 0;
@@ -71,11 +68,6 @@ DeclarativeWebPage::DeclarativeWebPage(QObject *parent)
                                           CONTENT_ORIENTATION_CHANGED_MESSAGE };
 
     addMessageListeners(messages);
-
-    if (BrowserAppInfo::captivePortal()) {
-        addMessageListener(OPEN_LINK);
-        loadFrameScript("file:///usr/share/sailfish-captiveportal/pages/captiveportal.js");
-    }
 
     connect(this, &DeclarativeWebPage::recvAsyncMessage,
             this, &DeclarativeWebPage::onRecvAsyncMessage);

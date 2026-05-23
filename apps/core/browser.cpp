@@ -15,7 +15,6 @@
 #include "declarativewebutils.h"
 #include "downloadmanager.h"
 #include "settingmanager.h"
-#include "browserappinfo.h"
 
 #include <QDir>
 #include <QGuiApplication>
@@ -47,9 +46,7 @@ Browser::Browser(QQuickView *view, const QString &dataPath, QObject *parent)
     d->view->rootContext()->setContextProperty("DownloadManager", downloadManager);
 
     QString mainQml;
-    if (BrowserAppInfo::captivePortal()) {
-        mainQml = QStringLiteral("captiveportal.qml");
-    } else if (!qEnvironmentVariableIsEmpty("ATLANTIC_MINIMAL_UI")) {
+    if (!qEnvironmentVariableIsEmpty("ATLANTIC_MINIMAL_UI")) {
         mainQml = QStringLiteral("browser-minimal.qml");
     } else {
         mainQml = QStringLiteral("browser.qml");
@@ -88,7 +85,6 @@ QString Browser::applicationFilePath()
 
 void Browser::openUrl(const QString &url)
 {
-    Q_D(Browser);
     DeclarativeWebUtils::instance()->openUrl(url);
 }
 
@@ -99,13 +95,11 @@ void Browser::openSettings()
 
 void Browser::openNewTabView()
 {
-    Q_D(Browser);
     emit DeclarativeWebUtils::instance()->activateNewTabViewRequested();
 }
 
 void Browser::showChrome()
 {
-    Q_D(Browser);
     emit DeclarativeWebUtils::instance()->showChrome();
 }
 

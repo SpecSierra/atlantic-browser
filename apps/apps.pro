@@ -1,5 +1,4 @@
 TEMPLATE = subdirs
-SUBDIRS += lib browser captiveportal
+SUBDIRS += lib browser
 
 browser.depends = lib
-captiveportal.depends = lib
