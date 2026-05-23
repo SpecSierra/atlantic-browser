@@ -107,6 +107,14 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     : WPEQtView(parent)
     , m_security(new WPESecurityInfo(this))
 {
+    m_framePump.setInterval(33);
+    m_framePump.setTimerType(Qt::PreciseTimer);
+    connect(&m_framePump, &QTimer::timeout, this, [this]() {
+        if (m_active && isVisible()) {
+            update();
+        }
+    });
+
     // Set a credible mobile Chrome UA from the start
     setUserAgent(QStringLiteral(
         "Mozilla/5.0 (Linux; Android 13; Pixel 7) "
@@ -180,6 +188,8 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             emit fullscreenChanged();
         }
     });
+
+    updateFramePumpState();
 }
 
 WPEWebPage::~WPEWebPage() = default;
@@ -258,6 +268,7 @@ void WPEWebPage::setActive(bool active)
     if (m_active != active) {
         m_active = active;
         setVisible(active);
+        updateFramePumpState();
         emit activeChanged();
     }
 }
@@ -268,6 +279,7 @@ void WPEWebPage::setThrottlePainting(bool throttle)
 {
     if (m_throttlePainting != throttle) {
         m_throttlePainting = throttle;
+        updateFramePumpState();
         emit throttlePaintingChanged();
     }
 }
@@ -455,11 +467,14 @@ void WPEWebPage::forceChrome(bool forced)
 void WPEWebPage::suspendView()
 {
     setVisible(false);
+    updateFramePumpState();
 }
 
 void WPEWebPage::resumeView()
 {
     setVisible(true);
+    updateFramePumpState();
+    update();
 }
 
 void WPEWebPage::sendAsyncMessage(const QString &, const QVariant &)
@@ -589,6 +604,20 @@ void WPEWebPage::itemChange(ItemChange change, const ItemChangeData &value)
         connect(value.window, &QQuickWindow::frameSwapped,
                 this, &WPEWebPage::onFrameSwapped,
                 Qt::UniqueConnection);
+    } else if (change == ItemVisibleHasChanged) {
+        updateFramePumpState();
+    }
+}
+
+void WPEWebPage::updateFramePumpState()
+{
+    const bool shouldPump = m_active && isVisible() && !m_throttlePainting;
+    if (shouldPump) {
+        if (!m_framePump.isActive()) {
+            m_framePump.start();
+        }
+    } else if (m_framePump.isActive()) {
+        m_framePump.stop();
     }
 }
 

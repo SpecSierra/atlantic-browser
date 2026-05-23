@@ -11,6 +11,7 @@
 
 #include <QHash>
 #include <QSharedPointer>
+#include <QTimer>
 #include <QVariant>
 #include <qqml.h>
 
@@ -259,6 +260,7 @@ private slots:
     void updateSecurityInfo();
 
 private:
+    void updateFramePumpState();
     void syncVirtualKeyboardToFocusedElement();
     double currentPageZoomLevel() const;
     void setPageZoomLevel(double zoomLevel);
@@ -304,6 +306,7 @@ private:
     double m_pinchStartZoomLevel = 1.0;
     double m_defaultZoomLevel = 1.0;
     bool m_defaultZoomLevelInitialized = false;
+    QTimer m_framePump;
     QHash<int, QTouchEvent::TouchPoint> m_trackedTouchPoints;
 };
 
