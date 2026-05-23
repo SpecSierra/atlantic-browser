@@ -581,6 +581,7 @@ Page {
             objectName: "atlanticFilePickerPage"
             nameFilters: webView.contentItem ? webView.contentItem.fileChooserNameFilters : []
             property bool _selectionCommitted: false
+            property int _selectionRetryCount: 0
 
             function submitSelection() {
                 if (_selectionCommitted || !webView.contentItem || !webView.contentItem.fileChooserActive) {
@@ -631,16 +632,28 @@ Page {
                 if (status === PageStatus.Inactive) {
                     _filePickerOpen = false
                     submitSelection()
-                    if (!_selectionCommitted)
+                    if (!_selectionCommitted) {
+                        _selectionRetryCount = 0
                         delayedCancel.restart()
+                    }
                 }
             }
 
             Timer {
                 id: delayedCancel
-                interval: 250
-                repeat: false
+                interval: 200
+                repeat: true
                 onTriggered: {
+                    _selectionRetryCount += 1
+                    submitSelection()
+                    if (_selectionCommitted) {
+                        delayedCancel.stop()
+                        return
+                    }
+                    if (_selectionRetryCount < 6) {
+                        return
+                    }
+                    delayedCancel.stop()
                     if (!_selectionCommitted && webView.contentItem && webView.contentItem.fileChooserActive) {
                         webView.contentItem.cancelFileChooser()
                     }
