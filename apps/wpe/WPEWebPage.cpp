@@ -15,6 +15,7 @@
 #include <QImage>
 #include <QInputMethod>
 #include <QInputMethodEvent>
+#include <QKeyEvent>
 #include <QLineF>
 #include <QPointer>
 #include <QQuickItemGrabResult>
@@ -678,93 +679,30 @@ void WPEWebPage::inputMethodEvent(QInputMethodEvent *event)
         return;
     }
 
-    const QString text = event->commitString();
-    if (text.isEmpty()) {
-        const int deleteCount = event->replacementLength();
-        if (deleteCount <= 0) {
-            event->accept();
-            return;
+    const QString committed = event->commitString();
+    if (!committed.isEmpty()) {
+        for (QChar ch : committed) {
+            const int key = (ch == QChar::fromLatin1('\n') || ch == QChar::fromLatin1('\r'))
+                ? Qt::Key_Return
+                : ch.unicode();
+            const QString text(ch);
+            QKeyEvent pressEvent(QEvent::KeyPress, key, Qt::NoModifier, text);
+            WPEQtView::keyPressEvent(&pressEvent);
+            QKeyEvent releaseEvent(QEvent::KeyRelease, key, Qt::NoModifier, text);
+            WPEQtView::keyReleaseEvent(&releaseEvent);
         }
-
-        WebKitWebView* wv = webView();
-        if (wv) {
-            const QString script = QStringLiteral(
-                "(function(count){"
-                "  var e=document.activeElement;"
-                "  if(!e) return;"
-                "  if(e.isContentEditable){"
-                "    for(var i=0;i<count;i++) document.execCommand('delete', false, null);"
-                "    return;"
-                "  }"
-                "  var tag=(e.tagName||'').toLowerCase();"
-                "  var isInput=(tag==='input'||tag==='textarea');"
-                "  if(!isInput||e.readOnly||e.disabled) return;"
-                "  var start=e.selectionStart, end=e.selectionEnd;"
-                "  var v=e.value||'';"
-                "  if(start===null||end===null) return;"
-                "  if(start===end) start=Math.max(0,start-count);"
-                "  e.value=v.slice(0,start)+v.slice(end);"
-                "  e.setSelectionRange(start,start);"
-                "  e.dispatchEvent(new Event('input',{bubbles:true}));"
-                "})(%1);").arg(deleteCount);
-
-            const QByteArray utf8Script = script.toUtf8();
-            webkit_web_view_evaluate_javascript(
-                wv,
-                utf8Script.constData(),
-                -1,
-                nullptr,
-                nullptr,
-                nullptr,
-                nullptr,
-                nullptr);
-        }
-
         event->accept();
         return;
     }
 
-    WebKitWebView* wv = webView();
-    if (wv) {
-        QString escaped = text;
-        escaped.replace(QStringLiteral("\\"), QStringLiteral("\\\\"));
-        escaped.replace(QStringLiteral("'"), QStringLiteral("\\'"));
-        escaped.replace(QStringLiteral("\n"), QStringLiteral("\\n"));
-        escaped.replace(QStringLiteral("\r"), QStringLiteral("\\r"));
-
-        const QString script = QStringLiteral(
-            "(function(t){"
-            "  var e=document.activeElement;"
-            "  if(!e) return;"
-            "  if(e.isContentEditable){"
-            "    document.execCommand('insertText', false, t);"
-            "    return;"
-            "  }"
-            "  var tag=(e.tagName||'').toLowerCase();"
-            "  var isInput=(tag==='input'||tag==='textarea');"
-            "  if(!isInput||e.readOnly||e.disabled) return;"
-            "  var start=e.selectionStart, end=e.selectionEnd;"
-            "  var v=e.value||'';"
-            "  if(start===null||end===null){"
-            "    e.value=v+t;"
-            "  }else{"
-            "    e.value=v.slice(0,start)+t+v.slice(end);"
-            "    var p=start+t.length;"
-            "    e.setSelectionRange(p,p);"
-            "  }"
-            "  e.dispatchEvent(new Event('input',{bubbles:true}));"
-            "})( '%1' );").arg(escaped);
-
-        const QByteArray utf8Script = script.toUtf8();
-        webkit_web_view_evaluate_javascript(
-            wv,
-            utf8Script.constData(),
-            -1,
-            nullptr,
-            nullptr,
-            nullptr,
-            nullptr,
-            nullptr);
+    const int deleteCount = event->replacementLength();
+    if (deleteCount > 0) {
+        for (int i = 0; i < deleteCount; ++i) {
+            QKeyEvent pressEvent(QEvent::KeyPress, Qt::Key_Backspace, Qt::NoModifier);
+            WPEQtView::keyPressEvent(&pressEvent);
+            QKeyEvent releaseEvent(QEvent::KeyRelease, Qt::Key_Backspace, Qt::NoModifier);
+            WPEQtView::keyReleaseEvent(&releaseEvent);
+        }
     }
 
     event->accept();
