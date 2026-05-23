@@ -18,6 +18,7 @@
 #include "WPEQtView.h"
 
 class QQuickItemGrabResult;
+class QInputMethodEvent;
 class WPEQtViewLoadRequest;
 
 // Lightweight security info exposed to QML (mirrors QMozSecurity interface)
@@ -251,6 +252,8 @@ signals:
     void afterRendering();
 
 protected:
+    QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
+    void inputMethodEvent(QInputMethodEvent *event) override;
     void itemChange(ItemChange change, const ItemChangeData &value) override;
     void keyPressEvent(QKeyEvent *event) override;
     void keyReleaseEvent(QKeyEvent *event) override;

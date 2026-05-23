@@ -14,6 +14,9 @@
 #include <QGuiApplication>
 #include <QImage>
 #include <QInputMethod>
+#include <QInputMethodEvent>
+#include <QJsonArray>
+#include <QJsonDocument>
 #include <QKeyEvent>
 #include <QLineF>
 #include <QPointer>
@@ -123,74 +126,154 @@ gboolean onDecidePolicy(WebKitWebView* webView, WebKitPolicyDecision* decision, 
     return TRUE;
 }
 
-int keyFromInputText(const QString& text, Qt::KeyboardModifiers& modifiers)
+bool dispatchCommittedTextToFocusedElement(WPEWebPage* page, const QString& text)
 {
-    if (text == QStringLiteral("\n") || text == QStringLiteral("\r"))
-        return Qt::Key_Return;
-    if (text == QStringLiteral("\t"))
-        return Qt::Key_Tab;
-    if (text.size() != 1)
-        return Qt::Key_unknown;
+    if (!page || text.isEmpty())
+        return false;
 
-    const QChar ch = text.at(0);
-    if (ch.isLetter()) {
-        const ushort code = ch.toUpper().unicode();
-        if (code >= ushort('A') && code <= ushort('Z')) {
-            if (ch.isUpper())
-                modifiers |= Qt::ShiftModifier;
-            return Qt::Key_A + (code - ushort('A'));
-        }
-    }
-
-    if (ch.isDigit())
-        return Qt::Key_0 + (ch.unicode() - ushort('0'));
-
-    switch (ch.unicode()) {
-    case ' ': return Qt::Key_Space;
-    case '.': return Qt::Key_Period;
-    case ',': return Qt::Key_Comma;
-    case '/': return Qt::Key_Slash;
-    case '\\': return Qt::Key_Backslash;
-    case ';': return Qt::Key_Semicolon;
-    case ':': modifiers |= Qt::ShiftModifier; return Qt::Key_Semicolon;
-    case '\'': return Qt::Key_Apostrophe;
-    case '"': modifiers |= Qt::ShiftModifier; return Qt::Key_Apostrophe;
-    case '-': return Qt::Key_Minus;
-    case '_': modifiers |= Qt::ShiftModifier; return Qt::Key_Minus;
-    case '=': return Qt::Key_Equal;
-    case '+': modifiers |= Qt::ShiftModifier; return Qt::Key_Equal;
-    case '[': return Qt::Key_BracketLeft;
-    case '{': modifiers |= Qt::ShiftModifier; return Qt::Key_BracketLeft;
-    case ']': return Qt::Key_BracketRight;
-    case '}': modifiers |= Qt::ShiftModifier; return Qt::Key_BracketRight;
-    case '`': return Qt::Key_QuoteLeft;
-    case '~': modifiers |= Qt::ShiftModifier; return Qt::Key_QuoteLeft;
-    case '!': modifiers |= Qt::ShiftModifier; return Qt::Key_1;
-    case '@': modifiers |= Qt::ShiftModifier; return Qt::Key_2;
-    case '#': modifiers |= Qt::ShiftModifier; return Qt::Key_3;
-    case '$': modifiers |= Qt::ShiftModifier; return Qt::Key_4;
-    case '%': modifiers |= Qt::ShiftModifier; return Qt::Key_5;
-    case '^': modifiers |= Qt::ShiftModifier; return Qt::Key_6;
-    case '&': modifiers |= Qt::ShiftModifier; return Qt::Key_7;
-    case '*': modifiers |= Qt::ShiftModifier; return Qt::Key_8;
-    case '(': modifiers |= Qt::ShiftModifier; return Qt::Key_9;
-    case ')': modifiers |= Qt::ShiftModifier; return Qt::Key_0;
-    case '?': modifiers |= Qt::ShiftModifier; return Qt::Key_Slash;
-    case '<': modifiers |= Qt::ShiftModifier; return Qt::Key_Comma;
-    case '>': modifiers |= Qt::ShiftModifier; return Qt::Key_Period;
-    default:
-        break;
-    }
-
-    return Qt::Key_unknown;
+    const QString args = QString::fromUtf8(QJsonDocument(QJsonArray{ text }).toJson(QJsonDocument::Compact));
+    const QString script = QStringLiteral(
+        "(function(args){"
+        "  var t=args[0];"
+        "  function isEditable(e){"
+        "    if(!e) return false;"
+        "    if(e.isContentEditable) return true;"
+        "    var tag=(e.tagName||'').toLowerCase();"
+        "    if(tag==='textarea') return !e.readOnly && !e.disabled;"
+        "    if(tag==='input'){"
+        "      var tp=(e.type||'text').toLowerCase();"
+        "      var blocked={button:1,submit:1,reset:1,checkbox:1,radio:1,file:1,image:1,range:1,color:1,hidden:1};"
+        "      return !blocked[tp] && !e.readOnly && !e.disabled;"
+        "    }"
+        "    return false;"
+        "  }"
+        "  function fireInput(el,data,inputType){"
+        "    try {"
+        "      if (typeof InputEvent === 'function')"
+        "        el.dispatchEvent(new InputEvent('input',{bubbles:true,data:data,inputType:inputType}));"
+        "      else"
+        "        el.dispatchEvent(new Event('input',{bubbles:true}));"
+        "    } catch(_e) {"
+        "      el.dispatchEvent(new Event('input',{bubbles:true}));"
+        "    }"
+        "  }"
+        "  var el=document.activeElement;"
+        "  if(!isEditable(el)) return false;"
+        "  if(el.isContentEditable){"
+        "    var sel=window.getSelection();"
+        "    if(!sel || !sel.rangeCount) return false;"
+        "    if(document.queryCommandSupported && document.queryCommandSupported('insertText')){"
+        "      document.execCommand('insertText', false, t);"
+        "      return true;"
+        "    }"
+        "    var r=sel.getRangeAt(0);"
+        "    r.deleteContents();"
+        "    var node=document.createTextNode(t);"
+        "    r.insertNode(node);"
+        "    r.setStartAfter(node);"
+        "    r.collapse(true);"
+        "    sel.removeAllRanges();"
+        "    sel.addRange(r);"
+        "    fireInput(el,t,'insertText');"
+        "    return true;"
+        "  }"
+        "  var start=el.selectionStart;"
+        "  var end=el.selectionEnd;"
+        "  if(typeof start==='number' && typeof end==='number' && typeof el.setRangeText==='function'){"
+        "    el.setRangeText(t,start,end,'end');"
+        "  } else if(typeof start==='number' && typeof end==='number'){"
+        "    var v=el.value||'';"
+        "    el.value=v.slice(0,start)+t+v.slice(end);"
+        "    var p=start+t.length;"
+        "    if(el.setSelectionRange) el.setSelectionRange(p,p);"
+        "  } else {"
+        "    el.value=(el.value||'')+t;"
+        "  }"
+        "  fireInput(el,t,'insertText');"
+        "  return true;"
+        "})(%1);")
+        .arg(args);
+    page->runJavaScript(script);
+    return true;
 }
 
-bool shouldNormalizeSoftKeyboardEvent(const QKeyEvent* event)
+bool dispatchBackspaceToFocusedElement(WPEWebPage* page)
 {
-    if (!event || event->text().isEmpty())
+    if (!page)
+        return false;
+
+    page->runJavaScript(QStringLiteral(
+        "(function(){"
+        "  function isEditable(e){"
+        "    if(!e) return false;"
+        "    if(e.isContentEditable) return true;"
+        "    var tag=(e.tagName||'').toLowerCase();"
+        "    if(tag==='textarea') return !e.readOnly && !e.disabled;"
+        "    if(tag==='input'){"
+        "      var tp=(e.type||'text').toLowerCase();"
+        "      var blocked={button:1,submit:1,reset:1,checkbox:1,radio:1,file:1,image:1,range:1,color:1,hidden:1};"
+        "      return !blocked[tp] && !e.readOnly && !e.disabled;"
+        "    }"
+        "    return false;"
+        "  }"
+        "  function fireInput(el){"
+        "    try {"
+        "      if (typeof InputEvent === 'function')"
+        "        el.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'deleteContentBackward'}));"
+        "      else"
+        "        el.dispatchEvent(new Event('input',{bubbles:true}));"
+        "    } catch(_e) {"
+        "      el.dispatchEvent(new Event('input',{bubbles:true}));"
+        "    }"
+        "  }"
+        "  var el=document.activeElement;"
+        "  if(!isEditable(el)) return false;"
+        "  if(el.isContentEditable){"
+        "    var sel=window.getSelection();"
+        "    if(!sel || !sel.rangeCount) return false;"
+        "    if(document.queryCommandSupported && document.queryCommandSupported('delete')){"
+        "      document.execCommand('delete', false, null);"
+        "      return true;"
+        "    }"
+        "    var r=sel.getRangeAt(0);"
+        "    if(r.collapsed){"
+        "      if(r.startOffset<=0) return true;"
+        "      r.setStart(r.startContainer,r.startOffset-1);"
+        "    }"
+        "    r.deleteContents();"
+        "    sel.removeAllRanges();"
+        "    sel.addRange(r);"
+        "    fireInput(el);"
+        "    return true;"
+        "  }"
+        "  var start=el.selectionStart;"
+        "  var end=el.selectionEnd;"
+        "  var v=el.value||'';"
+        "  if(typeof start==='number' && typeof end==='number'){"
+        "    if(start!==end){"
+        "      el.value=v.slice(0,start)+v.slice(end);"
+        "    } else if(start>0){"
+        "      el.value=v.slice(0,start-1)+v.slice(end);"
+        "      start-=1;"
+        "    }"
+        "    if(el.setSelectionRange) el.setSelectionRange(start,start);"
+        "  } else if(v.length){"
+        "    el.value=v.slice(0,-1);"
+        "  }"
+        "  fireInput(el);"
+        "  return true;"
+        "})();"));
+    return true;
+}
+
+bool shouldInterceptSoftKeyboardEvent(const QKeyEvent* event)
+{
+    if (!event)
         return false;
     QInputMethod* inputMethod = QGuiApplication::inputMethod();
-    return inputMethod && inputMethod->isVisible();
+    if (!inputMethod || !inputMethod->isVisible())
+        return false;
+    return !event->text().isEmpty() || event->key() == Qt::Key_Backspace;
 }
 
 } // namespace
@@ -742,38 +825,63 @@ void WPEWebPage::updateFramePumpState()
     }
 }
 
-void WPEWebPage::keyPressEvent(QKeyEvent *event)
+QVariant WPEWebPage::inputMethodQuery(Qt::InputMethodQuery query) const
 {
-    if (!shouldNormalizeSoftKeyboardEvent(event)) {
-        WPEQtView::keyPressEvent(event);
+    if (query == Qt::ImEnabled)
+        return true;
+    return QQuickItem::inputMethodQuery(query);
+}
+
+void WPEWebPage::inputMethodEvent(QInputMethodEvent *event)
+{
+    if (!event)
+        return;
+
+    bool handled = false;
+    const QString committed = event->commitString();
+    if (!committed.isEmpty()) {
+        handled = dispatchCommittedTextToFocusedElement(this, committed) || handled;
+    }
+
+    const int deleteCount = event->replacementLength();
+    for (int i = 0; i < deleteCount; ++i) {
+        handled = dispatchBackspaceToFocusedElement(this) || handled;
+    }
+
+    if (handled) {
+        event->accept();
         return;
     }
 
-    Qt::KeyboardModifiers modifiers = event->modifiers();
-    int key = keyFromInputText(event->text(), modifiers);
-    if (key == Qt::Key_unknown)
-        key = event->key();
+    QQuickItem::inputMethodEvent(event);
+}
 
-    QKeyEvent normalizedEvent(QEvent::KeyPress, key, modifiers, event->text(), event->isAutoRepeat(), event->count());
-    WPEQtView::keyPressEvent(&normalizedEvent);
-    event->accept();
+void WPEWebPage::keyPressEvent(QKeyEvent *event)
+{
+    if (!event) {
+        return;
+    }
+
+    if (shouldInterceptSoftKeyboardEvent(event)) {
+        event->accept();
+        return;
+    }
+
+    WPEQtView::keyPressEvent(event);
 }
 
 void WPEWebPage::keyReleaseEvent(QKeyEvent *event)
 {
-    if (!shouldNormalizeSoftKeyboardEvent(event)) {
-        WPEQtView::keyReleaseEvent(event);
+    if (!event) {
         return;
     }
 
-    Qt::KeyboardModifiers modifiers = event->modifiers();
-    int key = keyFromInputText(event->text(), modifiers);
-    if (key == Qt::Key_unknown)
-        key = event->key();
+    if (shouldInterceptSoftKeyboardEvent(event)) {
+        event->accept();
+        return;
+    }
 
-    QKeyEvent normalizedEvent(QEvent::KeyRelease, key, modifiers, event->text(), event->isAutoRepeat(), event->count());
-    WPEQtView::keyReleaseEvent(&normalizedEvent);
-    event->accept();
+    WPEQtView::keyReleaseEvent(event);
 }
 
 void WPEWebPage::mouseReleaseEvent(QMouseEvent *event)
