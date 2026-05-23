@@ -509,66 +509,10 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
         }
     }
 
-    var longPressTimer = null;
-    var longPressPoint = null;
-    var longPressStartPoint = null;
-    var longPressMoveThreshold = 12;
-
-    function cancelLongPress() {
-        if (longPressTimer) {
-            clearTimeout(longPressTimer);
-            longPressTimer = null;
-        }
-        longPressPoint = null;
-        longPressStartPoint = null;
-    }
-
-    function beginLongPress(x, y) {
-        cancelLongPress();
-        longPressPoint = { x: x, y: y };
-        longPressStartPoint = { x: x, y: y };
-        longPressTimer = setTimeout(function() {
-            longPressTimer = null;
-            if (longPressPoint && selectWordAtPoint(longPressPoint.x, longPressPoint.y))
-                postSelection();
-            longPressPoint = null;
-        }, 350);
-    }
-
-    function touchPointFromEvent(e) {
-        if (e.touches && e.touches.length)
-            return e.touches[0];
-        if (e.changedTouches && e.changedTouches.length)
-            return e.changedTouches[0];
-        return null;
-    }
-
     document.addEventListener('selectionchange', postSelection, true);
     document.addEventListener('mouseup', postSelection, true);
     document.addEventListener('touchend', postSelection, true);
     document.addEventListener('keyup', postSelection, true);
-    document.addEventListener('contextmenu', function(e) {
-        if (selectWordAtPoint(e.clientX, e.clientY)) {
-            e.preventDefault();
-            postSelection();
-        }
-    }, true);
-    document.addEventListener('touchstart', function(e) {
-        var p = touchPointFromEvent(e);
-        if (p)
-            beginLongPress(p.clientX, p.clientY);
-    }, true);
-    document.addEventListener('touchmove', function(e) {
-        var p = touchPointFromEvent(e);
-        if (!p || !longPressStartPoint)
-            return;
-        var dx = p.clientX - longPressStartPoint.x;
-        var dy = p.clientY - longPressStartPoint.y;
-        if ((dx * dx) + (dy * dy) > longPressMoveThreshold * longPressMoveThreshold)
-            cancelLongPress();
-    }, true);
-    document.addEventListener('touchcancel', cancelLongPress, true);
-    document.addEventListener('touchend', cancelLongPress, true);
 })();
 )JS";
 
