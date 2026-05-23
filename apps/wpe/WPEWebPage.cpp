@@ -1472,6 +1472,16 @@ bool WPEWebPage::handleFileChooserRequest(WebKitFileChooserRequest *request)
     m_fileChooserRequest = WEBKIT_FILE_CHOOSER_REQUEST(g_object_ref(request));
 
     const bool selectMultiple = webkit_file_chooser_request_get_select_multiple(request);
+    const gchar* const* mimeTypes = webkit_file_chooser_request_get_mime_types(request);
+    QStringList requestedMimeTypes;
+    if (mimeTypes) {
+        for (guint i = 0; mimeTypes[i]; ++i) {
+            requestedMimeTypes.append(QString::fromUtf8(mimeTypes[i]));
+        }
+    }
+    fprintf(stderr, "[WPE-FILE] open request=%p selectMultiple=%d mimeTypes=%s\n",
+            static_cast<void*>(request), selectMultiple ? 1 : 0,
+            requestedMimeTypes.join(QStringLiteral(",")).toUtf8().constData());
     if (m_fileChooserSelectMultiple != selectMultiple) {
         m_fileChooserSelectMultiple = selectMultiple;
         emit fileChooserSelectMultipleChanged();
@@ -1493,6 +1503,8 @@ bool WPEWebPage::handleFileChooserRequest(WebKitFileChooserRequest *request)
 
 void WPEWebPage::clearFileChooserRequest(bool cancelRequest)
 {
+    fprintf(stderr, "[WPE-FILE] clear request=%p cancel=%d active=%d\n",
+            static_cast<void*>(m_fileChooserRequest), cancelRequest ? 1 : 0, m_fileChooserActive ? 1 : 0);
     if (m_fileChooserRequest) {
         if (cancelRequest) {
             webkit_file_chooser_request_cancel(m_fileChooserRequest);
@@ -2077,8 +2089,12 @@ void WPEWebPage::closeSelectMenu()
 void WPEWebPage::chooseFiles(const QStringList &filePaths)
 {
     if (!m_fileChooserRequest) {
+        fprintf(stderr, "[WPE-FILE] chooseFiles ignored (no active request)\n");
         return;
     }
+
+    fprintf(stderr, "[WPE-FILE] chooseFiles incoming=%s\n",
+            filePaths.join(QStringLiteral(" | ")).toUtf8().constData());
 
     QStringList normalizedPaths;
     QStringList existingPaths;
@@ -2100,6 +2116,8 @@ void WPEWebPage::chooseFiles(const QStringList &filePaths)
             if (fileInfo.exists() && fileInfo.isFile()) {
                 existingPaths.append(fileInfo.absoluteFilePath());
             }
+            fprintf(stderr, "[WPE-FILE] candidate localPath=%s exists=%d isFile=%d\n",
+                    localPath.toUtf8().constData(), fileInfo.exists() ? 1 : 0, fileInfo.isFile() ? 1 : 0);
         }
     }
 
@@ -2111,9 +2129,12 @@ void WPEWebPage::chooseFiles(const QStringList &filePaths)
     }
 
     if (chosenPaths.isEmpty()) {
+        fprintf(stderr, "[WPE-FILE] no usable paths; cancelling chooser\n");
         clearFileChooserRequest(true);
         return;
     }
+
+    fprintf(stderr, "[WPE-FILE] chosen=%s\n", chosenPaths.join(QStringLiteral(" | ")).toUtf8().constData());
 
     QVector<QByteArray> utf8Paths;
     utf8Paths.reserve(chosenPaths.size());
@@ -2126,10 +2147,21 @@ void WPEWebPage::chooseFiles(const QStringList &filePaths)
     selectedFiles.append(nullptr);
 
     webkit_file_chooser_request_select_files(m_fileChooserRequest, selectedFiles.constData());
+    if (const gchar* const* selected = webkit_file_chooser_request_get_selected_files(m_fileChooserRequest)) {
+        QStringList selectedDebug;
+        for (guint i = 0; selected[i]; ++i) {
+            selectedDebug.append(QString::fromUtf8(selected[i]));
+        }
+        fprintf(stderr, "[WPE-FILE] selected-files now=%s\n",
+                selectedDebug.join(QStringLiteral(" | ")).toUtf8().constData());
+    } else {
+        fprintf(stderr, "[WPE-FILE] selected-files now=<none>\n");
+    }
     clearFileChooserRequest(false);
 }
 
 void WPEWebPage::cancelFileChooser()
 {
+    fprintf(stderr, "[WPE-FILE] cancelFileChooser requested from QML\n");
     clearFileChooserRequest(true);
 }

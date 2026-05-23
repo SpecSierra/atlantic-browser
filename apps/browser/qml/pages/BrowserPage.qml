@@ -588,17 +588,25 @@ Page {
                 }
 
                 var candidates = []
-                if (selectedContentProperties) {
-                    if (selectedContentProperties.filePath) {
-                        candidates.push(selectedContentProperties.filePath)
+                function addCandidate(value) {
+                    var normalized = String(value)
+                    if (!normalized || normalized === "undefined" || normalized === "null") {
+                        return
                     }
-                    if (selectedContentProperties.url
-                            && candidates.indexOf(selectedContentProperties.url) === -1) {
-                        candidates.push(selectedContentProperties.url)
+                    if (candidates.indexOf(normalized) === -1) {
+                        candidates.push(normalized)
                     }
                 }
-                if (selectedContent && candidates.indexOf(selectedContent) === -1) {
-                    candidates.push(selectedContent)
+                if (selectedContentProperties) {
+                    if (selectedContentProperties.filePath) {
+                        addCandidate(selectedContentProperties.filePath)
+                    }
+                    if (selectedContentProperties.url) {
+                        addCandidate(selectedContentProperties.url)
+                    }
+                }
+                if (selectedContent) {
+                    addCandidate(selectedContent)
                 }
                 if (candidates.length === 0) {
                     return
@@ -619,7 +627,7 @@ Page {
             }
 
             onStatusChanged: {
-                if (status === PageStatus.Deactivating) {
+                if (status === PageStatus.Inactive) {
                     _filePickerOpen = false
                     if (!_selectionCommitted && webView.contentItem && webView.contentItem.fileChooserActive) {
                         webView.contentItem.cancelFileChooser()
