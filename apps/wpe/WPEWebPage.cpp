@@ -611,7 +611,7 @@ void WPEWebPage::itemChange(ItemChange change, const ItemChangeData &value)
 
 void WPEWebPage::updateFramePumpState()
 {
-    const bool shouldPump = m_active && isVisible() && !m_throttlePainting;
+    const bool shouldPump = m_active && isVisible();
     if (shouldPump) {
         if (!m_framePump.isActive()) {
             m_framePump.start();
