@@ -217,6 +217,82 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
         return rect;
     }
 
+    function pointRange(x, y) {
+        if (document.caretRangeFromPoint)
+            return document.caretRangeFromPoint(x, y);
+        if (document.caretPositionFromPoint) {
+            var p = document.caretPositionFromPoint(x, y);
+            if (p) {
+                var r = document.createRange();
+                r.setStart(p.offsetNode, p.offset);
+                r.collapse(true);
+                return r;
+            }
+        }
+        return null;
+    }
+
+    function selectWordAtPoint(x, y) {
+        var sel = window.getSelection ? window.getSelection() : null;
+        if (!sel)
+            return false;
+
+        var range = pointRange(x, y);
+        if (!range)
+            return false;
+
+        var node = range.startContainer;
+        var offset = range.startOffset;
+        if (!node)
+            return false;
+
+        if (node.nodeType !== Node.TEXT_NODE) {
+            if (node.childNodes && node.childNodes.length) {
+                if (offset >= node.childNodes.length)
+                    offset = node.childNodes.length - 1;
+                if (offset < 0)
+                    offset = 0;
+                var child = node.childNodes[offset];
+                if (child && child.nodeType === Node.TEXT_NODE) {
+                    node = child;
+                    offset = 0;
+                }
+            }
+        }
+
+        if (node.nodeType !== Node.TEXT_NODE)
+            return false;
+
+        var text = node.data || '';
+        if (!text.length)
+            return false;
+
+        var start = offset;
+        var end = offset;
+        while (start > 0 && /\S/.test(text.charAt(start - 1)))
+            start--;
+        while (end < text.length && /\S/.test(text.charAt(end)))
+            end++;
+
+        if (start === end) {
+            if (end < text.length)
+                end++;
+            else if (start > 0)
+                start--;
+        }
+
+        try {
+            var wordRange = document.createRange();
+            wordRange.setStart(node, start);
+            wordRange.setEnd(node, end);
+            sel.removeAllRanges();
+            sel.addRange(wordRange);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
     function selectionPayload() {
         var sel = window.getSelection ? window.getSelection() : null;
         if (!sel || !sel.rangeCount || sel.isCollapsed)
@@ -254,10 +330,56 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
         }
     }
 
+    var longPressTimer = null;
+    var longPressPoint = null;
+
+    function cancelLongPress() {
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
+        longPressPoint = null;
+    }
+
+    function beginLongPress(x, y) {
+        cancelLongPress();
+        longPressPoint = { x: x, y: y };
+        longPressTimer = setTimeout(function() {
+            longPressTimer = null;
+            if (selectWordAtPoint(longPressPoint.x, longPressPoint.y))
+                postSelection();
+            longPressPoint = null;
+        }, 500);
+    }
+
+    function touchPointFromEvent(e) {
+        if (e.touches && e.touches.length)
+            return e.touches[0];
+        if (e.changedTouches && e.changedTouches.length)
+            return e.changedTouches[0];
+        return null;
+    }
+
     document.addEventListener('selectionchange', postSelection, true);
     document.addEventListener('mouseup', postSelection, true);
     document.addEventListener('touchend', postSelection, true);
     document.addEventListener('keyup', postSelection, true);
+    document.addEventListener('contextmenu', function(e) {
+        if (selectWordAtPoint(e.clientX, e.clientY)) {
+            e.preventDefault();
+            postSelection();
+        }
+    }, true);
+    document.addEventListener('touchstart', function(e) {
+        var p = touchPointFromEvent(e);
+        if (p)
+            beginLongPress(p.clientX, p.clientY);
+    }, true);
+    document.addEventListener('touchmove', function() {
+        cancelLongPress();
+    }, true);
+    document.addEventListener('touchcancel', cancelLongPress, true);
+    document.addEventListener('touchend', cancelLongPress, true);
 })();
 )JS";
 
