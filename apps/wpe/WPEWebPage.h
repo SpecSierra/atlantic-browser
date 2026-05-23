@@ -202,6 +202,8 @@ public:
     Q_INVOKABLE void moveSelectionStart(qreal cssX, qreal cssY);
     Q_INVOKABLE void moveSelectionEnd(qreal cssX, qreal cssY);
     Q_INVOKABLE void copyToClipboard();
+    Q_INVOKABLE void handleJsSelectionClear();
+    Q_INVOKABLE void handleJsSelectionUpdate(const QString &text, qreal startX, qreal startY, qreal endX, qreal endY);
 
     // Find-in-page
     Q_INVOKABLE void findText(const QString &text, bool backwards = false);

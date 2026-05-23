@@ -141,12 +141,6 @@ WebContainer {
 
     onForwardButtonPressed: webView.goForward()
 
-    onTouched: {
-        if (webView.contentItem && webView.contentItem.textSelectionActive) {
-            clearSelection()
-        }
-    }
-
     // WPE selection drag handles (at container level so contentItem is available)
     Item {
         id: selHandles
@@ -163,7 +157,7 @@ WebContainer {
             height: Theme.iconSizeMedium / 2
             radius: width / 2
             color: Theme.highlightColor
-            visible: selHandles.visible && selHandles.ci && selHandles.ci.selectionStartX > 0
+            visible: selHandles.visible && selHandles.ci && selHandles.ci.selectionStartX >= 0
             x: selHandles.ci ? selHandles.ci.selectionStartX * selHandles.dsf - width : 0
             y: selHandles.ci ? selHandles.ci.selectionStartY * selHandles.dsf : 0
 
@@ -188,7 +182,7 @@ WebContainer {
             height: Theme.iconSizeMedium / 2
             radius: width / 2
             color: Theme.highlightColor
-            visible: selHandles.visible && selHandles.ci && selHandles.ci.selectionEndX > 0
+            visible: selHandles.visible && selHandles.ci && selHandles.ci.selectionEndX >= 0
             x: selHandles.ci ? selHandles.ci.selectionEndX * selHandles.dsf : 0
             y: selHandles.ci ? selHandles.ci.selectionEndY * selHandles.dsf : 0
 

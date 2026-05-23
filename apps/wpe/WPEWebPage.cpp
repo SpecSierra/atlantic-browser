@@ -130,26 +130,21 @@ gboolean onDecidePolicy(WebKitWebView* webView, WebKitPolicyDecision* decision, 
 
 static void onSelectBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
 {
-    fprintf(stderr, "[WPE-SELECT] onSelectBridgeMessage fired, value=%p userData=%p\n", value, userData);
     WPEWebPage* page = static_cast<WPEWebPage*>(userData);
     if (!page || !value)
         return;
 
     gchar* json = jsc_value_to_json(value, 0);
-    fprintf(stderr, "[WPE-SELECT] JSON payload: %s\n", json ? json : "(null)");
     if (!json)
         return;
 
-    // Parse {"options":["opt1","opt2",...],"selectedIndex":N}
     QByteArray jsonBytes(json);
     g_free(json);
 
     QJsonParseError parseError;
     QJsonDocument doc = QJsonDocument::fromJson(jsonBytes, &parseError);
-    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
-        fprintf(stderr, "[WPE-SELECT] JSON parse error: %s\n", parseError.errorString().toUtf8().constData());
+    if (parseError.error != QJsonParseError::NoError || !doc.isObject())
         return;
-    }
 
     QJsonObject obj = doc.object();
     QJsonArray optArray = obj.value(QStringLiteral("options")).toArray();
@@ -160,9 +155,119 @@ static void onSelectBridgeMessage(WebKitUserContentManager*, JSCValue* value, gp
     for (const QJsonValue &v : optArray)
         items.append(v.toString());
 
-    fprintf(stderr, "[WPE-SELECT] Activating select menu (%d items, selectedIndex=%d)\n", items.size(), selectedIndex);
-    // Set properties directly — QML binds to contentItem.selectMenuActive etc.
     page->openSelectMenu(items, selectedIndex);
+}
+
+static void onSelectionBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
+{
+    WPEWebPage* page = static_cast<WPEWebPage*>(userData);
+    if (!page || !value)
+        return;
+
+    gchar* json = jsc_value_to_json(value, 0);
+    if (!json)
+        return;
+
+    QByteArray jsonBytes(json);
+    g_free(json);
+
+    QJsonDocument doc = QJsonDocument::fromJson(jsonBytes);
+    if (!doc.isObject())
+        return;
+
+    const QJsonObject obj = doc.object();
+    const QString type = obj.value(QStringLiteral("type")).toString();
+
+    if (type == QLatin1String("clear")) {
+        page->handleJsSelectionClear();
+    } else if (type == QLatin1String("select")) {
+        page->handleJsSelectionUpdate(
+            obj.value(QStringLiteral("text")).toString(),
+            obj.value(QStringLiteral("sx")).toDouble(),
+            obj.value(QStringLiteral("sy")).toDouble(),
+            obj.value(QStringLiteral("ex")).toDouble(),
+            obj.value(QStringLiteral("ey")).toDouble());
+    }
+}
+
+static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page)
+{
+    g_signal_connect(ucm, "script-message-received::selectionBridge",
+                     G_CALLBACK(onSelectionBridgeMessage), page);
+    webkit_user_content_manager_register_script_message_handler(ucm, "selectionBridge", nullptr);
+
+    static const gchar* selectionBridgeJs = R"JS(
+(function() {
+    if (window.__wpeSelectionBridgeInstalled) return;
+    window.__wpeSelectionBridgeInstalled = true;
+
+    function caretRect(node, offset) {
+        if (!node)
+            return null;
+        var range = document.createRange();
+        try {
+            range.setStart(node, offset);
+            range.setEnd(node, offset);
+        } catch (e) {
+            return null;
+        }
+        var rect = range.getBoundingClientRect();
+        if (!rect)
+            return null;
+        return rect;
+    }
+
+    function selectionPayload() {
+        var sel = window.getSelection ? window.getSelection() : null;
+        if (!sel || !sel.rangeCount || sel.isCollapsed)
+            return { type: 'clear' };
+
+        var text = sel.toString();
+        if (!text)
+            return { type: 'clear' };
+
+        var anchor = caretRect(sel.anchorNode, sel.anchorOffset);
+        var focus = caretRect(sel.focusNode, sel.focusOffset);
+        var range = sel.getRangeAt(0);
+        var bounds = range.getBoundingClientRect();
+
+        var sx = anchor ? anchor.left : (bounds ? bounds.left : 0);
+        var sy = anchor ? anchor.top : (bounds ? bounds.top : 0);
+        var ex = focus ? focus.left : (bounds ? bounds.right : 0);
+        var ey = focus ? focus.top : (bounds ? bounds.bottom : 0);
+
+        return {
+            type: 'select',
+            text: text,
+            sx: sx,
+            sy: sy,
+            ex: ex,
+            ey: ey
+        };
+    }
+
+    function postSelection() {
+        try {
+            window.webkit.messageHandlers.selectionBridge.postMessage(selectionPayload());
+        } catch (ex) {
+            console.error('[WPE-SEL-JS] postMessage error: ' + ex);
+        }
+    }
+
+    document.addEventListener('selectionchange', postSelection, true);
+    document.addEventListener('mouseup', postSelection, true);
+    document.addEventListener('touchend', postSelection, true);
+    document.addEventListener('keyup', postSelection, true);
+})();
+)JS";
+
+    WebKitUserScript* script = webkit_user_script_new(
+        selectionBridgeJs,
+        WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+        nullptr, nullptr);
+    webkit_user_content_manager_add_script(ucm, script);
+    webkit_user_script_unref(script);
 }
 
 bool dispatchTextToFocusedElement(WPEWebPage* page, const QString& text, int replaceBeforeCaret)
@@ -498,6 +603,8 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             webkit_user_content_manager_add_script(ucm, script);
             webkit_user_script_unref(script);
 
+            onSelectionBridgeInstall(ucm, this);
+
             WebKitNetworkSession* session = webkit_web_view_get_network_session(wv);
             if (!session) {
                 session = webkit_network_session_get_default();
@@ -819,6 +926,7 @@ void WPEWebPage::addMessageListener(const QString &)
 
 void WPEWebPage::clearSelection()
 {
+    handleJsSelectionClear();
     runJavaScript(QStringLiteral("window.getSelection().removeAllRanges();"));
 }
 
@@ -831,6 +939,56 @@ void WPEWebPage::copyToClipboard()
 {
     if (!m_selectedText.isEmpty())
         QGuiApplication::clipboard()->setText(m_selectedText);
+}
+
+void WPEWebPage::handleJsSelectionClear()
+{
+    const bool wasActive = m_textSelectionActive;
+    const bool hadSelection = !m_selectedText.isEmpty() || m_selectionStartX > 0.0 || m_selectionEndX > 0.0;
+
+    m_selectedText.clear();
+    m_textSelectionActive = false;
+    m_selectionStartX = m_selectionStartY = m_selectionEndX = m_selectionEndY = 0.0;
+
+    if (hadSelection)
+        Q_EMIT selectionTextChanged();
+    if (wasActive)
+        Q_EMIT textSelectionActiveChanged();
+    if (hadSelection || wasActive)
+        Q_EMIT selectionHandlesUpdated();
+}
+
+void WPEWebPage::handleJsSelectionUpdate(const QString &text, qreal startX, qreal startY, qreal endX, qreal endY)
+{
+    const bool wasActive = m_textSelectionActive;
+    const bool textChanged = (m_selectedText != text);
+    const bool activeNow = !text.isEmpty();
+    const bool handlesChanged = !qFuzzyCompare(m_selectionStartX, startX)
+        || !qFuzzyCompare(m_selectionStartY, startY)
+        || !qFuzzyCompare(m_selectionEndX, endX)
+        || !qFuzzyCompare(m_selectionEndY, endY);
+
+    m_selectedText = text;
+    m_textSelectionActive = activeNow;
+    m_selectionStartX = startX;
+    m_selectionStartY = startY;
+    m_selectionEndX = endX;
+    m_selectionEndY = endY;
+
+    if (textChanged)
+        Q_EMIT selectionTextChanged();
+    if (wasActive != activeNow)
+        Q_EMIT textSelectionActiveChanged();
+    if (textChanged || handlesChanged || wasActive != activeNow)
+        Q_EMIT selectionHandlesUpdated();
+
+    QVariantMap data;
+    data.insert(QStringLiteral("text"), text);
+    data.insert(QStringLiteral("sx"), startX);
+    data.insert(QStringLiteral("sy"), startY);
+    data.insert(QStringLiteral("ex"), endX);
+    data.insert(QStringLiteral("ey"), endY);
+    emit recvAsyncMessage(QStringLiteral("Content:SelectionRange"), data);
 }
 
 void WPEWebPage::moveSelectionStart(qreal cssX, qreal cssY)
@@ -906,7 +1064,7 @@ void WPEWebPage::onLoadingChanged(WPEQtViewLoadRequest *loadRequest)
         static_cast<WPESecurityInfo*>(m_security)->reset();
         emit securityChanged();
         // Reset visual pinch zoom so new page starts at 1:1
-        if (!qFuzzyCompare(m_visualScale, 1.0f)) {
+        if (!qFuzzyCompare(m_visualScale, 1.0)) {
             m_visualScale = 1.0;
         }
         setChrome(true);
