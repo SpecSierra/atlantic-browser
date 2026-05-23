@@ -595,10 +595,6 @@ Shared.Background {
                         pageStack.push(Qt.resolvedUrl("CertificateDetailsPage.qml"), { "security": sec })
                     }
                 }
-                onSavePageAsPDF: {
-                    // WPE: PDF save not supported via Gecko embedui:download
-                    console.log("[WPE] PDF save not available")
-                }
             }
 
             Browser.HistoryList {
