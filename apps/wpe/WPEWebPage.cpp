@@ -18,6 +18,7 @@
 #include <QInputMethodEvent>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QKeyEvent>
 #include <QLineF>
 #include <QPointer>
@@ -127,13 +128,35 @@ gboolean onDecidePolicy(WebKitWebView* webView, WebKitPolicyDecision* decision, 
     return TRUE;
 }
 
-gboolean onShowOptionMenu(WebKitWebView*, WebKitOptionMenu* menu, WebKitRectangle*, gpointer userData)
+static void onSelectBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
 {
     WPEWebPage* page = static_cast<WPEWebPage*>(userData);
-    if (!page || !menu)
-        return FALSE;
-    page->handleOptionMenu(menu);
-    return TRUE;
+    if (!page || !value)
+        return;
+
+    gchar* json = jsc_value_to_json(value, 0);
+    if (!json)
+        return;
+
+    // Parse {"options":["opt1","opt2",...],"selectedIndex":N}
+    QByteArray jsonBytes(json);
+    g_free(json);
+
+    QJsonParseError parseError;
+    QJsonDocument doc = QJsonDocument::fromJson(jsonBytes, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !doc.isObject())
+        return;
+
+    QJsonObject obj = doc.object();
+    QJsonArray optArray = obj.value(QStringLiteral("options")).toArray();
+    int selectedIndex = obj.value(QStringLiteral("selectedIndex")).toInt(0);
+
+    QStringList items;
+    items.reserve(optArray.size());
+    for (const QJsonValue &v : optArray)
+        items.append(v.toString());
+
+    Q_EMIT page->showSelectMenu(items, selectedIndex);
 }
 
 bool dispatchTextToFocusedElement(WPEWebPage* page, const QString& text, int replaceBeforeCaret)
@@ -413,7 +436,46 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     connect(this, &WPEQtView::webViewCreated, this, [this]() {
         if (WebKitWebView* wv = webView()) {
             g_signal_connect(wv, "decide-policy", G_CALLBACK(onDecidePolicy), nullptr);
-            g_signal_connect(wv, "show-option-menu", G_CALLBACK(onShowOptionMenu), this);
+
+            // --- HTML <select> via JS bridge ---
+            WebKitUserContentManager* ucm = webkit_web_view_get_user_content_manager(wv);
+            // Connect BEFORE registering (per documentation, to avoid race conditions)
+            g_signal_connect(ucm, "script-message-received::selectBridge",
+                             G_CALLBACK(onSelectBridgeMessage), this);
+            webkit_user_content_manager_register_script_message_handler(ucm, "selectBridge", nullptr);
+
+            // Inject JS: intercept <select> mousedown and forward options to C++
+            static const gchar* selectBridgeJs = R"JS(
+(function() {
+    if (window.__wpeSelectBridgeInstalled) return;
+    window.__wpeSelectBridgeInstalled = true;
+    document.addEventListener('mousedown', function(e) {
+        var el = e.target;
+        while (el && el.tagName && el.tagName.toLowerCase() !== 'select') {
+            el = el.parentElement;
+        }
+        if (!el || !el.tagName || el.tagName.toLowerCase() !== 'select') return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        var opts = [];
+        for (var i = 0; i < el.options.length; i++) {
+            opts.push(el.options[i].text);
+        }
+        window.__wpePendingSelect = el;
+        window.webkit.messageHandlers.selectBridge.postMessage({
+            options: opts,
+            selectedIndex: el.selectedIndex
+        });
+    }, true);
+})();
+)JS";
+            WebKitUserScript* script = webkit_user_script_new(
+                selectBridgeJs,
+                WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+                WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+                nullptr, nullptr);
+            webkit_user_content_manager_add_script(ucm, script);
+            webkit_user_script_unref(script);
 
             WebKitNetworkSession* session = webkit_web_view_get_network_session(wv);
             if (!session) {
@@ -1361,47 +1423,22 @@ void WPEWebPage::savePageAsPDF(const QString &filePath)
 
 // --- HTML <select> dropdown ---
 
-void WPEWebPage::handleOptionMenu(WebKitOptionMenu* menu)
-{
-    if (m_optionMenu) {
-        webkit_option_menu_close(m_optionMenu);
-        g_object_unref(m_optionMenu);
-        m_optionMenu = nullptr;
-    }
-
-    m_optionMenu = static_cast<WebKitOptionMenu*>(g_object_ref(menu));
-
-    guint n = webkit_option_menu_get_n_items(menu);
-    QStringList items;
-    int selectedIndex = 0;
-    items.reserve(static_cast<int>(n));
-    for (guint i = 0; i < n; ++i) {
-        WebKitOptionMenuItem* item = webkit_option_menu_get_item(menu, i);
-        const gchar* label = item ? webkit_option_menu_item_get_label(item) : "";
-        items.append(QString::fromUtf8(label ? label : ""));
-        if (item && webkit_option_menu_item_is_selected(item))
-            selectedIndex = static_cast<int>(i);
-    }
-
-    Q_EMIT showSelectMenu(items, selectedIndex);
-}
-
 void WPEWebPage::selectMenuOption(int index)
 {
-    if (!m_optionMenu)
-        return;
-    webkit_option_menu_select_item(m_optionMenu, static_cast<guint>(index));
-    webkit_option_menu_activate_item(m_optionMenu, static_cast<guint>(index));
-    webkit_option_menu_close(m_optionMenu);
-    g_object_unref(m_optionMenu);
-    m_optionMenu = nullptr;
+    const QString script = QStringLiteral(
+        "(function(){"
+        "  var el=window.__wpePendingSelect;"
+        "  if(!el) return;"
+        "  el.selectedIndex=%1;"
+        "  el.dispatchEvent(new Event('change',{bubbles:true}));"
+        "  el.dispatchEvent(new Event('input',{bubbles:true}));"
+        "  window.__wpePendingSelect=null;"
+        "})();"
+    ).arg(index);
+    runJavaScript(script);
 }
 
 void WPEWebPage::closeSelectMenu()
 {
-    if (!m_optionMenu)
-        return;
-    webkit_option_menu_close(m_optionMenu);
-    g_object_unref(m_optionMenu);
-    m_optionMenu = nullptr;
+    runJavaScript(QStringLiteral("window.__wpePendingSelect=null;"));
 }

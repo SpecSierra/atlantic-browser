@@ -16,8 +16,6 @@
 #include <QVariant>
 #include <qqml.h>
 
-typedef struct _WebKitOptionMenu WebKitOptionMenu;
-
 #include "WPEQtView.h"
 
 class QQuickItemGrabResult;
@@ -210,7 +208,6 @@ public:
     // HTML <select> dropdown
     Q_INVOKABLE void selectMenuOption(int index);
     Q_INVOKABLE void closeSelectMenu();
-    void handleOptionMenu(WebKitOptionMenu* menu);
 
     bool textSelectionActive() const;
     QObject* textSelectionController();
@@ -331,7 +328,6 @@ private:
     QString m_lastPreeditText;
     qint64 m_lastSoftKeyboardTextTimeMs = 0;
     qint64 m_lastSoftBackspaceTimeMs = 0;
-    WebKitOptionMenu *m_optionMenu = nullptr;
 };
 
 QML_DECLARE_TYPE(WPEWebPage)
