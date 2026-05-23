@@ -1769,7 +1769,24 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
 
     if (m_pinchZoomActive) {
         if (activePoints.size() < 2 || event->type() == QEvent::TouchEnd || event->type() == QEvent::TouchCancel) {
-            // CSS transform persists — no WebKit zoom commit, no layout shift
+            // Commit pinch scale back into WebKit zoom and clear temporary CSS transform so
+            // scrolling/hit-testing remain in native coordinates after the gesture ends.
+            WebKitWebView *wv = webView();
+            if (wv && !qFuzzyCompare(m_visualScale, 1.0)) {
+                const double committedZoom = std::clamp(
+                    currentPageZoomLevel() * static_cast<double>(m_visualScale),
+                    minimumPinchZoomLevel(),
+                    maximumPinchZoomLevel());
+                setPageZoomLevel(committedZoom);
+
+                webkit_web_view_evaluate_javascript(
+                    wv,
+                    "document.documentElement.style.transform='';"
+                    "document.documentElement.style.transformOrigin='';",
+                    -1, nullptr, nullptr, nullptr, nullptr, nullptr);
+                m_visualScale = 1.0;
+            }
+
             resetPinchZoomState(m_pinchZoomActive, m_pinchStartDistance, m_pinchStartZoomLevel);
             if (activePoints.isEmpty()) {
                 m_trackedTouchPoints.clear();
