@@ -130,11 +130,13 @@ gboolean onDecidePolicy(WebKitWebView* webView, WebKitPolicyDecision* decision, 
 
 static void onSelectBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
 {
+    fprintf(stderr, "[WPE-SELECT] onSelectBridgeMessage fired, value=%p userData=%p\n", value, userData);
     WPEWebPage* page = static_cast<WPEWebPage*>(userData);
     if (!page || !value)
         return;
 
     gchar* json = jsc_value_to_json(value, 0);
+    fprintf(stderr, "[WPE-SELECT] JSON payload: %s\n", json ? json : "(null)");
     if (!json)
         return;
 
@@ -144,8 +146,10 @@ static void onSelectBridgeMessage(WebKitUserContentManager*, JSCValue* value, gp
 
     QJsonParseError parseError;
     QJsonDocument doc = QJsonDocument::fromJson(jsonBytes, &parseError);
-    if (parseError.error != QJsonParseError::NoError || !doc.isObject())
+    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
+        fprintf(stderr, "[WPE-SELECT] JSON parse error: %s\n", parseError.errorString().toUtf8().constData());
         return;
+    }
 
     QJsonObject obj = doc.object();
     QJsonArray optArray = obj.value(QStringLiteral("options")).toArray();
@@ -156,6 +160,7 @@ static void onSelectBridgeMessage(WebKitUserContentManager*, JSCValue* value, gp
     for (const QJsonValue &v : optArray)
         items.append(v.toString());
 
+    fprintf(stderr, "[WPE-SELECT] Emitting showSelectMenu with %d items, selectedIndex=%d\n", items.size(), selectedIndex);
     Q_EMIT page->showSelectMenu(items, selectedIndex);
 }
 
@@ -442,19 +447,24 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             // Connect BEFORE registering (per documentation, to avoid race conditions)
             g_signal_connect(ucm, "script-message-received::selectBridge",
                              G_CALLBACK(onSelectBridgeMessage), this);
-            webkit_user_content_manager_register_script_message_handler(ucm, "selectBridge", nullptr);
+            gboolean regOk = webkit_user_content_manager_register_script_message_handler(ucm, "selectBridge", nullptr);
+            fprintf(stderr, "[WPE-SELECT] register_script_message_handler returned %d, ucm=%p\n", (int)regOk, ucm);
 
-            // Inject JS: intercept <select> mousedown and forward options to C++
+            // Inject JS: intercept <select> taps via multiple event types
             static const gchar* selectBridgeJs = R"JS(
 (function() {
     if (window.__wpeSelectBridgeInstalled) return;
     window.__wpeSelectBridgeInstalled = true;
-    document.addEventListener('mousedown', function(e) {
+    console.error('[WPE-SELECT-JS] selectBridge JS installed, handlers=' +
+        (window.webkit && window.webkit.messageHandlers ? 'YES' : 'NO'));
+
+    function handleSelectActivation(e) {
         var el = e.target;
         while (el && el.tagName && el.tagName.toLowerCase() !== 'select') {
             el = el.parentElement;
         }
         if (!el || !el.tagName || el.tagName.toLowerCase() !== 'select') return;
+        console.error('[WPE-SELECT-JS] intercepted ' + e.type + ' on <select>, options=' + el.options.length);
         e.preventDefault();
         e.stopImmediatePropagation();
         var opts = [];
@@ -462,11 +472,21 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             opts.push(el.options[i].text);
         }
         window.__wpePendingSelect = el;
-        window.webkit.messageHandlers.selectBridge.postMessage({
-            options: opts,
-            selectedIndex: el.selectedIndex
-        });
-    }, true);
+        try {
+            window.webkit.messageHandlers.selectBridge.postMessage({
+                options: opts,
+                selectedIndex: el.selectedIndex
+            });
+            console.error('[WPE-SELECT-JS] postMessage sent');
+        } catch(ex) {
+            console.error('[WPE-SELECT-JS] postMessage error: ' + ex);
+        }
+    }
+    document.addEventListener('mousedown',   handleSelectActivation, true);
+    document.addEventListener('touchstart',  handleSelectActivation, true);
+    document.addEventListener('pointerdown', handleSelectActivation, true);
+    document.addEventListener('click',       handleSelectActivation, true);
+    console.error('[WPE-SELECT-JS] event listeners registered');
 })();
 )JS";
             WebKitUserScript* script = webkit_user_script_new(

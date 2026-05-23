@@ -502,7 +502,7 @@ WebContainer {
                             onClicked: {
                                 selectPage._chosen = true
                                 webPage.selectMenuOption(index)
-                                pageStack.pop()
+                                window.pageStack.pop()
                             }
                         }
                         ScrollDecorator {}
@@ -511,7 +511,7 @@ WebContainer {
             }
 
             onShowSelectMenu: {
-                var page = pageStack.push(selectPageComponent)
+                var page = window.pageStack.push(selectPageComponent)
                 page._items = items
                 page._initialIndex = selectedIndex
             }
