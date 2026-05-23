@@ -252,6 +252,8 @@ signals:
 
 protected:
     void itemChange(ItemChange change, const ItemChangeData &value) override;
+    void keyPressEvent(QKeyEvent *event) override;
+    void keyReleaseEvent(QKeyEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
     void touchEvent(QTouchEvent *event) override;
 

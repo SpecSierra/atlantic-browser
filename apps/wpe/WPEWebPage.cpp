@@ -14,6 +14,7 @@
 #include <QGuiApplication>
 #include <QImage>
 #include <QInputMethod>
+#include <QKeyEvent>
 #include <QLineF>
 #include <QPointer>
 #include <QQuickItemGrabResult>
@@ -120,6 +121,76 @@ gboolean onDecidePolicy(WebKitWebView* webView, WebKitPolicyDecision* decision, 
     }
     webkit_policy_decision_ignore(decision);
     return TRUE;
+}
+
+int keyFromInputText(const QString& text, Qt::KeyboardModifiers& modifiers)
+{
+    if (text == QStringLiteral("\n") || text == QStringLiteral("\r"))
+        return Qt::Key_Return;
+    if (text == QStringLiteral("\t"))
+        return Qt::Key_Tab;
+    if (text.size() != 1)
+        return Qt::Key_unknown;
+
+    const QChar ch = text.at(0);
+    if (ch.isLetter()) {
+        const ushort code = ch.toUpper().unicode();
+        if (code >= ushort('A') && code <= ushort('Z')) {
+            if (ch.isUpper())
+                modifiers |= Qt::ShiftModifier;
+            return Qt::Key_A + (code - ushort('A'));
+        }
+    }
+
+    if (ch.isDigit())
+        return Qt::Key_0 + (ch.unicode() - ushort('0'));
+
+    switch (ch.unicode()) {
+    case ' ': return Qt::Key_Space;
+    case '.': return Qt::Key_Period;
+    case ',': return Qt::Key_Comma;
+    case '/': return Qt::Key_Slash;
+    case '\\': return Qt::Key_Backslash;
+    case ';': return Qt::Key_Semicolon;
+    case ':': modifiers |= Qt::ShiftModifier; return Qt::Key_Semicolon;
+    case '\'': return Qt::Key_Apostrophe;
+    case '"': modifiers |= Qt::ShiftModifier; return Qt::Key_Apostrophe;
+    case '-': return Qt::Key_Minus;
+    case '_': modifiers |= Qt::ShiftModifier; return Qt::Key_Minus;
+    case '=': return Qt::Key_Equal;
+    case '+': modifiers |= Qt::ShiftModifier; return Qt::Key_Equal;
+    case '[': return Qt::Key_BracketLeft;
+    case '{': modifiers |= Qt::ShiftModifier; return Qt::Key_BracketLeft;
+    case ']': return Qt::Key_BracketRight;
+    case '}': modifiers |= Qt::ShiftModifier; return Qt::Key_BracketRight;
+    case '`': return Qt::Key_QuoteLeft;
+    case '~': modifiers |= Qt::ShiftModifier; return Qt::Key_QuoteLeft;
+    case '!': modifiers |= Qt::ShiftModifier; return Qt::Key_1;
+    case '@': modifiers |= Qt::ShiftModifier; return Qt::Key_2;
+    case '#': modifiers |= Qt::ShiftModifier; return Qt::Key_3;
+    case '$': modifiers |= Qt::ShiftModifier; return Qt::Key_4;
+    case '%': modifiers |= Qt::ShiftModifier; return Qt::Key_5;
+    case '^': modifiers |= Qt::ShiftModifier; return Qt::Key_6;
+    case '&': modifiers |= Qt::ShiftModifier; return Qt::Key_7;
+    case '*': modifiers |= Qt::ShiftModifier; return Qt::Key_8;
+    case '(': modifiers |= Qt::ShiftModifier; return Qt::Key_9;
+    case ')': modifiers |= Qt::ShiftModifier; return Qt::Key_0;
+    case '?': modifiers |= Qt::ShiftModifier; return Qt::Key_Slash;
+    case '<': modifiers |= Qt::ShiftModifier; return Qt::Key_Comma;
+    case '>': modifiers |= Qt::ShiftModifier; return Qt::Key_Period;
+    default:
+        break;
+    }
+
+    return Qt::Key_unknown;
+}
+
+bool shouldNormalizeSoftKeyboardEvent(const QKeyEvent* event)
+{
+    if (!event || event->text().isEmpty())
+        return false;
+    QInputMethod* inputMethod = QGuiApplication::inputMethod();
+    return inputMethod && inputMethod->isVisible();
 }
 
 } // namespace
@@ -669,6 +740,40 @@ void WPEWebPage::updateFramePumpState()
     } else if (m_framePump.isActive()) {
         m_framePump.stop();
     }
+}
+
+void WPEWebPage::keyPressEvent(QKeyEvent *event)
+{
+    if (!shouldNormalizeSoftKeyboardEvent(event)) {
+        WPEQtView::keyPressEvent(event);
+        return;
+    }
+
+    Qt::KeyboardModifiers modifiers = event->modifiers();
+    int key = keyFromInputText(event->text(), modifiers);
+    if (key == Qt::Key_unknown)
+        key = event->key();
+
+    QKeyEvent normalizedEvent(QEvent::KeyPress, key, modifiers, event->text(), event->isAutoRepeat(), event->count());
+    WPEQtView::keyPressEvent(&normalizedEvent);
+    event->accept();
+}
+
+void WPEWebPage::keyReleaseEvent(QKeyEvent *event)
+{
+    if (!shouldNormalizeSoftKeyboardEvent(event)) {
+        WPEQtView::keyReleaseEvent(event);
+        return;
+    }
+
+    Qt::KeyboardModifiers modifiers = event->modifiers();
+    int key = keyFromInputText(event->text(), modifiers);
+    if (key == Qt::Key_unknown)
+        key = event->key();
+
+    QKeyEvent normalizedEvent(QEvent::KeyRelease, key, modifiers, event->text(), event->isAutoRepeat(), event->count());
+    WPEQtView::keyReleaseEvent(&normalizedEvent);
+    event->accept();
 }
 
 void WPEWebPage::mouseReleaseEvent(QMouseEvent *event)
