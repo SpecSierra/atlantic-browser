@@ -219,6 +219,25 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     connect(this, &WPEQtView::webViewCreated, this, [this]() {
         if (WebKitWebView* wv = webView()) {
             g_signal_connect(wv, "decide-policy", G_CALLBACK(onDecidePolicy), nullptr);
+
+            WebKitNetworkSession* session = webkit_web_view_get_network_session(wv);
+            if (!session) {
+                session = webkit_network_session_get_default();
+            }
+            WebKitCookieManager* cookieManager = session ? webkit_network_session_get_cookie_manager(session) : nullptr;
+            if (cookieManager) {
+                const QString dataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+                const QString cookieDir = dataDir.isEmpty()
+                    ? QStringLiteral("/home/defaultuser/.local/share/org.sailfishos/browser")
+                    : dataDir;
+                QDir().mkpath(cookieDir);
+                const QString cookieFile = cookieDir + QStringLiteral("/cookies.sqlite");
+                webkit_cookie_manager_set_persistent_storage(
+                    cookieManager,
+                    cookieFile.toUtf8().constData(),
+                    WEBKIT_COOKIE_PERSISTENT_STORAGE_SQLITE);
+                webkit_cookie_manager_set_accept_policy(cookieManager, WEBKIT_COOKIE_POLICY_ACCEPT_ALWAYS);
+            }
         }
     });
 
