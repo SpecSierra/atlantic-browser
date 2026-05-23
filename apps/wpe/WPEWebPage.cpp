@@ -513,6 +513,11 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
     document.addEventListener('mouseup', postSelection, true);
     document.addEventListener('touchend', postSelection, true);
     document.addEventListener('keyup', postSelection, true);
+    document.addEventListener('contextmenu', function(e) {
+        if (selectWordAtPoint(e.clientX, e.clientY)) {
+            postSelection();
+        }
+    }, true);
 })();
 )JS";
 
