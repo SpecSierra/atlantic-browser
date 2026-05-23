@@ -534,6 +534,8 @@ WPEWebPage *WPEWebContainer::getOrCreatePage(int tabId)
     // Reparent after all connections are set up — this fires windowChanged which triggers
     // WPEQtView::configureWindow() → createWebView().
     page->setParentItem(this);
+    // Apply the current mode UA once the view exists so first navigation uses it.
+    page->setDesktopMode(page->desktopMode());
     return page;
 }
 

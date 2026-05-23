@@ -281,8 +281,7 @@ bool WPEWebPage::desktopMode() const { return m_desktopMode; }
 
 void WPEWebPage::setDesktopMode(bool desktop)
 {
-    if (m_desktopMode == desktop)
-        return;
+    const bool changed = (m_desktopMode != desktop);
     m_desktopMode = desktop;
     static const char* mobileUA =
         "Mozilla/5.0 (Linux; Android 13; Pixel 7) "
@@ -293,9 +292,11 @@ void WPEWebPage::setDesktopMode(bool desktop)
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/131.0.0.0 Safari/537.36";
     setUserAgent(QString::fromUtf8(desktop ? desktopUA : mobileUA));
-    emit desktopModeChanged();
-    // Reload so the server sends the correct page variant
-    setUrl(url());
+    if (changed) {
+        emit desktopModeChanged();
+        // Reload so the server sends the correct page variant.
+        setUrl(url());
+    }
 }
 
 void WPEWebPage::applyInitialDeviceScale(qreal scale)
