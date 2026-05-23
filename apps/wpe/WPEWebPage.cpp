@@ -681,15 +681,41 @@ void WPEWebPage::inputMethodEvent(QInputMethodEvent *event)
 
     const QString committed = event->commitString();
     if (!committed.isEmpty()) {
-        for (QChar ch : committed) {
-            const int key = (ch == QChar::fromLatin1('\n') || ch == QChar::fromLatin1('\r'))
-                ? Qt::Key_Return
-                : ch.unicode();
-            const QString text(ch);
-            QKeyEvent pressEvent(QEvent::KeyPress, key, Qt::NoModifier, text);
+        auto emitKey = [this](int key, const QString &text, Qt::KeyboardModifiers modifiers = Qt::NoModifier) {
+            QKeyEvent pressEvent(QEvent::KeyPress, key, modifiers, text);
             WPEQtView::keyPressEvent(&pressEvent);
-            QKeyEvent releaseEvent(QEvent::KeyRelease, key, Qt::NoModifier, text);
+            QKeyEvent releaseEvent(QEvent::KeyRelease, key, modifiers, text);
             WPEQtView::keyReleaseEvent(&releaseEvent);
+        };
+
+        for (QChar ch : committed) {
+            const QString text(ch);
+            if (ch == QChar::fromLatin1('\n') || ch == QChar::fromLatin1('\r')) {
+                emitKey(Qt::Key_Return, text);
+            } else if (ch.isLetter()) {
+                const QChar upper = ch.toUpper();
+                const int key = Qt::Key_A + (upper.unicode() - QChar::fromLatin1('A').unicode());
+                emitKey(key, text, ch.isUpper() ? Qt::ShiftModifier : Qt::NoModifier);
+            } else if (ch.isDigit()) {
+                const int key = Qt::Key_0 + (ch.unicode() - QChar::fromLatin1('0').unicode());
+                emitKey(key, text);
+            } else if (ch == QChar::fromLatin1(' ')) {
+                emitKey(Qt::Key_Space, text);
+            } else {
+                switch (ch.unicode()) {
+                case '.': emitKey(Qt::Key_Period, text); break;
+                case ',': emitKey(Qt::Key_Comma, text); break;
+                case '-': emitKey(Qt::Key_Minus, text); break;
+                case '_': emitKey(Qt::Key_Minus, text, Qt::ShiftModifier); break;
+                case '/': emitKey(Qt::Key_Slash, text); break;
+                case ':': emitKey(Qt::Key_Semicolon, text, Qt::ShiftModifier); break;
+                case ';': emitKey(Qt::Key_Semicolon, text); break;
+                default:
+                    // Fallback for unmapped symbols.
+                    emitKey(Qt::Key_unknown, text);
+                    break;
+                }
+            }
         }
         event->accept();
         return;
