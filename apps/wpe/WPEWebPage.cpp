@@ -442,6 +442,83 @@ bool dispatchBackspaceToFocusedElement(WPEWebPage* page)
     return true;
 }
 
+bool startSelectionAtPoint(WPEWebPage* page, qreal x, qreal y)
+{
+    if (!page)
+        return false;
+
+    const QString script = QStringLiteral(
+        "(function(x,y){"
+        "  function pointRange(){"
+        "    if (document.caretRangeFromPoint)"
+        "      return document.caretRangeFromPoint(x,y);"
+        "    if (document.caretPositionFromPoint) {"
+        "      var p = document.caretPositionFromPoint(x,y);"
+        "      if (p) {"
+        "        var r = document.createRange();"
+        "        r.setStart(p.offsetNode, p.offset);"
+        "        r.collapse(true);"
+        "        return r;"
+        "      }"
+        "    }"
+        "    return null;"
+        "  }"
+        "  function isWordChar(ch) { return /\\S/.test(ch); }"
+        "  var sel = window.getSelection && window.getSelection();"
+        "  if (!sel) return false;"
+        "  var range = pointRange();"
+        "  if (!range) return false;"
+        "  var node = range.startContainer;"
+        "  var offset = range.startOffset;"
+        "  if (!node) return false;"
+        "  if (node.nodeType !== Node.TEXT_NODE) {"
+        "    if (node.childNodes && node.childNodes.length) {"
+        "      if (offset >= node.childNodes.length) offset = node.childNodes.length - 1;"
+        "      if (offset < 0) offset = 0;"
+        "      var child = node.childNodes[offset];"
+        "      if (child && child.nodeType === Node.TEXT_NODE) {"
+        "        node = child;"
+        "        offset = 0;"
+        "      }"
+        "    }"
+        "  }"
+        "  if (node.nodeType !== Node.TEXT_NODE) return false;"
+        "  var text = node.data || '';"
+        "  if (!text.length) return false;"
+        "  var start = offset;"
+        "  var end = offset;"
+        "  while (start > 0 && isWordChar(text.charAt(start - 1))) start--;"
+        "  while (end < text.length && isWordChar(text.charAt(end))) end++;"
+        "  if (start === end) {"
+        "    if (end < text.length) end++;"
+        "    else if (start > 0) start--;"
+        "  }"
+        "  try {"
+        "    var wordRange = document.createRange();"
+        "    wordRange.setStart(node, start);"
+        "    wordRange.setEnd(node, end);"
+        "    sel.removeAllRanges();"
+        "    sel.addRange(wordRange);"
+        "    return true;"
+        "  } catch (e) {"
+        "    return false;"
+        "  }"
+        "})(%1,%2);")
+        .arg(x, 0, 'f', 2)
+        .arg(y, 0, 'f', 2);
+
+    page->runJavaScript(script);
+    if (QQuickWindow* win = page->window())
+        win->update();
+    page->update();
+    QTimer::singleShot(16, page, [page]() {
+        if (QQuickWindow* win = page->window())
+            win->update();
+        page->update();
+    });
+    return true;
+}
+
 bool shouldInterceptSoftKeyboardEvent(const QKeyEvent* event)
 {
     if (!event)
@@ -914,9 +991,14 @@ void WPEWebPage::resumeView()
     update();
 }
 
-void WPEWebPage::sendAsyncMessage(const QString &, const QVariant &)
+void WPEWebPage::sendAsyncMessage(const QString &name, const QVariant &data)
 {
-    // stub: WPE handles messaging internally
+    if (name == QStringLiteral("Browser:SelectionStart")) {
+        const QVariantMap map = data.toMap();
+        const qreal x = map.value(QStringLiteral("xPos")).toReal();
+        const qreal y = map.value(QStringLiteral("yPos")).toReal();
+        startSelectionAtPoint(this, x, y);
+    }
 }
 
 void WPEWebPage::addMessageListener(const QString &)
