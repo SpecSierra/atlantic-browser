@@ -3,7 +3,7 @@ Type=Application
 Name=Web Browser
 X-MeeGo-Logical-Id=sailfish-browser-ap-name
 X-MeeGo-Translation-Catalog=sailfish-browser
-Icon=/usr/share/atlantic-browser/data/icon-launcher-browser.png
+Icon=atlantic-browser
 Exec=/usr/bin/invoker --type=browser,silica-qt5 -A -- /usr/bin/sailfish-browser %U
 Comment=Sailfish UI application
 MimeType=text/html;application/xhtml+xml;application/xml;text/xml;x-scheme-handler/http;x-scheme-handler/https;

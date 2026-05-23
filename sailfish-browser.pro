@@ -23,7 +23,10 @@ data.files = data/prefs.js \
              data/icon-launcher-browser.png
 data.path = /usr/share/atlantic-browser/data
 
-INSTALLS += desktop dbus_service chrome_scripts oneshots data
+icon.files = data/icon-launcher-browser.png
+icon.path = /usr/share/icons/hicolor/86x86/apps
+
+INSTALLS += desktop dbus_service chrome_scripts oneshots data icon
 
 usersession.path = /usr/lib/systemd/user/user-session.target.d
 usersession.files += 50-sailfish-browser.conf
