@@ -11,9 +11,12 @@
 
 #include <QHash>
 #include <QSharedPointer>
+#include <QStringList>
 #include <QTimer>
 #include <QVariant>
 #include <qqml.h>
+
+typedef struct _WebKitOptionMenu WebKitOptionMenu;
 
 #include "WPEQtView.h"
 
@@ -204,6 +207,11 @@ public:
     // Save page as PDF
     Q_INVOKABLE void savePageAsPDF(const QString &filePath);
 
+    // HTML <select> dropdown
+    Q_INVOKABLE void selectMenuOption(int index);
+    Q_INVOKABLE void closeSelectMenu();
+    void handleOptionMenu(WebKitOptionMenu* menu);
+
     bool textSelectionActive() const;
     QObject* textSelectionController();
     QString selectedText() const;
@@ -250,6 +258,8 @@ signals:
     void fileGrabWritten(const QString &fileName);
     void thumbnailResult(const QString &data);
     void afterRendering();
+
+    void showSelectMenu(const QStringList &items, int selectedIndex);
 
 protected:
     QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
@@ -321,6 +331,7 @@ private:
     QString m_lastPreeditText;
     qint64 m_lastSoftKeyboardTextTimeMs = 0;
     qint64 m_lastSoftBackspaceTimeMs = 0;
+    WebKitOptionMenu *m_optionMenu = nullptr;
 };
 
 QML_DECLARE_TYPE(WPEWebPage)

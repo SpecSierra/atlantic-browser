@@ -127,6 +127,15 @@ gboolean onDecidePolicy(WebKitWebView* webView, WebKitPolicyDecision* decision, 
     return TRUE;
 }
 
+gboolean onShowOptionMenu(WebKitWebView*, WebKitOptionMenu* menu, WebKitRectangle*, gpointer userData)
+{
+    WPEWebPage* page = static_cast<WPEWebPage*>(userData);
+    if (!page || !menu)
+        return FALSE;
+    page->handleOptionMenu(menu);
+    return TRUE;
+}
+
 bool dispatchTextToFocusedElement(WPEWebPage* page, const QString& text, int replaceBeforeCaret)
 {
     if (!page)
@@ -404,6 +413,7 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     connect(this, &WPEQtView::webViewCreated, this, [this]() {
         if (WebKitWebView* wv = webView()) {
             g_signal_connect(wv, "decide-policy", G_CALLBACK(onDecidePolicy), nullptr);
+            g_signal_connect(wv, "show-option-menu", G_CALLBACK(onShowOptionMenu), this);
 
             WebKitNetworkSession* session = webkit_web_view_get_network_session(wv);
             if (!session) {
@@ -1347,4 +1357,51 @@ void WPEWebPage::savePageAsPDF(const QString &filePath)
     // For a full PDF, a server-side renderer would be needed.
     Q_UNUSED(filePath);
     emit pdfSaved(filePath, false);
+}
+
+// --- HTML <select> dropdown ---
+
+void WPEWebPage::handleOptionMenu(WebKitOptionMenu* menu)
+{
+    if (m_optionMenu) {
+        webkit_option_menu_close(m_optionMenu);
+        g_object_unref(m_optionMenu);
+        m_optionMenu = nullptr;
+    }
+
+    m_optionMenu = static_cast<WebKitOptionMenu*>(g_object_ref(menu));
+
+    guint n = webkit_option_menu_get_n_items(menu);
+    QStringList items;
+    int selectedIndex = 0;
+    items.reserve(static_cast<int>(n));
+    for (guint i = 0; i < n; ++i) {
+        WebKitOptionMenuItem* item = webkit_option_menu_get_item(menu, i);
+        const gchar* label = item ? webkit_option_menu_item_get_label(item) : "";
+        items.append(QString::fromUtf8(label ? label : ""));
+        if (item && webkit_option_menu_item_is_selected(item))
+            selectedIndex = static_cast<int>(i);
+    }
+
+    Q_EMIT showSelectMenu(items, selectedIndex);
+}
+
+void WPEWebPage::selectMenuOption(int index)
+{
+    if (!m_optionMenu)
+        return;
+    webkit_option_menu_select_item(m_optionMenu, static_cast<guint>(index));
+    webkit_option_menu_activate_item(m_optionMenu, static_cast<guint>(index));
+    webkit_option_menu_close(m_optionMenu);
+    g_object_unref(m_optionMenu);
+    m_optionMenu = nullptr;
+}
+
+void WPEWebPage::closeSelectMenu()
+{
+    if (!m_optionMenu)
+        return;
+    webkit_option_menu_close(m_optionMenu);
+    g_object_unref(m_optionMenu);
+    m_optionMenu = nullptr;
 }
