@@ -576,10 +576,10 @@ Page {
     Component {
         id: filePickerPage
 
-        FilePickerPage {
+        ContentPickerPage {
             id: filePicker
             objectName: "atlanticFilePickerPage"
-            nameFilters: webView.contentItem ? webView.contentItem.fileChooserNameFilters : []
+            title: qsTr("Select file")
             property bool _selectionCommitted: false
             property int _selectionRetryCount: 0
 
