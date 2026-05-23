@@ -456,64 +456,12 @@ WebContainer {
             }
 
             Component.onCompleted: {
+                console.log("[QML-STARTUP] WebPage component created, tabId=" + tabId)
                 addMessageListener("Content:SelectionRange")
                 addMessageListener("Content:SelectionCopied")
                 addMessageListener("Content:SelectionSwap")
 
                 PermissionManager.instance()
-            }
-
-            // HTML <select> dropdown picker
-            Component {
-                id: selectPageComponent
-                Page {
-                    id: selectPage
-                    property var _items: []
-                    property int _initialIndex: -1
-                    property bool _chosen: false
-
-                    onStatusChanged: {
-                        if (status === PageStatus.Inactive && !_chosen) {
-                            webPage.closeSelectMenu()
-                        }
-                    }
-
-                    SilicaListView {
-                        anchors.fill: parent
-                        header: PageHeader { title: "" }
-                        model: selectPage._items
-                        delegate: ListItem {
-                            id: delegateItem
-                            contentHeight: Theme.itemSizeSmall
-                            Label {
-                                text: modelData
-                                anchors {
-                                    verticalCenter: parent.verticalCenter
-                                    left: parent.left
-                                    leftMargin: Theme.horizontalPageMargin
-                                    right: parent.right
-                                    rightMargin: Theme.horizontalPageMargin
-                                }
-                                truncationMode: TruncationMode.Fade
-                                color: index === selectPage._initialIndex
-                                       ? Theme.highlightColor
-                                       : Theme.primaryColor
-                            }
-                            onClicked: {
-                                selectPage._chosen = true
-                                webPage.selectMenuOption(index)
-                                window.pageStack.pop()
-                            }
-                        }
-                        ScrollDecorator {}
-                    }
-                }
-            }
-
-            onShowSelectMenu: {
-                var page = window.pageStack.push(selectPageComponent)
-                page._items = items
-                page._initialIndex = selectedIndex
             }
         }
     }

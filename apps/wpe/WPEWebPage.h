@@ -124,6 +124,11 @@ class WPEWebPage : public WPEQtView
     // Find-in-page
     Q_PROPERTY(bool findInPageHasResult READ findInPageHasResult NOTIFY findInPageHasResultChanged FINAL)
 
+    // HTML <select> dropdown state — property bindings for reliable QML observation
+    Q_PROPERTY(bool selectMenuActive READ selectMenuActive NOTIFY selectMenuActiveChanged FINAL)
+    Q_PROPERTY(QStringList selectMenuOptions READ selectMenuOptions NOTIFY selectMenuOptionsChanged FINAL)
+    Q_PROPERTY(int selectMenuSelectedIndex READ selectMenuSelectedIndex NOTIFY selectMenuSelectedIndexChanged FINAL)
+
 public:
     explicit WPEWebPage(QQuickItem *parent = nullptr);
     ~WPEWebPage() override;
@@ -208,6 +213,10 @@ public:
     // HTML <select> dropdown
     Q_INVOKABLE void selectMenuOption(int index);
     Q_INVOKABLE void closeSelectMenu();
+    void openSelectMenu(const QStringList &options, int selectedIndex);
+    bool selectMenuActive() const { return m_selectMenuActive; }
+    QStringList selectMenuOptions() const { return m_selectMenuOptions; }
+    int selectMenuSelectedIndex() const { return m_selectMenuSelectedIdx; }
 
     bool textSelectionActive() const;
     QObject* textSelectionController();
@@ -257,6 +266,9 @@ signals:
     void afterRendering();
 
     void showSelectMenu(const QStringList &items, int selectedIndex);
+    void selectMenuActiveChanged();
+    void selectMenuOptionsChanged();
+    void selectMenuSelectedIndexChanged();
 
 protected:
     QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
@@ -328,6 +340,10 @@ private:
     QString m_lastPreeditText;
     qint64 m_lastSoftKeyboardTextTimeMs = 0;
     qint64 m_lastSoftBackspaceTimeMs = 0;
+
+    bool m_selectMenuActive = false;
+    QStringList m_selectMenuOptions;
+    int m_selectMenuSelectedIdx = 0;
 };
 
 QML_DECLARE_TYPE(WPEWebPage)

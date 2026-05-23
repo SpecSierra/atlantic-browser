@@ -475,6 +475,83 @@ Page {
         }
     }
 
+    // HTML <select> dropdown overlay — driven by contentItem property bindings
+    Item {
+        id: selectOverlay
+        visible: webView.contentItem !== null && webView.contentItem.selectMenuActive
+        z: 1000
+        anchors.fill: webView
+
+        function dismiss() {
+            if (webView.contentItem) webView.contentItem.closeSelectMenu()
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            color: Theme.highlightBackgroundColor
+            opacity: 0.0
+            MouseArea { anchors.fill: parent; onClicked: selectOverlay.dismiss() }
+        }
+
+        Rectangle {
+            id: selectPanel
+            anchors {
+                left: parent.left
+                right: parent.right
+                bottom: parent.bottom
+            }
+            height: Math.min(parent.height * 0.6, selectListView.contentHeight + Theme.itemSizeMedium)
+            color: Theme.colorScheme === Theme.LightOnDark ? Qt.darker(Theme.overlayBackgroundColor, 1.2) : Theme.overlayBackgroundColor
+            radius: Theme.paddingMedium
+
+            Column {
+                anchors.fill: parent
+
+                Item {
+                    width: parent.width
+                    height: Theme.itemSizeMedium
+                    Label {
+                        anchors.centerIn: parent
+                        font.pixelSize: Theme.fontSizeLarge
+                        color: Theme.highlightColor
+                        text: qsTr("Select option")
+                    }
+                }
+
+                SilicaListView {
+                    id: selectListView
+                    width: parent.width
+                    height: selectPanel.height - Theme.itemSizeMedium
+                    clip: true
+                    model: webView.contentItem ? webView.contentItem.selectMenuOptions : []
+                    currentIndex: webView.contentItem ? webView.contentItem.selectMenuSelectedIndex : -1
+
+                    delegate: ListItem {
+                        contentHeight: Theme.itemSizeSmall
+                        highlighted: webView.contentItem && index === webView.contentItem.selectMenuSelectedIndex
+                        Label {
+                            text: modelData
+                            color: (webView.contentItem && index === webView.contentItem.selectMenuSelectedIndex)
+                                   ? Theme.highlightColor : Theme.primaryColor
+                            anchors {
+                                verticalCenter: parent.verticalCenter
+                                left: parent.left
+                                leftMargin: Theme.horizontalPageMargin
+                                right: parent.right
+                                rightMargin: Theme.horizontalPageMargin
+                            }
+                            truncationMode: TruncationMode.Fade
+                        }
+                        onClicked: {
+                            if (webView.contentItem) webView.contentItem.selectMenuOption(index)
+                        }
+                    }
+                    ScrollDecorator {}
+                }
+            }
+        }
+    }
+
     Component.onCompleted: {
         window.setBrowserCover(webView.tabModel)
         if (Qt.application.arguments.indexOf("-debugMode") > 0) {

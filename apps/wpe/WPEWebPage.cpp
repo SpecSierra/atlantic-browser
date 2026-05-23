@@ -160,8 +160,9 @@ static void onSelectBridgeMessage(WebKitUserContentManager*, JSCValue* value, gp
     for (const QJsonValue &v : optArray)
         items.append(v.toString());
 
-    fprintf(stderr, "[WPE-SELECT] Emitting showSelectMenu with %d items, selectedIndex=%d\n", items.size(), selectedIndex);
-    Q_EMIT page->showSelectMenu(items, selectedIndex);
+    fprintf(stderr, "[WPE-SELECT] Activating select menu (%d items, selectedIndex=%d)\n", items.size(), selectedIndex);
+    // Set properties directly — QML binds to contentItem.selectMenuActive etc.
+    page->openSelectMenu(items, selectedIndex);
 }
 
 bool dispatchTextToFocusedElement(WPEWebPage* page, const QString& text, int replaceBeforeCaret)
@@ -1443,6 +1444,16 @@ void WPEWebPage::savePageAsPDF(const QString &filePath)
 
 // --- HTML <select> dropdown ---
 
+void WPEWebPage::openSelectMenu(const QStringList &options, int selectedIndex)
+{
+    m_selectMenuOptions = options;
+    m_selectMenuSelectedIdx = selectedIndex;
+    m_selectMenuActive = true;
+    emit selectMenuOptionsChanged();
+    emit selectMenuSelectedIndexChanged();
+    emit selectMenuActiveChanged();
+}
+
 void WPEWebPage::selectMenuOption(int index)
 {
     const QString script = QStringLiteral(
@@ -1456,9 +1467,17 @@ void WPEWebPage::selectMenuOption(int index)
         "})();"
     ).arg(index);
     runJavaScript(script);
+    if (m_selectMenuActive) {
+        m_selectMenuActive = false;
+        emit selectMenuActiveChanged();
+    }
 }
 
 void WPEWebPage::closeSelectMenu()
 {
     runJavaScript(QStringLiteral("window.__wpePendingSelect=null;"));
+    if (m_selectMenuActive) {
+        m_selectMenuActive = false;
+        emit selectMenuActiveChanged();
+    }
 }
