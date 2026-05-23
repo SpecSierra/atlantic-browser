@@ -1,5 +1,5 @@
 {
-    "icon": "icon-launcher-browser",
+    "icon": "/usr/share/atlantic-browser/data/icon-launcher-browser.png",
     "name": "Browser",
     "script": "/usr/libexec/jolla-vault/units/vault-browser",
     "translation": "vault-ap-browser"

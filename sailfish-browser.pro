@@ -19,7 +19,8 @@ oneshots.files = oneshot.d/browser-cleanup-startup-cache \
 oneshots.path  = /usr/lib/oneshot.d
 
 data.files = data/prefs.js \
-             data/ua-update.json.in
+             data/ua-update.json.in \
+             data/icon-launcher-browser.png
 data.path = /usr/share/atlantic-browser/data
 
 INSTALLS += desktop dbus_service chrome_scripts oneshots data

@@ -17,6 +17,6 @@ CoverBackground {
         //: Create a new tab cover text
         //% "Create a new tab"
         text: qsTrId("sailfish_browser-he-create_new_tab")
-        icon.source: "image://theme/icon-launcher-browser"
+        icon.source: "file:///usr/share/atlantic-browser/data/icon-launcher-browser.png"
     }
 }
