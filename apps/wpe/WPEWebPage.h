@@ -252,6 +252,7 @@ signals:
 
 protected:
     QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
+    void inputMethodEvent(QInputMethodEvent *event) override;
     void itemChange(ItemChange change, const ItemChangeData &value) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
     void touchEvent(QTouchEvent *event) override;

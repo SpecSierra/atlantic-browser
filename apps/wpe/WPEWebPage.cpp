@@ -14,6 +14,8 @@
 #include <QGuiApplication>
 #include <QImage>
 #include <QInputMethod>
+#include <QInputMethodEvent>
+#include <QKeyEvent>
 #include <QLineF>
 #include <QPointer>
 #include <QQuickItemGrabResult>
@@ -650,6 +652,32 @@ QVariant WPEWebPage::inputMethodQuery(Qt::InputMethodQuery query) const
     default:
         return QVariant();
     }
+}
+
+void WPEWebPage::inputMethodEvent(QInputMethodEvent *event)
+{
+    if (!event) {
+        return;
+    }
+
+    const QString committed = event->commitString();
+    if (committed.isEmpty()) {
+        event->accept();
+        return;
+    }
+
+    for (QChar ch : committed) {
+        const int key = (ch == QChar::fromLatin1('\n') || ch == QChar::fromLatin1('\r'))
+            ? Qt::Key_Return
+            : ch.unicode();
+        const QString text(ch);
+        QKeyEvent pressEvent(QEvent::KeyPress, key, Qt::NoModifier, text);
+        WPEQtView::keyPressEvent(&pressEvent);
+        QKeyEvent releaseEvent(QEvent::KeyRelease, key, Qt::NoModifier, text);
+        WPEQtView::keyReleaseEvent(&releaseEvent);
+    }
+
+    event->accept();
 }
 
 void WPEWebPage::updateFramePumpState()
