@@ -127,15 +127,19 @@ gboolean onDecidePolicy(WebKitWebView* webView, WebKitPolicyDecision* decision, 
     return TRUE;
 }
 
-bool dispatchCommittedTextToFocusedElement(WPEWebPage* page, const QString& text)
+bool dispatchTextToFocusedElement(WPEWebPage* page, const QString& text, int replaceBeforeCaret)
 {
-    if (!page || text.isEmpty())
+    if (!page)
         return false;
 
-    const QString args = QString::fromUtf8(QJsonDocument(QJsonArray{ text }).toJson(QJsonDocument::Compact));
+    if (replaceBeforeCaret < 0)
+        replaceBeforeCaret = 0;
+
+    const QString args = QString::fromUtf8(QJsonDocument(QJsonArray{ text, replaceBeforeCaret }).toJson(QJsonDocument::Compact));
     const QString script = QStringLiteral(
         "(function(args){"
         "  var t=args[0];"
+        "  var replaceBefore=(args[1]||0)|0;"
         "  function isEditable(e){"
         "    if(!e) return false;"
         "    if(e.isContentEditable) return true;"
@@ -164,22 +168,32 @@ bool dispatchCommittedTextToFocusedElement(WPEWebPage* page, const QString& text
         "    var sel=window.getSelection();"
         "    if(!sel || !sel.rangeCount) return false;"
         "    if(document.queryCommandSupported && document.queryCommandSupported('insertText')){"
-        "      document.execCommand('insertText', false, t);"
+        "      if(replaceBefore>0){"
+        "        for(var i=0;i<replaceBefore;i++) document.execCommand('delete', false, null);"
+        "      }"
+        "      if(t.length) document.execCommand('insertText', false, t);"
         "      return true;"
         "    }"
         "    var r=sel.getRangeAt(0);"
+        "    if(r.collapsed && replaceBefore>0){"
+        "      var available = Math.min(replaceBefore, r.startOffset);"
+        "      if(available>0) r.setStart(r.startContainer, r.startOffset-available);"
+        "    }"
         "    r.deleteContents();"
-        "    var node=document.createTextNode(t);"
-        "    r.insertNode(node);"
-        "    r.setStartAfter(node);"
+        "    if(t.length){"
+        "      var node=document.createTextNode(t);"
+        "      r.insertNode(node);"
+        "      r.setStartAfter(node);"
+        "    }"
         "    r.collapse(true);"
         "    sel.removeAllRanges();"
         "    sel.addRange(r);"
-        "    fireInput(el,t,'insertText');"
+        "    fireInput(el,t, t.length ? 'insertText' : 'deleteContentBackward');"
         "    return true;"
         "  }"
         "  var start=el.selectionStart;"
         "  var end=el.selectionEnd;"
+        "  if(start===end && replaceBefore>0) start=Math.max(0,start-replaceBefore);"
         "  if(typeof start==='number' && typeof end==='number' && typeof el.setRangeText==='function'){"
         "    el.setRangeText(t,start,end,'end');"
         "  } else if(typeof start==='number' && typeof end==='number'){"
@@ -188,9 +202,11 @@ bool dispatchCommittedTextToFocusedElement(WPEWebPage* page, const QString& text
         "    var p=start+t.length;"
         "    if(el.setSelectionRange) el.setSelectionRange(p,p);"
         "  } else {"
-        "    el.value=(el.value||'')+t;"
+        "    var vv=(el.value||'');"
+        "    if(replaceBefore>0 && vv.length) vv=vv.slice(0, Math.max(0, vv.length-replaceBefore));"
+        "    el.value=vv+t;"
         "  }"
-        "  fireInput(el,t,'insertText');"
+        "  fireInput(el,t, t.length ? 'insertText' : 'deleteContentBackward');"
         "  return true;"
         "})(%1);")
         .arg(args);
@@ -856,6 +872,7 @@ void WPEWebPage::inputMethodEvent(QInputMethodEvent *event)
 
     bool handled = false;
     const QString committed = event->commitString();
+    const QString preedit = event->preeditString();
     if (!committed.isEmpty()) {
         const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
         const bool duplicateOfRecentSoftKey =
@@ -863,11 +880,20 @@ void WPEWebPage::inputMethodEvent(QInputMethodEvent *event)
             (nowMs - m_lastSoftKeyboardTextTimeMs >= 0) &&
             (nowMs - m_lastSoftKeyboardTextTimeMs < 200);
 
-        if (!duplicateOfRecentSoftKey)
-            handled = dispatchCommittedTextToFocusedElement(this, committed) || handled;
+        if (!duplicateOfRecentSoftKey) {
+            const int replaceBefore = m_lastPreeditText.size();
+            handled = dispatchTextToFocusedElement(this, committed, replaceBefore) || handled;
+        }
 
         m_lastSoftKeyboardText.clear();
         m_lastSoftKeyboardTextTimeMs = 0;
+        m_lastPreeditText.clear();
+    } else if (!preedit.isEmpty()) {
+        handled = dispatchTextToFocusedElement(this, preedit, m_lastPreeditText.size()) || handled;
+        m_lastPreeditText = preedit;
+    } else if (!m_lastPreeditText.isEmpty()) {
+        handled = dispatchTextToFocusedElement(this, QString(), m_lastPreeditText.size()) || handled;
+        m_lastPreeditText.clear();
     }
 
     const int deleteCount = event->replacementLength();
@@ -903,9 +929,10 @@ void WPEWebPage::keyPressEvent(QKeyEvent *event)
             dispatchBackspaceToFocusedElement(this);
             m_lastSoftBackspaceTimeMs = QDateTime::currentMSecsSinceEpoch();
         } else if (!event->text().isEmpty()) {
-            dispatchCommittedTextToFocusedElement(this, event->text());
+            dispatchTextToFocusedElement(this, event->text(), 0);
             m_lastSoftKeyboardText = event->text();
             m_lastSoftKeyboardTextTimeMs = QDateTime::currentMSecsSinceEpoch();
+            m_lastPreeditText.clear();
         }
         event->accept();
         return;

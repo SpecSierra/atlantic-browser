@@ -318,6 +318,7 @@ private:
     qreal m_lastInteractionY = -1.0;
     QHash<int, QTouchEvent::TouchPoint> m_trackedTouchPoints;
     QString m_lastSoftKeyboardText;
+    QString m_lastPreeditText;
     qint64 m_lastSoftKeyboardTextTimeMs = 0;
     qint64 m_lastSoftBackspaceTimeMs = 0;
 };
