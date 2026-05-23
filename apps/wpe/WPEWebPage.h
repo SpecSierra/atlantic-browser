@@ -262,6 +262,7 @@ private slots:
 
 private:
     void updateFramePumpState();
+    void scheduleVirtualKeyboardSync();
     void syncVirtualKeyboardToFocusedElement();
     double currentPageZoomLevel() const;
     void setPageZoomLevel(double zoomLevel);

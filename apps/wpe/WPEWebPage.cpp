@@ -105,6 +105,23 @@ void onKeyboardProbeEvaluated(GObject* object, GAsyncResult* result, gpointer us
     }
 }
 
+gboolean onDecidePolicy(WebKitWebView* webView, WebKitPolicyDecision* decision, WebKitPolicyDecisionType type, gpointer)
+{
+    if (type != WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION) {
+        return FALSE;
+    }
+
+    WebKitNavigationPolicyDecision* navigationDecision = WEBKIT_NAVIGATION_POLICY_DECISION(decision);
+    WebKitNavigationAction* action = webkit_navigation_policy_decision_get_navigation_action(navigationDecision);
+    WebKitURIRequest* request = action ? webkit_navigation_action_get_request(action) : nullptr;
+    const gchar* uri = request ? webkit_uri_request_get_uri(request) : nullptr;
+    if (uri && *uri) {
+        webkit_web_view_load_uri(webView, uri);
+    }
+    webkit_policy_decision_ignore(decision);
+    return TRUE;
+}
+
 } // namespace
 
 WPEWebPage::WPEWebPage(QQuickItem *parent)
@@ -193,6 +210,11 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
         if (m_fullscreen) {
             m_fullscreen = false;
             emit fullscreenChanged();
+        }
+    });
+    connect(this, &WPEQtView::webViewCreated, this, [this]() {
+        if (WebKitWebView* wv = webView()) {
+            g_signal_connect(wv, "decide-policy", G_CALLBACK(onDecidePolicy), nullptr);
         }
     });
 
@@ -631,9 +653,7 @@ void WPEWebPage::updateFramePumpState()
 void WPEWebPage::mouseReleaseEvent(QMouseEvent *event)
 {
     WPEQtView::mouseReleaseEvent(event);
-    QTimer::singleShot(0, this, [this]() {
-        syncVirtualKeyboardToFocusedElement();
-    });
+    scheduleVirtualKeyboardSync();
 }
 
 void WPEWebPage::touchEvent(QTouchEvent *event)
@@ -698,10 +718,18 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
 
     WPEQtView::touchEvent(event);
     if (shouldSyncKeyboard) {
-        QTimer::singleShot(0, this, [this]() {
-            syncVirtualKeyboardToFocusedElement();
-        });
+        scheduleVirtualKeyboardSync();
     }
+}
+
+void WPEWebPage::scheduleVirtualKeyboardSync()
+{
+    QTimer::singleShot(0, this, [this]() {
+        syncVirtualKeyboardToFocusedElement();
+    });
+    QTimer::singleShot(120, this, [this]() {
+        syncVirtualKeyboardToFocusedElement();
+    });
 }
 
 void WPEWebPage::syncVirtualKeyboardToFocusedElement()
