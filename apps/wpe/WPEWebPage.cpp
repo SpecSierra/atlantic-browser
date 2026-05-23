@@ -1183,20 +1183,21 @@ void WPEWebPage::handleJsSelectionClear()
 
 void WPEWebPage::handleJsSelectionUpdate(const QString &text, qreal startX, qreal startY, qreal endX, qreal endY)
 {
+    const qreal zoom = currentPageZoomLevel();
     const bool wasActive = m_textSelectionActive;
     const bool textChanged = (m_selectedText != text);
     const bool activeNow = !text.isEmpty();
-    const bool handlesChanged = !qFuzzyCompare(m_selectionStartX, startX)
-        || !qFuzzyCompare(m_selectionStartY, startY)
-        || !qFuzzyCompare(m_selectionEndX, endX)
-        || !qFuzzyCompare(m_selectionEndY, endY);
+    const bool handlesChanged = !qFuzzyCompare(m_selectionStartX, startX * zoom)
+        || !qFuzzyCompare(m_selectionStartY, startY * zoom)
+        || !qFuzzyCompare(m_selectionEndX, endX * zoom)
+        || !qFuzzyCompare(m_selectionEndY, endY * zoom);
 
     m_selectedText = text;
     m_textSelectionActive = activeNow;
-    m_selectionStartX = startX;
-    m_selectionStartY = startY;
-    m_selectionEndX = endX;
-    m_selectionEndY = endY;
+    m_selectionStartX = startX * zoom;
+    m_selectionStartY = startY * zoom;
+    m_selectionEndX = endX * zoom;
+    m_selectionEndY = endY * zoom;
 
     if (textChanged)
         Q_EMIT selectionTextChanged();
