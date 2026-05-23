@@ -31,6 +31,7 @@
 #include <QStringList>
 #include <QUrl>
 #include <QVector>
+#include <array>
 
 #include "WPEQtViewLoadRequest.h"
 
@@ -232,6 +233,56 @@ void onKeyboardProbeEvaluated(GObject* object, GAsyncResult* result, gpointer us
 
 gboolean onDecidePolicy(WebKitWebView* webView, WebKitPolicyDecision* decision, WebKitPolicyDecisionType type, gpointer)
 {
+    static const std::array<const char*, 20> blockedHostSuffixes = {{
+        "doubleclick.net",
+        "googlesyndication.com",
+        "googleadservices.com",
+        "googletagservices.com",
+        "googletagmanager.com",
+        "google-analytics.com",
+        "adservice.google.com",
+        "adnxs.com",
+        "taboola.com",
+        "outbrain.com",
+        "criteo.com",
+        "rubiconproject.com",
+        "openx.net",
+        "pubmatic.com",
+        "advertising.com",
+        "amazon-adsystem.com",
+        "scorecardresearch.com",
+        "quantserve.com",
+        "moatads.com",
+        "connect.facebook.net"
+    }};
+
+    if (type == WEBKIT_POLICY_DECISION_TYPE_RESPONSE) {
+        WebKitResponsePolicyDecision* responseDecision = WEBKIT_RESPONSE_POLICY_DECISION(decision);
+        if (!responseDecision || webkit_response_policy_decision_is_main_frame_main_resource(responseDecision))
+            return FALSE;
+
+        WebKitURIRequest* request = webkit_response_policy_decision_get_request(responseDecision);
+        const gchar* uri = request ? webkit_uri_request_get_uri(request) : nullptr;
+        if (!uri || !*uri)
+            return FALSE;
+
+        const QUrl parsedUrl(QString::fromUtf8(uri));
+        const QString host = parsedUrl.host().toLower();
+        if (host.isEmpty())
+            return FALSE;
+
+        for (const char* suffixRaw : blockedHostSuffixes) {
+            const QString suffix = QString::fromLatin1(suffixRaw);
+            if (host == suffix || host.endsWith(QStringLiteral(".") + suffix)) {
+                fprintf(stderr, "[WPE-ADBLOCK] blocked %s\n", uri);
+                webkit_policy_decision_ignore(decision);
+                return TRUE;
+            }
+        }
+
+        return FALSE;
+    }
+
     if (type != WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION) {
         return FALSE;
     }
