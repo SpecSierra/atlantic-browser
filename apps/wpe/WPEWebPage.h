@@ -309,6 +309,8 @@ private:
     double m_defaultZoomLevel = 1.0;
     bool m_defaultZoomLevelInitialized = false;
     QTimer m_framePump;
+    qreal m_lastInteractionX = -1.0;
+    qreal m_lastInteractionY = -1.0;
     QHash<int, QTouchEvent::TouchPoint> m_trackedTouchPoints;
 };
 

@@ -652,6 +652,10 @@ void WPEWebPage::updateFramePumpState()
 
 void WPEWebPage::mouseReleaseEvent(QMouseEvent *event)
 {
+    if (event) {
+        m_lastInteractionX = event->localPos().x();
+        m_lastInteractionY = event->localPos().y();
+    }
     WPEQtView::mouseReleaseEvent(event);
     scheduleVirtualKeyboardSync();
 }
@@ -718,6 +722,11 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
 
     WPEQtView::touchEvent(event);
     if (shouldSyncKeyboard) {
+        if (!event->touchPoints().isEmpty()) {
+            const QTouchEvent::TouchPoint &point = event->touchPoints().constLast();
+            m_lastInteractionX = point.pos().x();
+            m_lastInteractionY = point.pos().y();
+        }
         scheduleVirtualKeyboardSync();
     }
 }
@@ -730,6 +739,9 @@ void WPEWebPage::scheduleVirtualKeyboardSync()
     QTimer::singleShot(120, this, [this]() {
         syncVirtualKeyboardToFocusedElement();
     });
+    QTimer::singleShot(320, this, [this]() {
+        syncVirtualKeyboardToFocusedElement();
+    });
 }
 
 void WPEWebPage::syncVirtualKeyboardToFocusedElement()
@@ -738,26 +750,51 @@ void WPEWebPage::syncVirtualKeyboardToFocusedElement()
     if (!wv)
         return;
 
-    static const char* editableProbeScript =
-        "(function(){"
-        "  var e=document.activeElement;"
-        "  if(!e) return false;"
-        "  if(e.isContentEditable) return true;"
-        "  var tag=(e.tagName||'').toLowerCase();"
-        "  if(tag==='textarea') return !e.readOnly && !e.disabled;"
-        "  if(tag==='input'){"
-        "    var t=(e.type||'text').toLowerCase();"
-        "    var blocked={button:1,submit:1,reset:1,checkbox:1,radio:1,file:1,image:1,range:1,color:1,hidden:1};"
-        "    return !blocked[t] && !e.readOnly && !e.disabled;"
+    const QString editableProbeScript = QStringLiteral(
+        "(function(x,y){"
+        "  function isEditable(e){"
+        "    if(!e) return false;"
+        "    if(e.isContentEditable) return true;"
+        "    var tag=(e.tagName||'').toLowerCase();"
+        "    if(tag==='textarea') return !e.readOnly && !e.disabled;"
+        "    if(tag==='input'){"
+        "      var t=(e.type||'text').toLowerCase();"
+        "      var blocked={button:1,submit:1,reset:1,checkbox:1,radio:1,file:1,image:1,range:1,color:1,hidden:1};"
+        "      return !blocked[t] && !e.readOnly && !e.disabled;"
+        "    }"
+        "    return false;"
+        "  }"
+        "  var active=document.activeElement;"
+        "  if(isEditable(active)) return true;"
+        "  if(!(x>=0 && y>=0)) return false;"
+        "  var px=x, py=y;"
+        "  var vv=window.visualViewport;"
+        "  if(vv && vv.scale && vv.scale>0){"
+        "    px=x/vv.scale; py=y/vv.scale;"
+        "  }"
+        "  var candidates=[document.elementFromPoint(px,py), document.elementFromPoint(x,y)];"
+        "  for(var i=0;i<candidates.length;i++){"
+        "    var e=candidates[i];"
+        "    if(!e) continue;"
+        "    if(e.closest){"
+        "      var n=e.closest('input,textarea,[contenteditable=\"\"],[contenteditable=\"true\"]');"
+        "      if(n) e=n;"
+        "    }"
+        "    if(isEditable(e)){"
+        "      try{e.focus();}catch(_e){}"
+        "      return true;"
+        "    }"
         "  }"
         "  return false;"
-        "})()";
+        "})(%1,%2);")
+        .arg(m_lastInteractionX, 0, 'f', 2)
+        .arg(m_lastInteractionY, 0, 'f', 2);
 
     std::unique_ptr<KeyboardProbeData> data = std::make_unique<KeyboardProbeData>();
     data->page = this;
     webkit_web_view_evaluate_javascript(
         wv,
-        editableProbeScript,
+        editableProbeScript.toUtf8().constData(),
         -1,
         nullptr,
         nullptr,
