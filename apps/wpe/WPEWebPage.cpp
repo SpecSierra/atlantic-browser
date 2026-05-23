@@ -194,6 +194,14 @@ bool dispatchCommittedTextToFocusedElement(WPEWebPage* page, const QString& text
         "})(%1);")
         .arg(args);
     page->runJavaScript(script);
+    if (QQuickWindow* win = page->window())
+        win->update();
+    page->update();
+    QTimer::singleShot(16, page, [page]() {
+        if (QQuickWindow* win = page->window())
+            win->update();
+        page->update();
+    });
     return true;
 }
 
@@ -263,6 +271,14 @@ bool dispatchBackspaceToFocusedElement(WPEWebPage* page)
         "  fireInput(el);"
         "  return true;"
         "})();"));
+    if (QQuickWindow* win = page->window())
+        win->update();
+    page->update();
+    QTimer::singleShot(16, page, [page]() {
+        if (QQuickWindow* win = page->window())
+            win->update();
+        page->update();
+    });
     return true;
 }
 
@@ -863,6 +879,9 @@ void WPEWebPage::keyPressEvent(QKeyEvent *event)
     }
 
     if (shouldInterceptSoftKeyboardEvent(event)) {
+        if (event->key() == Qt::Key_Backspace) {
+            dispatchBackspaceToFocusedElement(this);
+        }
         event->accept();
         return;
     }
