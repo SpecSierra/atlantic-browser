@@ -135,11 +135,31 @@ static int restartCountFromEnvironment()
 
 static void configureBrowserProcessEnvironment()
 {
+    auto needsUtf8Locale = [](const char *value) {
+        QByteArray normalized(value ? value : "");
+        normalized = normalized.trimmed().toLower();
+        return normalized.isEmpty() || normalized == "c" || normalized == "posix";
+    };
+
+    auto ensureUtf8Locale = [&](const char *name) {
+        if (needsUtf8Locale(getenv(name)))
+            setenv(name, "en_US.UTF-8", 1);
+    };
+
+    ensureUtf8Locale("LC_ALL");
+    ensureUtf8Locale("LC_CTYPE");
+    ensureUtf8Locale("LANG");
+
+    auto needsEmptyPluginPath = [](QByteArray value) {
+        value = value.trimmed();
+        return value.isEmpty();
+    };
+
     unsetenv("MOZ_DISABLE_CRASH_GUARD");
     unsetenv("MOZ_WEBGL_PREFER_EGL");
     setenv("WEBKIT_DISABLE_SANDBOX", "1", 1);
 
-    if (qgetenv("GST_PLUGIN_SYSTEM_PATH_1_0").isEmpty())
+    if (needsEmptyPluginPath(qgetenv("GST_PLUGIN_SYSTEM_PATH_1_0")))
         qputenv("GST_PLUGIN_SYSTEM_PATH_1_0", QByteArray());
     if (qgetenv("GST_PLUGIN_PATH").isEmpty())
         qputenv("GST_PLUGIN_PATH", WPERuntimePaths::kGStreamerPluginDir);
