@@ -587,23 +587,25 @@ Page {
                     return
                 }
 
-                var pickedPath = ""
+                var candidates = []
                 if (selectedContentProperties) {
                     if (selectedContentProperties.filePath) {
-                        pickedPath = selectedContentProperties.filePath
-                    } else if (selectedContentProperties.url) {
-                        pickedPath = selectedContentProperties.url
+                        candidates.push(selectedContentProperties.filePath)
+                    }
+                    if (selectedContentProperties.url
+                            && candidates.indexOf(selectedContentProperties.url) === -1) {
+                        candidates.push(selectedContentProperties.url)
                     }
                 }
-                if (!pickedPath && selectedContent) {
-                    pickedPath = selectedContent
+                if (selectedContent && candidates.indexOf(selectedContent) === -1) {
+                    candidates.push(selectedContent)
                 }
-                if (!pickedPath) {
+                if (candidates.length === 0) {
                     return
                 }
 
                 _selectionCommitted = true
-                webView.contentItem.chooseFiles([pickedPath])
+                webView.contentItem.chooseFiles(candidates)
                 _filePickerOpen = false
                 pageStack.pop(filePicker, PageStackAction.Immediate)
             }

@@ -12,6 +12,7 @@
 #include <QClipboard>
 #include <QDateTime>
 #include <QDir>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QImage>
 #include <QInputMethod>
@@ -2080,34 +2081,45 @@ void WPEWebPage::chooseFiles(const QStringList &filePaths)
     }
 
     QStringList normalizedPaths;
+    QStringList existingPaths;
     normalizedPaths.reserve(filePaths.size());
+    existingPaths.reserve(filePaths.size());
     for (const QString &entry : filePaths) {
         if (entry.isEmpty()) {
             continue;
         }
-        const QUrl asUrl(entry);
-        const QString localPath = asUrl.isValid() && asUrl.isLocalFile() ? asUrl.toLocalFile() : entry;
+        const QUrl asUrl = QUrl::fromUserInput(entry);
+        QString localPath = asUrl.isValid() && asUrl.isLocalFile() ? asUrl.toLocalFile() : entry;
+        if (localPath.startsWith(QStringLiteral("home/"))) {
+            localPath.prepend(QLatin1Char('/'));
+        }
+        localPath = QDir::cleanPath(localPath);
         if (!localPath.isEmpty()) {
             normalizedPaths.append(localPath);
+            const QFileInfo fileInfo(localPath);
+            if (fileInfo.exists() && fileInfo.isFile()) {
+                existingPaths.append(fileInfo.absoluteFilePath());
+            }
         }
     }
 
-    if (!m_fileChooserSelectMultiple && normalizedPaths.size() > 1) {
-        const QString firstPath = normalizedPaths.first();
-        normalizedPaths.clear();
-        normalizedPaths.append(firstPath);
+    QStringList chosenPaths = !existingPaths.isEmpty() ? existingPaths : normalizedPaths;
+    if (!m_fileChooserSelectMultiple && chosenPaths.size() > 1) {
+        const QString firstPath = chosenPaths.first();
+        chosenPaths.clear();
+        chosenPaths.append(firstPath);
     }
 
-    if (normalizedPaths.isEmpty()) {
+    if (chosenPaths.isEmpty()) {
         clearFileChooserRequest(true);
         return;
     }
 
     QVector<QByteArray> utf8Paths;
-    utf8Paths.reserve(normalizedPaths.size());
+    utf8Paths.reserve(chosenPaths.size());
     QVector<const gchar*> selectedFiles;
-    selectedFiles.reserve(normalizedPaths.size() + 1);
-    for (const QString &path : normalizedPaths) {
+    selectedFiles.reserve(chosenPaths.size() + 1);
+    for (const QString &path : chosenPaths) {
         utf8Paths.append(path.toUtf8());
         selectedFiles.append(utf8Paths.constLast().constData());
     }
