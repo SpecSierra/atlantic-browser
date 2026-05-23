@@ -128,6 +128,8 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     : WPEQtView(parent)
     , m_security(new WPESecurityInfo(this))
 {
+    setFlag(QQuickItem::ItemAcceptsInputMethod, true);
+
     m_framePump.setInterval(33);
     m_framePump.setTimerType(Qt::PreciseTimer);
     connect(&m_framePump, &QTimer::timeout, this, [this]() {
@@ -635,6 +637,18 @@ void WPEWebPage::itemChange(ItemChange change, const ItemChangeData &value)
                 Qt::UniqueConnection);
     } else if (change == ItemVisibleHasChanged) {
         updateFramePumpState();
+    }
+}
+
+QVariant WPEWebPage::inputMethodQuery(Qt::InputMethodQuery query) const
+{
+    switch (query) {
+    case Qt::ImEnabled:
+        return true;
+    case Qt::ImHints:
+        return static_cast<int>(Qt::ImhNone);
+    default:
+        return QVariant();
     }
 }
 
