@@ -151,10 +151,28 @@ WebContainer {
         property var ci: webView.contentItem
         property real dsf: ci ? ci.deviceScaleFactor || 1.0 : 1.0
 
+        Item {
+            id: selectionCursor
+            visible: selHandles.visible && selHandles.ci && selHandles.ci.textSelectionActive
+            x: selHandles.ci ? (selHandles.ci.selectionEndX * selHandles.dsf) : 0
+            y: selHandles.ci ? (selHandles.ci.selectionEndY * selHandles.dsf) - (Theme.iconSizeMedium / 2) : 0
+            width: Theme.paddingSmall
+            height: Theme.iconSizeMedium
+            z: 101
+
+            Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: 2
+                height: parent.height
+                radius: 1
+                color: Theme.highlightColor
+            }
+        }
+
         Rectangle {
             id: startHandle
-            width: Theme.iconSizeExtraSmall / 2
-            height: Theme.iconSizeMedium / 2
+            width: Theme.iconSizeExtraSmall
+            height: Theme.iconSizeMedium
             radius: width / 2
             color: Theme.highlightColor
             visible: selHandles.visible && selHandles.ci && selHandles.ci.selectionStartX >= 0
@@ -178,8 +196,8 @@ WebContainer {
 
         Rectangle {
             id: endHandle
-            width: Theme.iconSizeExtraSmall / 2
-            height: Theme.iconSizeMedium / 2
+            width: Theme.iconSizeExtraSmall
+            height: Theme.iconSizeMedium
             radius: width / 2
             color: Theme.highlightColor
             visible: selHandles.visible && selHandles.ci && selHandles.ci.selectionEndX >= 0

@@ -315,6 +315,12 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
         return {
             type: 'select',
             text: text,
+            startX: sx,
+            startY: sy,
+            endX: ex,
+            endY: ey,
+            cursorX: ex,
+            cursorY: ey,
             sx: sx,
             sy: sy,
             ex: ex,
@@ -346,10 +352,10 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
         longPressPoint = { x: x, y: y };
         longPressTimer = setTimeout(function() {
             longPressTimer = null;
-            if (selectWordAtPoint(longPressPoint.x, longPressPoint.y))
+            if (longPressPoint && selectWordAtPoint(longPressPoint.x, longPressPoint.y))
                 postSelection();
             longPressPoint = null;
-        }, 500);
+        }, 350);
     }
 
     function touchPointFromEvent(e) {
@@ -1188,6 +1194,12 @@ void WPEWebPage::handleJsSelectionUpdate(const QString &text, qreal startX, qrea
 
     QVariantMap data;
     data.insert(QStringLiteral("text"), text);
+    data.insert(QStringLiteral("startX"), startX);
+    data.insert(QStringLiteral("startY"), startY);
+    data.insert(QStringLiteral("endX"), endX);
+    data.insert(QStringLiteral("endY"), endY);
+    data.insert(QStringLiteral("cursorX"), endX);
+    data.insert(QStringLiteral("cursorY"), endY);
     data.insert(QStringLiteral("sx"), startX);
     data.insert(QStringLiteral("sy"), startY);
     data.insert(QStringLiteral("ex"), endX);
