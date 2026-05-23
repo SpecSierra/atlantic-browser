@@ -88,7 +88,7 @@ public:
     int fakeVisibility() const { return isVisible() ? 5 : 0; } // 5 = FullScreen
     bool needChrome() const;
 
-    Q_INVOKABLE void load(const QString &url, bool force = false, bool fromExternal = false);
+    Q_INVOKABLE void load(const QString &url, const QString &title = QString(), bool newTab = false);
     Q_INVOKABLE void reload(bool force = true);
     Q_INVOKABLE void goForward();
     Q_INVOKABLE void goBack();
@@ -187,6 +187,7 @@ private:
     bool m_privateMode = false;
     bool m_activeTabRendered = false;
     bool m_readyToPaint = false;
+    bool m_waitingForFreshTitle = false;
     bool m_touchBlocked = false;
     bool m_browserEnabled = true;
     int m_maxLiveTabCount = 5;

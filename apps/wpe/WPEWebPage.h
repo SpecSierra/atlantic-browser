@@ -259,6 +259,7 @@ private slots:
     void updateSecurityInfo();
 
 private:
+    void syncVirtualKeyboardToFocusedElement();
     double currentPageZoomLevel() const;
     void setPageZoomLevel(double zoomLevel);
     void rememberDefaultZoomLevel(double zoomLevel);

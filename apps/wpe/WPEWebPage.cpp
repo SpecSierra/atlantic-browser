@@ -13,7 +13,9 @@
 #include <QDir>
 #include <QGuiApplication>
 #include <QImage>
+#include <QInputMethod>
 #include <QLineF>
+#include <QPointer>
 #include <QQuickItemGrabResult>
 #include <QQuickWindow>
 #include <QRegularExpression>
@@ -61,6 +63,42 @@ void resetPinchZoomState(bool &pinchZoomActive, qreal &pinchStartDistance, doubl
     pinchZoomActive = false;
     pinchStartDistance = 0.0;
     pinchStartZoomLevel = 1.0;
+}
+
+struct KeyboardProbeData {
+    QPointer<WPEWebPage> page;
+};
+
+void onKeyboardProbeEvaluated(GObject* object, GAsyncResult* result, gpointer userData)
+{
+    std::unique_ptr<KeyboardProbeData> data(static_cast<KeyboardProbeData*>(userData));
+    if (!data || !data->page)
+        return;
+
+    GError* error = nullptr;
+    JSCValue* value = webkit_web_view_evaluate_javascript_finish(WEBKIT_WEB_VIEW(object), result, &error);
+    if (!value) {
+        if (error) {
+            g_error_free(error);
+        }
+        return;
+    }
+
+    bool editable = false;
+    if (jsc_value_is_boolean(value)) {
+        editable = jsc_value_to_boolean(value);
+    }
+    g_object_unref(value);
+
+    QInputMethod* inputMethod = QGuiApplication::inputMethod();
+    if (!inputMethod)
+        return;
+
+    if (editable) {
+        inputMethod->show();
+    } else if (inputMethod->isVisible()) {
+        inputMethod->hide();
+    }
 }
 
 } // namespace
@@ -560,10 +598,13 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
         return;
     }
 
+    forceActiveFocus();
+
     const QList<QTouchEvent::TouchPoint> activePoints = mergeTrackedTouchPoints(
         m_trackedTouchPoints,
         event->touchPoints(),
         event->type());
+    const bool shouldSyncKeyboard = (event->type() == QEvent::TouchEnd && activePoints.size() <= 1);
     if (activePoints.size() >= 2) {
         const qreal pinchDistance = QLineF(activePoints.at(0).pos(), activePoints.at(1).pos()).length();
         WebKitWebView *wv = webView();
@@ -612,6 +653,43 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
     }
 
     WPEQtView::touchEvent(event);
+    if (shouldSyncKeyboard) {
+        syncVirtualKeyboardToFocusedElement();
+    }
+}
+
+void WPEWebPage::syncVirtualKeyboardToFocusedElement()
+{
+    WebKitWebView* wv = webView();
+    if (!wv)
+        return;
+
+    static const char* editableProbeScript =
+        "(function(){"
+        "  var e=document.activeElement;"
+        "  if(!e) return false;"
+        "  if(e.isContentEditable) return true;"
+        "  var tag=(e.tagName||'').toLowerCase();"
+        "  if(tag==='textarea') return !e.readOnly && !e.disabled;"
+        "  if(tag==='input'){"
+        "    var t=(e.type||'text').toLowerCase();"
+        "    var blocked={button:1,submit:1,reset:1,checkbox:1,radio:1,file:1,image:1,range:1,color:1,hidden:1};"
+        "    return !blocked[t] && !e.readOnly && !e.disabled;"
+        "  }"
+        "  return false;"
+        "})()";
+
+    std::unique_ptr<KeyboardProbeData> data = std::make_unique<KeyboardProbeData>();
+    data->page = this;
+    webkit_web_view_evaluate_javascript(
+        wv,
+        editableProbeScript,
+        -1,
+        nullptr,
+        nullptr,
+        nullptr,
+        onKeyboardProbeEvaluated,
+        data.release());
 }
 
 void WPEWebPage::onFrameSwapped()

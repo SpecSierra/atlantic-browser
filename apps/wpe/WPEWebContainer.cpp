@@ -228,7 +228,14 @@ int WPEWebContainer::tabId() const
 
 QString WPEWebContainer::title() const
 {
-    return m_contentItem ? m_contentItem->title() : QString();
+    if (!m_contentItem)
+        return QString();
+
+    if (m_waitingForFreshTitle)
+        return m_contentItem->url().toString();
+
+    const QString pageTitle = m_contentItem->title();
+    return pageTitle.isEmpty() ? m_contentItem->url().toString() : pageTitle;
 }
 
 QString WPEWebContainer::url() const
@@ -357,12 +364,13 @@ void WPEWebContainer::componentComplete()
         emit hasInitialUrlChanged();
 }
 
-void WPEWebContainer::load(const QString &url, bool force, bool fromExternal)
+void WPEWebContainer::load(const QString &url, const QString &title, bool newTab)
 {
-    Q_UNUSED(force)
+    Q_UNUSED(title)
     qDebug() << "[WPE-LOAD] load() url=" << url << "completed=" << m_completed
              << "tabModel=" << (m_tabModel ? m_tabModel->count() : -1)
-             << "contentItem=" << m_contentItem;
+             << "contentItem=" << m_contentItem
+             << "newTab=" << newTab;
 
     if (!m_completed) {
         qDebug() << "[WPE-LOAD] not completed, saving as initialUrl";
@@ -373,13 +381,19 @@ void WPEWebContainer::load(const QString &url, bool force, bool fromExternal)
 
     if (!m_tabModel) { qDebug() << "[WPE-LOAD] no tabModel!"; return; }
 
-    if (m_tabModel->count() == 0) {
+    if (newTab || m_tabModel->count() == 0) {
         qDebug() << "[WPE-LOAD] newTab for" << url;
-        m_tabModel->newTab(url, fromExternal);
+        m_tabModel->newTab(url, newTab);
     } else {
         if (m_contentItem) {
-            qDebug() << "[WPE-LOAD] setUrl on contentItem:" << url;
-            m_contentItem->setUrl(QUrl(url));
+            const QUrl targetUrl(url);
+            if (m_contentItem->url() == targetUrl) {
+                qDebug() << "[WPE-LOAD] reload active contentItem:" << url;
+                m_contentItem->reload();
+            } else {
+                qDebug() << "[WPE-LOAD] setUrl on contentItem:" << url;
+                m_contentItem->setUrl(targetUrl);
+            }
         } else {
             qDebug() << "[WPE-LOAD] contentItem is NULL, cannot load!";
         }
@@ -493,6 +507,7 @@ void WPEWebContainer::activatePage(int tabId)
 
     if (m_contentItem != page) {
         m_contentItem = page;
+        m_waitingForFreshTitle = true;
         emit contentItemChanged();
         emit needChromeChanged();
         emit tabIdChanged();
@@ -579,7 +594,9 @@ void WPEWebContainer::onPageUrlChanged()
     QString newUrl = page->url().toString();
     if (newUrl == QStringLiteral("about:blank")) return;
 
+    m_waitingForFreshTitle = true;
     emit urlChanged();
+    emit titleChanged();
 
     // Update tab model
     if (m_tabModel) {
@@ -594,6 +611,7 @@ void WPEWebContainer::onPageTitleChanged()
 {
     WPEWebPage *page = qobject_cast<WPEWebPage *>(sender());
     if (!page || page != m_contentItem) return;
+    m_waitingForFreshTitle = page->title().isEmpty();
     emit titleChanged();
     // Update history entry once title is known
     QString url = page->url().toString();
