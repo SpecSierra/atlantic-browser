@@ -110,7 +110,10 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     m_framePump.setInterval(33);
     m_framePump.setTimerType(Qt::PreciseTimer);
     connect(&m_framePump, &QTimer::timeout, this, [this]() {
-        if (m_active && isVisible()) {
+        if (isVisible()) {
+            if (QQuickWindow *w = window()) {
+                w->update();
+            }
             update();
         }
     });
@@ -611,7 +614,7 @@ void WPEWebPage::itemChange(ItemChange change, const ItemChangeData &value)
 
 void WPEWebPage::updateFramePumpState()
 {
-    const bool shouldPump = m_active && isVisible();
+    const bool shouldPump = isVisible();
     if (shouldPump) {
         if (!m_framePump.isActive()) {
             m_framePump.start();
