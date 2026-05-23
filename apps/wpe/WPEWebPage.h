@@ -215,7 +215,6 @@ public:
     QObject* security() const { return m_security; }
 
     // Save page as PDF
-    Q_INVOKABLE void savePageAsPDF(const QString &filePath);
 
     // HTML <select> dropdown
     Q_INVOKABLE void selectMenuOption(int index);
@@ -269,7 +268,6 @@ signals:
 
     void securityChanged();
     void findInPageHasResultChanged();
-    void pdfSaved(const QString &filePath, bool success);
 
     void recvAsyncMessage(const QString &message, const QVariant &data);
     void recvSyncMessage(const QString &message, const QVariant &data);

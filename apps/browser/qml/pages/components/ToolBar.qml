@@ -71,8 +71,6 @@ Column {
     signal shareActivePage
     signal bookmarkActivePage
     signal removeActivePageFromBookmarks
-    signal savePageAsPDF
-
     function resetFind() {
         if (webView.contentItem) webView.contentItem.findFinish()
         if (webView.contentItem) {

@@ -1850,17 +1850,6 @@ void WPEWebPage::updateSecurityInfo()
     emit securityChanged();
 }
 
-// --- Save page as PDF ---
-
-void WPEWebPage::savePageAsPDF(const QString &filePath)
-{
-    // WPE doesn't have WebKitPrintOperation or snapshot API (those are GTK-only).
-    // Use JavaScript to generate a basic text dump as a workaround.
-    // For a full PDF, a server-side renderer would be needed.
-    Q_UNUSED(filePath);
-    emit pdfSaved(filePath, false);
-}
-
 // --- HTML <select> dropdown ---
 
 void WPEWebPage::openSelectMenu(const QStringList &options, int selectedIndex)

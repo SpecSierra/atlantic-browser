@@ -352,14 +352,6 @@ Page {
         }
     }
 
-    Component {
-        id: desktopBookmarkWriter_
-
-        DesktopBookmarkWriter {
-            onSaved: destroy()
-        }
-    }
-
     Browser.PopUpMenu {
         id: popupMenu
 
@@ -369,7 +361,6 @@ Page {
         active: overlay.toolBar.secondaryToolsActive
         menuItem: Component {
             Browser.PopUpMenuItem {
-                desktopBookmarkWriter: desktopBookmarkWriter_
                 iconWidth: Theme.iconSizeMedium + Theme.paddingLarge
             }
         }

@@ -15,7 +15,6 @@ Item {
 
     property int horizontalOffset
     property int iconWidth
-    property var desktopBookmarkWriter
     readonly property int verticalPadding: 3 * Theme.paddingSmall
 
     height: content.height + verticalPadding * 2
@@ -77,48 +76,6 @@ Item {
 
             OverlayListItem {
                 height: Theme.itemSizeSmall
-                iconWidth: root.iconWidth
-                horizontalOffset: root.horizontalOffset
-                iconSource: "image://theme/icon-m-add-to-grid"
-                //% "Add to apps grid"
-                text: qsTrId("sailfish_browser-la-add_to_apps_grid")
-                onClicked: {
-                    overlay.animator.showChrome()
-                    var page = webView.contentItem
-
-                    if (!page.favicon) {
-                        var stack = pageStack
-                        var writer = desktopBookmarkWriter
-
-                        // Empty favicon, grab icon from the page
-                        function handleThumbnailResult(data) {
-                            stack.animatorPush("AddToAppGridDialog.qml", {
-                                "url": page.url,
-                                "title": page.title,
-                                "icon": data,
-                                "desktopBookmarkWriter": writer,
-                                "bookmarkWriterParent": stack
-                            })
-                            page.onThumbnailResult.disconnect(handleThumbnailResult)
-                        }
-
-                        page.onThumbnailResult.connect(handleThumbnailResult)
-                        // 256x256 is the maximum icon size
-                        page.grabThumbnail(Qt.size(256, 256))
-                    } else {
-                        pageStack.animatorPush("AddToAppGridDialog.qml", {
-                            "url": url,
-                            "title": title,
-                            "icon": page.favicon,
-                            "desktopBookmarkWriter": desktopBookmarkWriter,
-                            "bookmarkWriterParent": pageStack
-                        })
-                    }
-                }
-            }
-
-            OverlayListItem {
-                height: Theme.itemSizeSmall
                 enabled: webView.contentItem
                 opacity: enabled ? 1.0 : 0.5
                 iconWidth: root.iconWidth
@@ -133,43 +90,6 @@ Item {
                 }
             }
 
-            OverlayListItem {
-                height: Theme.itemSizeSmall
-                enabled: !DownloadManager.pdfPrinting
-                opacity: enabled ? 1.0 : 0.5
-                iconWidth: root.iconWidth
-                horizontalOffset: root.horizontalOffset
-                iconSource: "image://theme/icon-m-file-download-as-pdf"
-                //% "Save web page as PDF"
-                text: qsTrId("sailfish_browser-la-save_as-pdf")
-
-                onClicked: {
-                    overlay.animator.showChrome()
-                    if (DownloadManager.pdfPrinting) {
-                        pdfPrintingNotice.show()
-                    } else {
-                        overlay.toolBar.savePageAsPDF()
-                    }
-                }
-            }
-        }
-
-        OverlayListItem {
-            enabled: webView.contentItem
-            height: Theme.itemSizeSmall
-            iconWidth: root.iconWidth
-            horizontalOffset: root.horizontalOffset
-            checkable: true
-            checked: webView.contentItem && webView.contentItem.desktopMode
-            iconSource: "image://theme/icon-m-computer"
-            //: Label for text switch that reloads page in desktop mode
-            //% "Desktop version"
-            text: qsTrId("settings_browser-la-desktop_version")
-
-            onClicked: {
-                overlay.animator.showChrome()
-                webView.contentItem.desktopMode = !webView.contentItem.desktopMode
-            }
         }
 
         Column {
@@ -235,15 +155,6 @@ Item {
                 }
             }
         }
-    }
-
-    Notice {
-        id: pdfPrintingNotice
-
-        duration: 3000
-        //% "Already saving pdf"
-        text: qsTrId("sailfish_browser-la-already_printing_pdf")
-        verticalOffset: -overlay.toolBar.rowHeight * overlay.toolBar.maxRowCount
     }
 
     DBusInterface {
