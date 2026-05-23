@@ -678,11 +678,48 @@ void WPEWebPage::inputMethodEvent(QInputMethodEvent *event)
         return;
     }
 
-    QString text = event->commitString();
+    const QString text = event->commitString();
     if (text.isEmpty()) {
-        text = event->preeditString();
-    }
-    if (text.isEmpty()) {
+        const int deleteCount = event->replacementLength();
+        if (deleteCount <= 0) {
+            event->accept();
+            return;
+        }
+
+        WebKitWebView* wv = webView();
+        if (wv) {
+            const QString script = QStringLiteral(
+                "(function(count){"
+                "  var e=document.activeElement;"
+                "  if(!e) return;"
+                "  if(e.isContentEditable){"
+                "    for(var i=0;i<count;i++) document.execCommand('delete', false, null);"
+                "    return;"
+                "  }"
+                "  var tag=(e.tagName||'').toLowerCase();"
+                "  var isInput=(tag==='input'||tag==='textarea');"
+                "  if(!isInput||e.readOnly||e.disabled) return;"
+                "  var start=e.selectionStart, end=e.selectionEnd;"
+                "  var v=e.value||'';"
+                "  if(start===null||end===null) return;"
+                "  if(start===end) start=Math.max(0,start-count);"
+                "  e.value=v.slice(0,start)+v.slice(end);"
+                "  e.setSelectionRange(start,start);"
+                "  e.dispatchEvent(new Event('input',{bubbles:true}));"
+                "})(%1);").arg(deleteCount);
+
+            const QByteArray utf8Script = script.toUtf8();
+            webkit_web_view_evaluate_javascript(
+                wv,
+                utf8Script.constData(),
+                -1,
+                nullptr,
+                nullptr,
+                nullptr,
+                nullptr,
+                nullptr);
+        }
+
         event->accept();
         return;
     }
