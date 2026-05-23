@@ -905,6 +905,10 @@ void WPEWebPage::onLoadingChanged(WPEQtViewLoadRequest *loadRequest)
         // Reset security on new navigation
         static_cast<WPESecurityInfo*>(m_security)->reset();
         emit securityChanged();
+        // Reset visual pinch zoom so new page starts at 1:1
+        if (!qFuzzyCompare(m_visualScale, 1.0f)) {
+            m_visualScale = 1.0;
+        }
         setChrome(true);
         emit domContentLoadedChanged();
         emit loadedChanged();
@@ -1078,8 +1082,7 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
             if (!m_pinchZoomActive) {
                 m_pinchZoomActive = true;
                 m_pinchStartDistance = pinchDistance;
-                m_pinchStartZoomLevel = currentPageZoomLevel();
-                rememberDefaultZoomLevel(m_pinchStartZoomLevel);
+                m_pinchStartVisualScale = m_visualScale;
 
                 QTouchEvent endEvent(QEvent::TouchEnd,
                                      event->device(),
@@ -1088,12 +1091,27 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
                                      event->touchPoints());
                 WPEQtView::touchEvent(&endEvent);
             } else if (m_pinchStartDistance > 0.0) {
-                const double targetZoomLevel = std::clamp(
-                    m_pinchStartZoomLevel * static_cast<double>(pinchDistance / m_pinchStartDistance),
-                    minimumPinchZoomLevel(),
-                    maximumPinchZoomLevel());
-                if (!qFuzzyCompare(targetZoomLevel, currentPageZoomLevel())) {
-                    setPageZoomLevel(targetZoomLevel);
+                const qreal ratio = pinchDistance / m_pinchStartDistance;
+                const qreal newVisualScale = std::clamp(
+                    m_pinchStartVisualScale * ratio,
+                    static_cast<qreal>(kMinimumPinchZoomFactor),
+                    static_cast<qreal>(kMaximumPinchZoomFactor));
+
+                if (!qFuzzyCompare(newVisualScale, m_visualScale)) {
+                    m_visualScale = newVisualScale;
+
+                    // Pinch center as percentage of item dimensions for CSS transform-origin
+                    const QPointF center = (activePoints.at(0).pos() + activePoints.at(1).pos()) / 2.0;
+                    const double cx_pct = (width()  > 0) ? center.x() / width()  * 100.0 : 50.0;
+                    const double cy_pct = (height() > 0) ? center.y() / height() * 100.0 : 50.0;
+
+                    // CSS transform: GPU-composited by WebKit — no layout reflow, no layout shift
+                    char js[256];
+                    snprintf(js, sizeof(js),
+                        "document.documentElement.style.transform='scale(%.4f)';"
+                        "document.documentElement.style.transformOrigin='%.1f%% %.1f%%';",
+                        (double)m_visualScale, cx_pct, cy_pct);
+                    webkit_web_view_evaluate_javascript(wv, js, -1, nullptr, nullptr, nullptr, nullptr, nullptr);
                 }
             }
         }
@@ -1104,6 +1122,7 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
 
     if (m_pinchZoomActive) {
         if (activePoints.size() < 2 || event->type() == QEvent::TouchEnd || event->type() == QEvent::TouchCancel) {
+            // CSS transform persists — no WebKit zoom commit, no layout shift
             resetPinchZoomState(m_pinchZoomActive, m_pinchStartDistance, m_pinchStartZoomLevel);
             if (activePoints.isEmpty()) {
                 m_trackedTouchPoints.clear();

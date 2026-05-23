@@ -129,6 +129,11 @@ class WPEWebPage : public WPEQtView
     Q_PROPERTY(QStringList selectMenuOptions READ selectMenuOptions NOTIFY selectMenuOptionsChanged FINAL)
     Q_PROPERTY(int selectMenuSelectedIndex READ selectMenuSelectedIndex NOTIFY selectMenuSelectedIndexChanged FINAL)
 
+    // Pinch zoom visual scale — compositor-level transform during gesture; WebKit zoom committed on end
+    Q_PROPERTY(qreal visualScale READ visualScale NOTIFY visualScaleChanged)
+    Q_PROPERTY(qreal pinchCenterX READ pinchCenterX NOTIFY pinchCenterChanged)
+    Q_PROPERTY(qreal pinchCenterY READ pinchCenterY NOTIFY pinchCenterChanged)
+
 public:
     explicit WPEWebPage(QQuickItem *parent = nullptr);
     ~WPEWebPage() override;
@@ -218,6 +223,11 @@ public:
     QStringList selectMenuOptions() const { return m_selectMenuOptions; }
     int selectMenuSelectedIndex() const { return m_selectMenuSelectedIdx; }
 
+    // Pinch zoom visual scale
+    qreal visualScale() const { return m_visualScale; }
+    qreal pinchCenterX() const { return m_pinchCenterX; }
+    qreal pinchCenterY() const { return m_pinchCenterY; }
+
     bool textSelectionActive() const;
     QObject* textSelectionController();
     QString selectedText() const;
@@ -269,6 +279,9 @@ signals:
     void selectMenuActiveChanged();
     void selectMenuOptionsChanged();
     void selectMenuSelectedIndexChanged();
+
+    void visualScaleChanged();
+    void pinchCenterChanged();
 
 protected:
     QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
@@ -332,6 +345,10 @@ private:
     double m_pinchStartZoomLevel = 1.0;
     double m_defaultZoomLevel = 1.0;
     bool m_defaultZoomLevelInitialized = false;
+    qreal m_visualScale = 1.0;
+    qreal m_pinchStartVisualScale = 1.0;
+    qreal m_pinchCenterX = 0.0;
+    qreal m_pinchCenterY = 0.0;
     QTimer m_framePump;
     qreal m_lastInteractionX = -1.0;
     qreal m_lastInteractionY = -1.0;
