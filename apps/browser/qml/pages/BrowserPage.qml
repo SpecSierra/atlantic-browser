@@ -613,6 +613,7 @@ Page {
                 }
 
                 _selectionCommitted = true
+                delayedCancel.stop()
                 webView.contentItem.chooseFiles(candidates)
                 _filePickerOpen = false
                 pageStack.pop(filePicker, PageStackAction.Immediate)
@@ -629,6 +630,17 @@ Page {
             onStatusChanged: {
                 if (status === PageStatus.Inactive) {
                     _filePickerOpen = false
+                    submitSelection()
+                    if (!_selectionCommitted)
+                        delayedCancel.restart()
+                }
+            }
+
+            Timer {
+                id: delayedCancel
+                interval: 250
+                repeat: false
+                onTriggered: {
                     if (!_selectionCommitted && webView.contentItem && webView.contentItem.fileChooserActive) {
                         webView.contentItem.cancelFileChooser()
                     }
