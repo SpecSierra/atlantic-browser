@@ -1223,6 +1223,12 @@ void WPEWebPage::handleJsSelectionUpdate(const QString &text, qreal startX, qrea
 
 void WPEWebPage::moveSelectionStart(qreal cssX, qreal cssY)
 {
+    const qreal zoom = currentPageZoomLevel();
+    if (zoom > 0.0) {
+        cssX /= zoom;
+        cssY /= zoom;
+    }
+
     QString js = QStringLiteral(
         "(function(x,y){"
         "  var sel=window.getSelection();"
@@ -1239,6 +1245,12 @@ void WPEWebPage::moveSelectionStart(qreal cssX, qreal cssY)
 
 void WPEWebPage::moveSelectionEnd(qreal cssX, qreal cssY)
 {
+    const qreal zoom = currentPageZoomLevel();
+    if (zoom > 0.0) {
+        cssX /= zoom;
+        cssY /= zoom;
+    }
+
     QString js = QStringLiteral(
         "(function(x,y){"
         "  var sel=window.getSelection();"
