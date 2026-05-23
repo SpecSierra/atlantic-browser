@@ -580,22 +580,46 @@ Page {
             id: filePicker
             objectName: "atlanticFilePickerPage"
             nameFilters: webView.contentItem ? webView.contentItem.fileChooserNameFilters : []
+            property bool _selectionCommitted: false
 
-            onSelectedContentPropertiesChanged: {
-                if (!webView.contentItem || !webView.contentItem.fileChooserActive
-                        || !selectedContentProperties || !selectedContentProperties.filePath) {
+            function submitSelection() {
+                if (_selectionCommitted || !webView.contentItem || !webView.contentItem.fileChooserActive) {
                     return
                 }
 
-                webView.contentItem.chooseFiles([selectedContentProperties.filePath])
+                var pickedPath = ""
+                if (selectedContentProperties) {
+                    if (selectedContentProperties.filePath) {
+                        pickedPath = selectedContentProperties.filePath
+                    } else if (selectedContentProperties.url) {
+                        pickedPath = selectedContentProperties.url
+                    }
+                }
+                if (!pickedPath && selectedContent) {
+                    pickedPath = selectedContent
+                }
+                if (!pickedPath) {
+                    return
+                }
+
+                _selectionCommitted = true
+                webView.contentItem.chooseFiles([pickedPath])
                 _filePickerOpen = false
                 pageStack.pop(filePicker, PageStackAction.Immediate)
+            }
+
+            onSelectedContentPropertiesChanged: {
+                submitSelection()
+            }
+
+            onSelectedContentChanged: {
+                submitSelection()
             }
 
             onStatusChanged: {
                 if (status === PageStatus.Deactivating) {
                     _filePickerOpen = false
-                    if (webView.contentItem && webView.contentItem.fileChooserActive) {
+                    if (!_selectionCommitted && webView.contentItem && webView.contentItem.fileChooserActive) {
                         webView.contentItem.cancelFileChooser()
                     }
                 }
