@@ -306,11 +306,14 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
         var focus = caretRect(sel.focusNode, sel.focusOffset);
         var range = sel.getRangeAt(0);
         var bounds = range.getBoundingClientRect();
+        var rects = range.getClientRects();
+        var firstRect = rects && rects.length ? rects[0] : null;
+        var lastRect = rects && rects.length ? rects[rects.length - 1] : null;
 
-        var sx = anchor ? anchor.left : (bounds ? bounds.left : 0);
-        var sy = anchor ? anchor.top : (bounds ? bounds.top : 0);
-        var ex = focus ? focus.left : (bounds ? bounds.right : 0);
-        var ey = focus ? focus.top : (bounds ? bounds.bottom : 0);
+        var sx = firstRect ? firstRect.left : (anchor ? anchor.left : (bounds ? bounds.left : 0));
+        var sy = firstRect ? firstRect.bottom : (anchor ? anchor.bottom : (bounds ? bounds.bottom : 0));
+        var ex = lastRect ? lastRect.right : (focus ? focus.right : (bounds ? bounds.right : 0));
+        var ey = lastRect ? lastRect.bottom : (focus ? focus.bottom : (bounds ? bounds.bottom : 0));
 
         return {
             type: 'select',
@@ -338,6 +341,8 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
 
     var longPressTimer = null;
     var longPressPoint = null;
+    var longPressStartPoint = null;
+    var longPressMoveThreshold = 12;
 
     function cancelLongPress() {
         if (longPressTimer) {
@@ -345,11 +350,13 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
             longPressTimer = null;
         }
         longPressPoint = null;
+        longPressStartPoint = null;
     }
 
     function beginLongPress(x, y) {
         cancelLongPress();
         longPressPoint = { x: x, y: y };
+        longPressStartPoint = { x: x, y: y };
         longPressTimer = setTimeout(function() {
             longPressTimer = null;
             if (longPressPoint && selectWordAtPoint(longPressPoint.x, longPressPoint.y))
@@ -381,8 +388,14 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
         if (p)
             beginLongPress(p.clientX, p.clientY);
     }, true);
-    document.addEventListener('touchmove', function() {
-        cancelLongPress();
+    document.addEventListener('touchmove', function(e) {
+        var p = touchPointFromEvent(e);
+        if (!p || !longPressStartPoint)
+            return;
+        var dx = p.clientX - longPressStartPoint.x;
+        var dy = p.clientY - longPressStartPoint.y;
+        if ((dx * dx) + (dy * dy) > longPressMoveThreshold * longPressMoveThreshold)
+            cancelLongPress();
     }, true);
     document.addEventListener('touchcancel', cancelLongPress, true);
     document.addEventListener('touchend', cancelLongPress, true);
