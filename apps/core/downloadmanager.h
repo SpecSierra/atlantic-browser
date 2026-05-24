@@ -20,6 +20,7 @@
 #include <QVariant>
 
 class TransferEngineInterface;
+typedef struct _WebKitDownload WebKitDownload;
 
 class DownloadManager : public QObject
 {
@@ -44,6 +45,12 @@ public slots:
     void cancelActiveTransfers();
     void cancel(int downloadId);
 
+public:
+    bool prepareDownload(WebKitDownload *download, const QString &suggestedFilename);
+    void updateDownload(WebKitDownload *download);
+    void downloadFinished(WebKitDownload *download);
+    void downloadFailed(WebKitDownload *download, const QString &reason);
+
 private slots:
 
 private:
@@ -56,6 +63,11 @@ private:
     void restartTransfer(int transferId);
 
     void setPdfPrinting(const bool pdfPrinting);
+    int ensureDownloadId(WebKitDownload *download);
+    QString ensureDestinationPath(const QString &suggestedFilename) const;
+    int transferIdForDownload(int downloadId) const;
+    void finalizeDownload(int downloadId, DownloadStatus::Status status, int transferStatus, const QString &reason);
+    QVariantMap downloadInfo(int downloadId) const;
 
     // TODO: unlike Gecko downloads and Sailfish transfers these mappings
     //       are not persistent -> after user has browser closed transfers can't be
@@ -63,10 +75,14 @@ private:
     QHash<qulonglong, int> m_download2transferMap;
     QHash<int, qulonglong> m_transfer2downloadMap;
     QHash<qulonglong, DownloadStatus::Status> m_statusCache;
+    QHash<WebKitDownload*, int> m_downloadObjectToId;
+    QHash<int, WebKitDownload*> m_downloadIdToObject;
+    QHash<int, QVariantMap> m_downloadInfoCache;
 
     TransferEngineInterface *m_transferClient;
 
     bool m_pdfPrinting;
+    int m_nextDownloadId = 1;
 
     friend class Browser;
 };

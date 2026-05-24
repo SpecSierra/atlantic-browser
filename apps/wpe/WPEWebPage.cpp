@@ -7,6 +7,7 @@
  */
 
 #include "WPEWebPage.h"
+#include "downloadmanager.h"
 
 #include <QBuffer>
 #include <QClipboard>
@@ -229,6 +230,39 @@ void onKeyboardProbeEvaluated(GObject* object, GAsyncResult* result, gpointer us
     } else if (inputMethod->isVisible()) {
         inputMethod->hide();
     }
+}
+
+gboolean onDownloadDecideDestination(WebKitDownload* download, gchar* suggestedFilename, gpointer)
+{
+    const QString suggested = suggestedFilename ? QString::fromUtf8(suggestedFilename) : QString();
+    return DownloadManager::instance()->prepareDownload(download, suggested);
+}
+
+void onDownloadReceivedData(WebKitDownload* download, guint64, gpointer)
+{
+    DownloadManager::instance()->updateDownload(download);
+}
+
+void onDownloadFinished(WebKitDownload* download, gpointer)
+{
+    DownloadManager::instance()->downloadFinished(download);
+}
+
+void onDownloadFailed(WebKitDownload* download, GError* error, gpointer)
+{
+    const QString reason = error ? QString::fromUtf8(error->message) : QStringLiteral("Download failed");
+    DownloadManager::instance()->downloadFailed(download, reason);
+}
+
+void onNetworkSessionDownloadStarted(WebKitNetworkSession*, WebKitDownload* download, gpointer)
+{
+    if (!download)
+        return;
+
+    g_signal_connect(download, "decide-destination", G_CALLBACK(onDownloadDecideDestination), nullptr);
+    g_signal_connect(download, "received-data", G_CALLBACK(onDownloadReceivedData), nullptr);
+    g_signal_connect(download, "finished", G_CALLBACK(onDownloadFinished), nullptr);
+    g_signal_connect(download, "failed", G_CALLBACK(onDownloadFailed), nullptr);
 }
 
 gboolean onDecidePolicy(WebKitWebView* webView, WebKitPolicyDecision* decision, WebKitPolicyDecisionType type, gpointer)
@@ -935,6 +969,12 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     connect(this, &WPEQtView::webViewCreated, this, [this]() {
         if (WebKitWebView* wv = webView()) {
             g_signal_connect(wv, "decide-policy", G_CALLBACK(onDecidePolicy), nullptr);
+            if (WebKitNetworkSession* session = webkit_web_view_get_network_session(wv)) {
+                if (!g_object_get_data(G_OBJECT(session), "atlantic-download-hooked")) {
+                    g_signal_connect(session, "download-started", G_CALLBACK(onNetworkSessionDownloadStarted), nullptr);
+                    g_object_set_data(G_OBJECT(session), "atlantic-download-hooked", GINT_TO_POINTER(1));
+                }
+            }
             g_signal_connect(
                 wv, "run-file-chooser",
                 G_CALLBACK(+[](WebKitWebView*, WebKitFileChooserRequest* request, gpointer userData) -> gboolean {
