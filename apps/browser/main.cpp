@@ -579,6 +579,11 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     QScopedPointer<QQuickView> view(new QQuickView);
     configureBrowserApplication(app.data(), view.data());
 
+    // Ensure clean exit when window closes
+    QObject::connect(view.data(), &QQuickView::closing, [app = app.data()]() {
+        app->quit();
+    });
+
     std::unique_ptr<QLibrary> runtimeLibrary(new QLibrary);
     if (!silicaMainSmokeUi) {
         QTimer::singleShot(browserRuntimeDelayMs(), app.data(),
@@ -590,5 +595,9 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     // construction which would override an earlier install).
     installBrowserRestartCount();
     installSigAbrtRestartHandler();
-    return app->exec();
+    
+    int result = app->exec();
+    
+    // Force thread cleanup before exit to prevent hanging processes
+    _exit(result);
 }
