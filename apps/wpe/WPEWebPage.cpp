@@ -636,6 +636,125 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
     webkit_user_script_unref(script);
 }
 
+static void onMediaBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
+{
+    WPEWebPage* page = static_cast<WPEWebPage*>(userData);
+    if (!page || !value)
+        return;
+
+    gchar* json = jsc_value_to_json(value, 0);
+    if (!json)
+        return;
+
+    QByteArray jsonBytes(json);
+    g_free(json);
+
+    QJsonDocument doc = QJsonDocument::fromJson(jsonBytes);
+    if (!doc.isObject())
+        return;
+
+    const QJsonObject obj = doc.object();
+    const QString type = obj.value(QStringLiteral("type")).toString();
+
+    if (type == QLatin1String("clear")) {
+        page->setMediaPlaybackState(false, false);
+        return;
+    }
+
+    const bool videoActive = obj.value(QStringLiteral("videoActive")).toBool();
+    const bool audioActive = obj.value(QStringLiteral("audioActive")).toBool() || videoActive;
+    page->setMediaPlaybackState(audioActive, videoActive);
+}
+
+static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page)
+{
+    g_signal_connect(ucm, "script-message-received::mediaBridge",
+                     G_CALLBACK(onMediaBridgeMessage), page);
+    webkit_user_content_manager_register_script_message_handler(ucm, "mediaBridge", nullptr);
+
+    static const gchar* mediaBridgeJs = R"JS(
+(function() {
+    if (window.__wpeMediaBridgeInstalled) return;
+    window.__wpeMediaBridgeInstalled = true;
+
+    function isMediaElement(el) {
+        if (!el || !el.tagName)
+            return false;
+        var tag = el.tagName.toLowerCase();
+        return tag === 'audio' || tag === 'video';
+    }
+
+    function mediaStatePayload() {
+        var media = document.querySelectorAll('audio,video');
+        var audioActive = false;
+        var videoActive = false;
+
+        for (var i = 0; i < media.length; i++) {
+            var el = media[i];
+            if (!isMediaElement(el))
+                continue;
+            if (el.paused || el.ended)
+                continue;
+
+            if (el.tagName.toLowerCase() === 'video') {
+                videoActive = true;
+                audioActive = true;
+            } else if (!el.muted && el.volume > 0) {
+                audioActive = true;
+            }
+        }
+
+        return {
+            type: 'state',
+            audioActive: audioActive,
+            videoActive: videoActive
+        };
+    }
+
+    function postMediaState() {
+        try {
+            window.webkit.messageHandlers.mediaBridge.postMessage(mediaStatePayload());
+        } catch (ex) {
+            console.error('[WPE-MEDIA-JS] postMessage error: ' + ex);
+        }
+    }
+
+    var events = [
+        'play',
+        'playing',
+        'pause',
+        'ended',
+        'emptied',
+        'volumechange',
+        'loadeddata',
+        'loadedmetadata',
+        'canplay',
+        'canplaythrough',
+        'stalled',
+        'waiting',
+        'seeking',
+        'seeked',
+        'webkitbeginfullscreen',
+        'webkitendfullscreen'
+    ];
+    for (var i = 0; i < events.length; i++) {
+        document.addEventListener(events[i], postMediaState, true);
+    }
+
+    document.addEventListener('DOMContentLoaded', postMediaState, true);
+    postMediaState();
+})();
+)JS";
+
+    WebKitUserScript* script = webkit_user_script_new(
+        mediaBridgeJs,
+        WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+        nullptr, nullptr);
+    webkit_user_content_manager_add_script(ucm, script);
+    webkit_user_script_unref(script);
+}
+
 bool dispatchTextToFocusedElement(WPEWebPage* page, const QString& text, int replaceBeforeCaret)
 {
     if (!page)
@@ -1063,6 +1182,7 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             webkit_user_script_unref(script);
 
             onSelectionBridgeInstall(ucm, this);
+            onMediaBridgeInstall(ucm, this);
 
             WebKitNetworkSession* session = webkit_web_view_get_network_session(wv);
             if (!session) {
@@ -1147,6 +1267,23 @@ void WPEWebPage::setFullscreenHeight(qreal height)
     if (!qFuzzyCompare(m_fullscreenHeight, height)) {
         m_fullscreenHeight = height;
         emit fullscreenHeightChanged();
+    }
+}
+
+void WPEWebPage::setMediaPlaybackState(bool audioActive, bool videoActive)
+{
+    const bool changed = (m_mediaAudioActive != audioActive) || (m_mediaVideoActive != videoActive);
+    if (m_mediaAudioActive != audioActive) {
+        m_mediaAudioActive = audioActive;
+        emit mediaAudioActiveChanged();
+    }
+    if (m_mediaVideoActive != videoActive) {
+        m_mediaVideoActive = videoActive;
+        emit mediaVideoActiveChanged();
+    }
+    if (changed) {
+        qDebug() << "[WPE-MEDIA] playback state audio=" << m_mediaAudioActive
+                 << "video=" << m_mediaVideoActive;
     }
 }
 
@@ -1547,6 +1684,7 @@ void WPEWebPage::onLoadingChanged(WPEQtViewLoadRequest *loadRequest)
             Q_EMIT selectionTextChanged();
             Q_EMIT textSelectionActiveChanged();
         }
+        setMediaPlaybackState(false, false);
         // Reset security on new navigation
         static_cast<WPESecurityInfo*>(m_security)->reset();
         emit securityChanged();
@@ -1571,6 +1709,7 @@ void WPEWebPage::onLoadingChanged(WPEQtViewLoadRequest *loadRequest)
     case WPEQtView::LoadStoppedStatus:
     case WPEQtView::LoadFailedStatus:
         m_loaded = false;
+        setMediaPlaybackState(false, false);
         emit loadedChanged();
         break;
     }

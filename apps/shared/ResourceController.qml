@@ -32,14 +32,17 @@ Item {
     property bool _isVideoStream
     property bool _webrtcAudioActive
     property bool _webrtcVideoActive
+    property bool _htmlAudioActive
+    property bool _htmlVideoActive
 
     function calculateStatus() {
-        var video = _webrtcVideoActive
-        var audio = _webrtcAudioActive
+        var video = _webrtcVideoActive || _htmlVideoActive
+        var audio = _webrtcAudioActive || _htmlAudioActive || video
 
         if (_mediaState === "play" && _lastStateOwner === _lastMetaOwner) {
             if (_isVideoStream) {
                 video = true
+                audio = true
             }
             if (_isAudioStream) {
                 audio = true

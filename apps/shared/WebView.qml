@@ -40,6 +40,12 @@ WebContainer {
         background: !webView.visible
     }
 
+    onContentItemChanged: {
+        resourceController._htmlAudioActive = contentItem ? contentItem.mediaAudioActive : false
+        resourceController._htmlVideoActive = contentItem ? contentItem.mediaVideoActive : false
+        resourceController.calculateStatus()
+    }
+
     property var _webPageCreator: WebPageCreator {
         activeWebPage: contentItem
         model: tabModel
@@ -68,6 +74,20 @@ WebContainer {
 
     property QtObject fixedToolbarConfig: QtObject {
         property bool value: false
+    }
+
+    Connections {
+        target: contentItem
+        ignoreUnknownSignals: true
+
+        onMediaAudioActiveChanged: {
+            resourceController._htmlAudioActive = contentItem ? contentItem.mediaAudioActive : false
+            resourceController.calculateStatus()
+        }
+        onMediaVideoActiveChanged: {
+            resourceController._htmlVideoActive = contentItem ? contentItem.mediaVideoActive : false
+            resourceController.calculateStatus()
+        }
     }
 
     function stop() {

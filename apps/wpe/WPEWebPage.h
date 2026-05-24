@@ -93,6 +93,8 @@ class WPEWebPage : public WPEQtView
     Q_PROPERTY(bool chrome READ chrome WRITE setChrome NOTIFY chromeChanged)
     Q_PROPERTY(bool forcedChrome READ forcedChrome WRITE setForcedChrome NOTIFY forcedChromeChanged)
     Q_PROPERTY(bool fullscreen READ fullscreen NOTIFY fullscreenChanged)
+    Q_PROPERTY(bool mediaAudioActive READ mediaAudioActive NOTIFY mediaAudioActiveChanged FINAL)
+    Q_PROPERTY(bool mediaVideoActive READ mediaVideoActive NOTIFY mediaVideoActiveChanged FINAL)
     Q_PROPERTY(bool atYBeginning READ atYBeginning NOTIFY atYBeginningChanged)
     Q_PROPERTY(bool atYEnd READ atYEnd NOTIFY atYEndChanged)
     Q_PROPERTY(QString favicon READ favicon WRITE setFavicon NOTIFY faviconChanged)
@@ -154,6 +156,8 @@ public:
     void setForcedChrome(bool forcedChrome);
 
     bool fullscreen() const;
+    bool mediaAudioActive() const { return m_mediaAudioActive; }
+    bool mediaVideoActive() const { return m_mediaVideoActive; }
     bool atYBeginning() const;
     bool atYEnd() const;
 
@@ -191,6 +195,7 @@ public:
     bool desktopMode() const;
     void setDesktopMode(bool desktop);
     void applyInitialDeviceScale(qreal scale);
+    void setMediaPlaybackState(bool audioActive, bool videoActive);
 
     Q_INVOKABLE void loadTab(const QString &url, bool force = false);
     Q_INVOKABLE void grabToFile(const QSize &size);
@@ -254,6 +259,8 @@ signals:
     void chromeChanged();
     void forcedChromeChanged();
     void fullscreenChanged();
+    void mediaAudioActiveChanged();
+    void mediaVideoActiveChanged();
     void atYBeginningChanged();
     void atYEndChanged();
     void faviconChanged();
@@ -326,6 +333,8 @@ private:
     bool m_chrome = true;
     bool m_forcedChrome = false;
     bool m_fullscreen = false;
+    bool m_mediaAudioActive = false;
+    bool m_mediaVideoActive = false;
     bool m_atYBeginning = true;
     bool m_atYEnd = false;
     QString m_favicon;
