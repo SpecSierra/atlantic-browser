@@ -1,6 +1,7 @@
 #include "browserruntime.h"
 
 #include "browser.h"
+#include "browserservice.h"
 #include "declarativebookmarkmodel.h"
 #include "bookmarkfiltermodel.h"
 #include "desktopbookmarkwriter.h"
@@ -96,6 +97,23 @@ extern "C" Q_DECL_EXPORT bool atlanticBrowserRuntimeStart(QQuickView *view,
 
     fprintf(stderr, "[ATLANTIC-RUNTIME] Starting browser runtime\n");
     Browser *browser = new Browser(view, QString::fromLocal8Bit(dataPath ? dataPath : ""), app);
+
+    BrowserService *service = new BrowserService(app);
+    if (service->registered()) {
+        QObject::connect(service, &BrowserService::openUrlRequested,
+                         browser, &Browser::openUrl);
+        QObject::connect(service, &BrowserService::activateNewTabViewRequested,
+                         browser, &Browser::openNewTabView);
+        QObject::connect(service, &BrowserService::dumpMemoryInfoRequested,
+                         browser, &Browser::dumpMemoryInfo);
+        QObject::connect(service, &BrowserService::cancelTransferRequested,
+                         browser, &Browser::cancelDownload);
+        QObject::connect(service, &BrowserService::restartTransferRequested,
+                         browser, &Browser::restartDownload);
+    } else {
+        fprintf(stderr, "[ATLANTIC-RUNTIME] BrowserService registration failed; transfer callbacks unavailable\n");
+    }
+
     browser->load();
     view->setProperty("atlanticBrowserRuntimeLoaded", true);
     view->raise();

@@ -89,16 +89,28 @@ void DownloadManager::cancel(int downloadId)
 
 void DownloadManager::cancelTransfer(int transferId)
 {
-    m_transferClient->finishTransfer(transferId,
-                                     TransferEngineData::TransferInterrupted,
-                                     QString("Transfer got unavailable"));
+    if (m_transfer2downloadMap.contains(transferId)) {
+        cancel(m_transfer2downloadMap.value(transferId));
+    } else {
+        m_transferClient->finishTransfer(transferId,
+                                         TransferEngineData::TransferInterrupted,
+                                         QString("Transfer got unavailable"));
+    }
 }
 
 void DownloadManager::restartTransfer(int transferId)
 {
-    m_transferClient->finishTransfer(transferId,
-                                     TransferEngineData::TransferInterrupted,
-                                     QString("Transfer got unavailable"));
+    if (m_transfer2downloadMap.contains(transferId)) {
+        // WebKit download restart is not directly supported; report interruption so
+        // the stale transfer entry is cleaned up instead of silently doing nothing.
+        m_transferClient->finishTransfer(transferId,
+                                         TransferEngineData::TransferInterrupted,
+                                         QString("Restart not supported for active WebKit download"));
+    } else {
+        m_transferClient->finishTransfer(transferId,
+                                         TransferEngineData::TransferInterrupted,
+                                         QString("Transfer got unavailable"));
+    }
 }
 
 void DownloadManager::setPdfPrinting(const bool pdfPrinting)
