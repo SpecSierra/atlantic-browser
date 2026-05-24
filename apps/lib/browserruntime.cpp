@@ -96,9 +96,15 @@ extern "C" Q_DECL_EXPORT bool atlanticBrowserRuntimeStart(QQuickView *view,
     registerBrowserQmlTypes();
 
     fprintf(stderr, "[ATLANTIC-RUNTIME] Starting browser runtime\n");
+    BrowserService *service = new BrowserService(app);
+    if (service->registered()) {
+        fprintf(stderr, "[ATLANTIC-RUNTIME] BrowserService registered\n");
+    } else {
+        fprintf(stderr, "[ATLANTIC-RUNTIME] BrowserService registration failed; transfer callbacks unavailable\n");
+    }
+
     Browser *browser = new Browser(view, QString::fromLocal8Bit(dataPath ? dataPath : ""), app);
 
-    BrowserService *service = new BrowserService(app);
     if (service->registered()) {
         QObject::connect(service, &BrowserService::openUrlRequested,
                          browser, &Browser::openUrl);
@@ -110,8 +116,6 @@ extern "C" Q_DECL_EXPORT bool atlanticBrowserRuntimeStart(QQuickView *view,
                          browser, &Browser::cancelDownload);
         QObject::connect(service, &BrowserService::restartTransferRequested,
                          browser, &Browser::restartDownload);
-    } else {
-        fprintf(stderr, "[ATLANTIC-RUNTIME] BrowserService registration failed; transfer callbacks unavailable\n");
     }
 
     browser->load();
