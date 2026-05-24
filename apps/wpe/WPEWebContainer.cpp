@@ -507,7 +507,7 @@ void WPEWebContainer::activatePage(int tabId)
 
     if (m_contentItem != page) {
         m_contentItem = page;
-        m_waitingForFreshTitle = true;
+        m_waitingForFreshTitle = page->title().isEmpty();
         emit contentItemChanged();
         emit needChromeChanged();
         emit tabIdChanged();

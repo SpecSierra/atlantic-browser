@@ -62,7 +62,8 @@ Shared.Background {
     }
 
     function loadPage(url, newTab) {
-        console.log("[QML-LOAD] loadPage url=" + url + " newTab=" + newTab)
+        var openInNewTab = !!newTab || searchField.enteringNewTabUrl
+        console.log("[QML-LOAD] loadPage url=" + url + " newTab=" + openInNewTab)
         if (url == "about:config") {
             pageStack.animatorPush(Qt.resolvedUrl("ConfigWarning.qml"), {"browserPage": browserPage})
         } else if (url == "about:settings") {
@@ -77,7 +78,7 @@ Shared.Background {
             }
 
             console.log("[QML-LOAD] resolved pageUrl=" + pageUrl)
-            webView.load(pageUrl)
+            webView.load(pageUrl, "", openInNewTab)
         }
 
         overlayAnimator.showChrome()
