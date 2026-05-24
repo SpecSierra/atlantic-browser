@@ -1123,6 +1123,11 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
         if (WebKitWebView* wv = webView()) {
             if (WebKitSettings* settings = webkit_web_view_get_settings(wv)) {
                 webkit_settings_set_enable_fullscreen(settings, TRUE);
+                // Enable hardware acceleration and performance features
+                webkit_settings_set_hardware_acceleration_policy(settings, WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS);
+                webkit_settings_set_enable_web_gl(settings, TRUE);
+                webkit_settings_set_enable_accelerated_2d_canvas(settings, TRUE);
+                webkit_settings_set_enable_smooth_scrolling(settings, TRUE);
             }
             g_signal_connect(wv, "decide-policy", G_CALLBACK(onDecidePolicy), nullptr);
             if (WebKitNetworkSession* session = webkit_web_view_get_network_session(wv)) {
