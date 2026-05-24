@@ -579,6 +579,9 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     QScopedPointer<QQuickView> view(new QQuickView);
     configureBrowserApplication(app.data(), view.data());
 
+    // Connect window destruction to app quit (ensures proper shutdown)
+    QObject::connect(view.data(), &QObject::destroyed, app.data(), &QGuiApplication::quit);
+
     std::unique_ptr<QLibrary> runtimeLibrary(new QLibrary);
     if (!silicaMainSmokeUi) {
         QTimer::singleShot(browserRuntimeDelayMs(), app.data(),
