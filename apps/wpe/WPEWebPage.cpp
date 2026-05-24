@@ -664,9 +664,8 @@ static void onMediaBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpo
 
     const bool videoActive = obj.value(QStringLiteral("videoActive")).toBool();
     const bool audioActive = obj.value(QStringLiteral("audioActive")).toBool() || videoActive;
-    const bool fullscreenActive = obj.value(QStringLiteral("fullscreenActive")).toBool();
     page->setMediaPlaybackState(audioActive, videoActive);
-    page->setFullscreenState(fullscreenActive);
+}
 }
 
 static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page)
@@ -692,6 +691,8 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
         var audioActive = false;
         var videoActive = false;
         var fullscreenActive = !!(document.fullscreenElement || document.webkitFullscreenElement);
+        var volume = 1.0;
+        var muted = false;
 
         for (var i = 0; i < media.length; i++) {
             var el = media[i];
@@ -700,14 +701,17 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
             if (!fullscreenActive && el.tagName.toLowerCase() === 'video') {
                 fullscreenActive = !!el.webkitDisplayingFullscreen;
             }
-            if (el.paused || el.ended)
-                continue;
-
-            if (el.tagName.toLowerCase() === 'video') {
-                videoActive = true;
-                audioActive = true;
-            } else if (!el.muted && el.volume > 0) {
-                audioActive = true;
+            if (!el.paused && !el.ended) {
+                if (el.tagName.toLowerCase() === 'video') {
+                    videoActive = true;
+                    audioActive = true;
+                } else if (!el.muted && el.volume > 0) {
+                    audioActive = true;
+                }
+                if (el.volume !== undefined) {
+                    volume = el.volume;
+                    muted = el.muted;
+                }
             }
         }
 
@@ -715,7 +719,9 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
             type: 'state',
             audioActive: audioActive,
             videoActive: videoActive,
-            fullscreenActive: fullscreenActive
+            fullscreenActive: fullscreenActive,
+            volume: volume,
+            muted: muted
         };
     }
 
@@ -1519,6 +1525,14 @@ void WPEWebPage::suspendView()
 {
     setVisible(false);
     updateFramePumpState();
+    // Pause all media when suspending (e.g., app close)
+    runJavaScript(QStringLiteral(
+        "(function(){"
+        "  var media = document.querySelectorAll('audio,video');"
+        "  for (var i = 0; i < media.length; i++) {"
+        "    if (!media[i].paused) media[i].pause();"
+        "  }"
+        "})();"));
 }
 
 void WPEWebPage::resumeView()
@@ -1550,6 +1564,30 @@ void WPEWebPage::sendAsyncMessage(const QString &name, const QVariant &data)
             "})();"));
         setFullscreenState(false);
     }
+}
+
+void WPEWebPage::setMediaVolume(qreal volume)
+{
+    if (volume < 0.0) volume = 0.0;
+    if (volume > 1.0) volume = 1.0;
+    runJavaScript(QString::fromLatin1(
+        "(function(){"
+        "  var media = document.querySelectorAll('audio,video');"
+        "  for (var i = 0; i < media.length; i++) {"
+        "    media[i].volume = %1;"
+        "  }"
+        "})();").arg(volume));
+}
+
+void WPEWebPage::setMediaMuted(bool muted)
+{
+    runJavaScript(QString::fromLatin1(
+        "(function(){"
+        "  var media = document.querySelectorAll('audio,video');"
+        "  for (var i = 0; i < media.length; i++) {"
+        "    media[i].muted = %1;"
+        "  }"
+        "})();").arg(muted ? "true" : "false"));
 }
 
 void WPEWebPage::addMessageListener(const QString &)

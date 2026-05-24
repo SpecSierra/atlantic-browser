@@ -197,6 +197,8 @@ public:
     void applyInitialDeviceScale(qreal scale);
     void setFullscreenState(bool fullscreen);
     void setMediaPlaybackState(bool audioActive, bool videoActive);
+    Q_INVOKABLE void setMediaVolume(qreal volume);
+    Q_INVOKABLE void setMediaMuted(bool muted);
 
     Q_INVOKABLE void loadTab(const QString &url, bool force = false);
     Q_INVOKABLE void grabToFile(const QSize &size);
