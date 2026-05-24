@@ -11,12 +11,19 @@
 
 #include <QGuiApplication>
 #include <QLibrary>
+#include <QOffscreenSurface>
+#include <QFileInfo>
+#include <QOpenGLContext>
+#include <QOpenGLFunctions>
 #include <QQuickView>
+#include <QSet>
+#include <QStringList>
 #include <qqmldebug.h>
 #include <QTimer>
 #include <QTranslator>
 
 #include "../wpe/WPERuntimePaths.h"
+#include <EGL/egl.h>
 #include <memory>
 #include <unistd.h>
 #include <signal.h>
@@ -154,6 +161,18 @@ static void configureBrowserProcessEnvironment()
         value = value.trimmed();
         return value.isEmpty();
     };
+    auto firstExistingDirectory = [](std::initializer_list<QString> candidates) {
+        for (const QString &candidate : candidates) {
+            if (candidate.isEmpty()) {
+                continue;
+            }
+            const QFileInfo info(candidate);
+            if (info.exists() && info.isDir()) {
+                return candidate.toUtf8();
+            }
+        }
+        return QByteArray();
+    };
 
     unsetenv("MOZ_DISABLE_CRASH_GUARD");
     unsetenv("MOZ_WEBGL_PREFER_EGL");
@@ -161,12 +180,246 @@ static void configureBrowserProcessEnvironment()
 
     if (needsEmptyPluginPath(qgetenv("GST_PLUGIN_SYSTEM_PATH_1_0")))
         qputenv("GST_PLUGIN_SYSTEM_PATH_1_0", QByteArray());
-    if (qgetenv("GST_PLUGIN_PATH").isEmpty())
-        qputenv("GST_PLUGIN_PATH", WPERuntimePaths::kGStreamerPluginDir);
+    if (qgetenv("GST_PLUGIN_PATH").isEmpty()) {
+        const QByteArray pluginPath = firstExistingDirectory({
+            QString::fromUtf8(WPERuntimePaths::kGStreamerPluginDir),
+            QStringLiteral("/usr/lib/gstreamer-1.0")
+        });
+        if (!pluginPath.isEmpty())
+            qputenv("GST_PLUGIN_PATH", pluginPath);
+    }
     if (qgetenv("WEBKIT_GST_ENABLE_HLS_SUPPORT").isEmpty())
         qputenv("WEBKIT_GST_ENABLE_HLS_SUPPORT", "1");
-    if (qgetenv("LIBGL_DRIVERS_PATH").isEmpty())
-        qputenv("LIBGL_DRIVERS_PATH", WPERuntimePaths::kLibGLDriversDir);
+    if (qgetenv("LIBGL_DRIVERS_PATH").isEmpty()) {
+        const QByteArray driverPath = firstExistingDirectory({
+            QString::fromUtf8(WPERuntimePaths::kLibGLDriversDir),
+            QStringLiteral("/usr/lib/dri")
+        });
+        if (!driverPath.isEmpty())
+            qputenv("LIBGL_DRIVERS_PATH", driverPath);
+    }
+}
+
+struct GpuCapabilityProbeResult {
+    bool probeSucceeded = false;
+    bool conservativeMode = true;
+    bool eglInfoAvailable = false;
+    bool hasEglCreateContext = false;
+    bool hasEglSurfacelessContext = false;
+    bool hasGlExternalImage = false;
+    bool hasGlBgra8888 = false;
+    int glesMajor = -1;
+    int glesMinor = -1;
+    QString reason = QStringLiteral("probe-not-run");
+    QString eglVendor;
+    QString eglVersion;
+    QString glVendor;
+    QString glRenderer;
+    QString glVersion;
+};
+
+static bool extensionListContains(const QByteArray &extensions, const char *extension)
+{
+    if (!extension || !*extension || extensions.isEmpty()) {
+        return false;
+    }
+    return extensions.split(' ').contains(QByteArray(extension));
+}
+
+static bool parseOpenGlesVersion(const QByteArray &versionString, int *majorVersion, int *minorVersion)
+{
+    if (!majorVersion || !minorVersion) {
+        return false;
+    }
+
+    *majorVersion = -1;
+    *minorVersion = -1;
+
+    for (int i = 0; i < versionString.size(); ++i) {
+        if (versionString.at(i) < '0' || versionString.at(i) > '9') {
+            continue;
+        }
+
+        int major = 0;
+        while (i < versionString.size() && versionString.at(i) >= '0' && versionString.at(i) <= '9') {
+            major = major * 10 + (versionString.at(i) - '0');
+            ++i;
+        }
+
+        int minor = 0;
+        bool minorFound = false;
+        if (i < versionString.size() && versionString.at(i) == '.') {
+            ++i;
+            while (i < versionString.size() && versionString.at(i) >= '0' && versionString.at(i) <= '9') {
+                minor = minor * 10 + (versionString.at(i) - '0');
+                minorFound = true;
+                ++i;
+            }
+        }
+
+        *majorVersion = major;
+        *minorVersion = minorFound ? minor : 0;
+        return true;
+    }
+
+    return false;
+}
+
+static QString diagnosticValue(const QString &value)
+{
+    return value.isEmpty() ? QStringLiteral("unknown") : value;
+}
+
+static void queryEglDetailsFromCurrentContext(GpuCapabilityProbeResult *result)
+{
+    if (!result) {
+        return;
+    }
+
+    QLibrary eglLibrary(QStringLiteral("EGL"));
+    if (!eglLibrary.load()) {
+        return;
+    }
+
+    using EglGetCurrentDisplayFn = EGLDisplay (*)(void);
+    using EglQueryStringFn = const char *(*)(EGLDisplay, EGLint);
+
+    const auto eglGetCurrentDisplayFn = reinterpret_cast<EglGetCurrentDisplayFn>(eglLibrary.resolve("eglGetCurrentDisplay"));
+    const auto eglQueryStringFn = reinterpret_cast<EglQueryStringFn>(eglLibrary.resolve("eglQueryString"));
+    if (!eglGetCurrentDisplayFn || !eglQueryStringFn) {
+        return;
+    }
+
+    const EGLDisplay display = eglGetCurrentDisplayFn();
+    if (display == EGL_NO_DISPLAY) {
+        return;
+    }
+
+    const char *eglVendor = eglQueryStringFn(display, EGL_VENDOR);
+    const char *eglVersion = eglQueryStringFn(display, EGL_VERSION);
+    const char *eglExtensions = eglQueryStringFn(display, EGL_EXTENSIONS);
+
+    if (eglVendor) {
+        result->eglVendor = QString::fromLocal8Bit(eglVendor);
+    }
+    if (eglVersion) {
+        result->eglVersion = QString::fromLocal8Bit(eglVersion);
+    }
+
+    const QByteArray extensions = eglExtensions ? QByteArray(eglExtensions) : QByteArray();
+    result->eglInfoAvailable = eglVendor || eglVersion || eglExtensions;
+    result->hasEglCreateContext = extensionListContains(extensions, "EGL_KHR_create_context");
+    result->hasEglSurfacelessContext = extensionListContains(extensions, "EGL_KHR_surfaceless_context");
+}
+
+static GpuCapabilityProbeResult probeGpuCapability()
+{
+    GpuCapabilityProbeResult result;
+
+    QSurfaceFormat format = QSurfaceFormat::defaultFormat();
+    format.setRenderableType(QSurfaceFormat::OpenGLES);
+    format.setProfile(QSurfaceFormat::NoProfile);
+
+    QOffscreenSurface surface;
+    surface.setFormat(format);
+    surface.create();
+    if (!surface.isValid()) {
+        result.reason = QStringLiteral("offscreen-surface-create-failed");
+        return result;
+    }
+
+    QOpenGLContext context;
+    context.setFormat(surface.format());
+    if (!context.create()) {
+        result.reason = QStringLiteral("context-create-failed");
+        return result;
+    }
+
+    if (!context.makeCurrent(&surface)) {
+        result.reason = QStringLiteral("context-make-current-failed");
+        return result;
+    }
+
+    QOpenGLFunctions *glFunctions = context.functions();
+    if (!glFunctions) {
+        context.doneCurrent();
+        result.reason = QStringLiteral("gl-functions-unavailable");
+        return result;
+    }
+
+    const char *glVendor = reinterpret_cast<const char *>(glFunctions->glGetString(GL_VENDOR));
+    const char *glRenderer = reinterpret_cast<const char *>(glFunctions->glGetString(GL_RENDERER));
+    const char *glVersion = reinterpret_cast<const char *>(glFunctions->glGetString(GL_VERSION));
+
+    if (glVendor) {
+        result.glVendor = QString::fromLocal8Bit(glVendor);
+    }
+    if (glRenderer) {
+        result.glRenderer = QString::fromLocal8Bit(glRenderer);
+    }
+    if (glVersion) {
+        result.glVersion = QString::fromLocal8Bit(glVersion);
+    }
+
+    const QSet<QByteArray> glExtensions = context.extensions();
+    result.hasGlExternalImage = glExtensions.contains(QByteArrayLiteral("GL_OES_EGL_image_external"))
+            || glExtensions.contains(QByteArrayLiteral("GL_OES_EGL_image"));
+    result.hasGlBgra8888 = glExtensions.contains(QByteArrayLiteral("GL_EXT_texture_format_BGRA8888"))
+            || glExtensions.contains(QByteArrayLiteral("GL_APPLE_texture_format_BGRA8888"));
+
+    queryEglDetailsFromCurrentContext(&result);
+    context.doneCurrent();
+
+    parseOpenGlesVersion(result.glVersion.toLatin1(), &result.glesMajor, &result.glesMinor);
+    result.probeSucceeded = !result.glRenderer.isEmpty() && !result.glVersion.isEmpty();
+
+    QStringList reasons;
+    if (!result.probeSucceeded) {
+        reasons << QStringLiteral("probe-incomplete");
+    }
+    if (result.glesMajor < 0) {
+        reasons << QStringLiteral("gles-version-unknown");
+    } else if (result.glesMajor < 3) {
+        reasons << QStringLiteral("gles<3");
+    }
+    if (!result.hasGlExternalImage) {
+        reasons << QStringLiteral("missing-gl-oes-egl-image-external");
+    }
+
+    result.conservativeMode = !reasons.isEmpty();
+    result.reason = reasons.isEmpty() ? QStringLiteral("modern-capable") : reasons.join(QStringLiteral(","));
+    return result;
+}
+
+static void configureGpuModeFromCapabilities()
+{
+    const GpuCapabilityProbeResult probe = probeGpuCapability();
+    const QByteArray conservativeAuto = probe.conservativeMode ? QByteArrayLiteral("1") : QByteArrayLiteral("0");
+    const bool hasPresetConservative = qEnvironmentVariableIsSet("ATLANTIC_GPU_CONSERVATIVE");
+
+    qputenv("ATLANTIC_GPU_CONSERVATIVE_PROBE", conservativeAuto);
+    qputenv("ATLANTIC_GPU_PROBE_STATUS", probe.probeSucceeded ? QByteArrayLiteral("ok") : QByteArrayLiteral("failed"));
+
+    if (!hasPresetConservative) {
+        qputenv("ATLANTIC_GPU_CONSERVATIVE", conservativeAuto);
+    }
+
+    const QByteArray effectiveConservative = qgetenv("ATLANTIC_GPU_CONSERVATIVE");
+    fprintf(stderr,
+            "[ATLANTIC] GPU caps: egl=%s/%s glVendor=%s renderer=%s gles=%s ext{egl_create_ctx=%d,egl_surfaceless=%d,gl_external_image=%d,gl_bgra8888=%d} conservative_auto=%s conservative_effective=%s source=%s reason=%s\n",
+            qPrintable(diagnosticValue(probe.eglVendor)),
+            qPrintable(diagnosticValue(probe.eglVersion)),
+            qPrintable(diagnosticValue(probe.glVendor)),
+            qPrintable(diagnosticValue(probe.glRenderer)),
+            qPrintable(diagnosticValue(probe.glVersion)),
+            probe.hasEglCreateContext ? 1 : 0,
+            probe.hasEglSurfacelessContext ? 1 : 0,
+            probe.hasGlExternalImage ? 1 : 0,
+            probe.hasGlBgra8888 ? 1 : 0,
+            conservativeAuto.constData(),
+            effectiveConservative.isEmpty() ? "unknown" : effectiveConservative.constData(),
+            hasPresetConservative ? "preset" : "auto",
+            qPrintable(probe.reason));
 }
 
 static void configureBrowserApplication(QGuiApplication *app, QQuickView *view)
@@ -322,6 +575,7 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     }
 
     QScopedPointer<QGuiApplication> app(new QGuiApplication(argc, argv));
+    configureGpuModeFromCapabilities();
     QScopedPointer<QQuickView> view(new QQuickView);
     configureBrowserApplication(app.data(), view.data());
 

@@ -27,8 +27,102 @@
 #include <QQmlEngine>
 #include <QQuickItem>
 #include <QQuickView>
+#include <QQuickWindow>
 #include <QWindow>
 #include <stdio.h>
+
+namespace {
+
+const char *applicationStateName(Qt::ApplicationState state)
+{
+    switch (state) {
+    case Qt::ApplicationSuspended:
+        return "suspended";
+    case Qt::ApplicationInactive:
+        return "inactive";
+    case Qt::ApplicationActive:
+        return "active";
+    default:
+        return "unknown";
+    }
+}
+
+void requestActivePageRenderRecovery(QQuickView *view, const char *reason)
+{
+    if (!view) {
+        return;
+    }
+
+    const QList<WPEWebPage *> pages = view->findChildren<WPEWebPage *>();
+    int resumedPageCount = 0;
+    for (WPEWebPage *page : pages) {
+        if (!page || !page->active()) {
+            continue;
+        }
+
+        page->resumeView();
+        ++resumedPageCount;
+    }
+
+    if (resumedPageCount > 0) {
+        view->update();
+    }
+
+    fprintf(stderr, "[ATLANTIC-RUNTIME] Render recovery (%s): resumed %d active page(s) out of %d\n",
+            reason ? reason : "unknown", resumedPageCount, pages.size());
+}
+
+void installRenderRecoveryHooks(QQuickView *view, QGuiApplication *app)
+{
+    if (!view || !app) {
+        return;
+    }
+
+    Qt::ApplicationState previousState = app->applicationState();
+
+    QObject::connect(app, &QGuiApplication::applicationStateChanged,
+                     view,
+                     [view, previousState](Qt::ApplicationState newState) mutable {
+        const Qt::ApplicationState oldState = previousState;
+        previousState = newState;
+
+        if (newState != Qt::ApplicationActive) {
+            return;
+        }
+
+        const bool resumedFromBackground = oldState == Qt::ApplicationInactive
+                || oldState == Qt::ApplicationSuspended;
+        if (!resumedFromBackground) {
+            return;
+        }
+
+        fprintf(stderr, "[ATLANTIC-RUNTIME] Application state transition: %s -> %s\n",
+                applicationStateName(oldState), applicationStateName(newState));
+        requestActivePageRenderRecovery(view, "app-activated");
+    },
+                     Qt::UniqueConnection);
+
+    QObject::connect(view, &QQuickWindow::sceneGraphError,
+                     view,
+                     [view](QQuickWindow::SceneGraphError error, const QString &message) {
+        fprintf(stderr, "[ATLANTIC-RUNTIME] Scene graph error (%d): %s\n",
+                static_cast<int>(error), message.toUtf8().constData());
+        requestActivePageRenderRecovery(view, "scenegraph-error");
+    },
+                     Qt::UniqueConnection);
+
+    QObject::connect(view, &QQuickWindow::sceneGraphInvalidated,
+                     view,
+                     [view, app]() {
+        fprintf(stderr, "[ATLANTIC-RUNTIME] Scene graph invalidated\n");
+        if (app && app->applicationState() == Qt::ApplicationActive) {
+            requestActivePageRenderRecovery(view, "scenegraph-invalidated");
+        }
+    },
+                     Qt::UniqueConnection);
+}
+
+} // namespace
 
 static QObject *search_model_factory(QQmlEngine *, QJSEngine *)
 {
@@ -104,6 +198,7 @@ extern "C" Q_DECL_EXPORT bool atlanticBrowserRuntimeStart(QQuickView *view,
     }
 
     Browser *browser = new Browser(view, QString::fromLocal8Bit(dataPath ? dataPath : ""), app);
+    installRenderRecoveryHooks(view, app);
 
     if (service->registered()) {
         QObject::connect(service, &BrowserService::openUrlRequested,

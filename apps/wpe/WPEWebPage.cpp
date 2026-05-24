@@ -43,6 +43,27 @@ namespace {
 
 constexpr double kMinimumPinchZoomFactor = 0.5;
 constexpr double kMaximumPinchZoomFactor = 3.0;
+constexpr int kDefaultFramePumpIntervalMs = 33;
+constexpr int kConservativeFramePumpIntervalMs = 50;
+
+bool envVarEnabled(const QByteArray &value)
+{
+    const QByteArray normalized = value.trimmed().toLower();
+    return normalized == "1" || normalized == "true" || normalized == "yes" || normalized == "on";
+}
+
+int framePumpIntervalForCurrentGpuMode()
+{
+    bool ok = false;
+    const int overrideMs = qEnvironmentVariableIntValue("ATLANTIC_FRAME_PUMP_INTERVAL_MS", &ok);
+    if (ok && overrideMs >= 16 && overrideMs <= 1000) {
+        return overrideMs;
+    }
+    if (envVarEnabled(qgetenv("ATLANTIC_GPU_CONSERVATIVE"))) {
+        return kConservativeFramePumpIntervalMs;
+    }
+    return kDefaultFramePumpIntervalMs;
+}
 
 QStringList wildcardFiltersForFamily(const QString &family)
 {
@@ -882,8 +903,11 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
 {
     setFlag(QQuickItem::ItemAcceptsInputMethod, true);
 
-    m_framePump.setInterval(33);
+    const int framePumpIntervalMs = framePumpIntervalForCurrentGpuMode();
+    m_framePump.setInterval(framePumpIntervalMs);
     m_framePump.setTimerType(Qt::PreciseTimer);
+    qDebug() << "[WPE] Frame pump interval" << framePumpIntervalMs
+             << "ATLANTIC_GPU_CONSERVATIVE=" << qgetenv("ATLANTIC_GPU_CONSERVATIVE");
     connect(&m_framePump, &QTimer::timeout, this, [this]() {
         if (isVisible()) {
             if (QQuickWindow *w = window()) {

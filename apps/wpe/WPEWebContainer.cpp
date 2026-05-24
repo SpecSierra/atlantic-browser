@@ -19,12 +19,15 @@
 #include <QTimer>
 #include <QScreen>
 #include <QDebug>
+#include <QFileInfo>
 #include <QWindow>
 
 #pragma push_macro("signals")
 #undef signals
 #include <wpe/webkit.h>
 #pragma pop_macro("signals")
+
+#include <unistd.h>
 
 namespace {
 
@@ -34,6 +37,48 @@ QSizeF screenSizeOrFallback(QScreen *screen)
         return screen->size();
     }
     return QSizeF(WPERuntimePaths::kFallbackScreenWidth, WPERuntimePaths::kFallbackScreenHeight);
+}
+
+bool addSandboxPathIfExists(WebKitWebContext *context, const QString &path, gboolean readOnly, const QString &label)
+{
+    if (path.isEmpty()) {
+        qDebug() << "[WPE] Sandbox path skipped (" << label << "): empty path";
+        return false;
+    }
+
+    const QFileInfo pathInfo(path);
+    if (!pathInfo.exists()) {
+        qDebug() << "[WPE] Sandbox path skipped (" << label << "):" << path << "(missing)";
+        return false;
+    }
+
+    const QByteArray encodedPath = path.toUtf8();
+    webkit_web_context_add_path_to_sandbox(context, encodedPath.constData(), readOnly);
+    qDebug() << "[WPE] Sandbox path enabled (" << label << "):" << path
+             << (readOnly ? "[readonly]" : "[readwrite]");
+    return true;
+}
+
+bool addRuntimeDirCandidate(WebKitWebContext *context, const QString &runtimeDir, const QString &source)
+{
+    if (runtimeDir.isEmpty()) {
+        qDebug() << "[WPE] Sandbox runtime dir skipped (" << source << "): empty path";
+        return false;
+    }
+
+    const QFileInfo runtimeInfo(runtimeDir);
+    if (!runtimeInfo.isAbsolute()) {
+        qDebug() << "[WPE] Sandbox runtime dir skipped (" << source << "):" << runtimeDir << "(not absolute)";
+        return false;
+    }
+
+    if (!runtimeInfo.exists() || !runtimeInfo.isDir()) {
+        qDebug() << "[WPE] Sandbox runtime dir skipped (" << source << "):" << runtimeDir << "(not available)";
+        return false;
+    }
+
+    return addSandboxPathIfExists(context, runtimeDir, FALSE,
+                                  QStringLiteral("runtime-dir from %1").arg(source));
 }
 
 } // namespace
@@ -53,14 +98,37 @@ WPEWebContainer::~WPEWebContainer()
 void WPEWebContainer::configureSandboxPaths()
 {
     WebKitWebContext *ctx = webkit_web_context_get_default();
-    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kRuntimePrefix, TRUE);
-    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kGStreamerPluginDir, TRUE);
-    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kCompatLibDir, TRUE);
-    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kAtlanticShareDir, TRUE);
-    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kQtShareDir, TRUE);
-    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kQtLibDir, TRUE);
-    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kSystemLibDir, TRUE);
-    webkit_web_context_add_path_to_sandbox(ctx, WPERuntimePaths::kRuntimeDir, FALSE);
+    addSandboxPathIfExists(ctx, QString::fromUtf8(WPERuntimePaths::kRuntimePrefix), TRUE,
+                           QStringLiteral("runtime-prefix"));
+    addSandboxPathIfExists(ctx, QString::fromUtf8(WPERuntimePaths::kGStreamerPluginDir), TRUE,
+                           QStringLiteral("gstreamer-plugins"));
+    addSandboxPathIfExists(ctx, QString::fromUtf8(WPERuntimePaths::kCompatLibDir), TRUE,
+                           QStringLiteral("compat-libdir"));
+    addSandboxPathIfExists(ctx, QString::fromUtf8(WPERuntimePaths::kAtlanticShareDir), TRUE,
+                           QStringLiteral("atlantic-share"));
+    addSandboxPathIfExists(ctx, QString::fromUtf8(WPERuntimePaths::kQtShareDir), TRUE,
+                           QStringLiteral("qt-share"));
+    addSandboxPathIfExists(ctx, QString::fromUtf8(WPERuntimePaths::kQtLibDir), TRUE,
+                           QStringLiteral("qt-lib"));
+    addSandboxPathIfExists(ctx, QString::fromUtf8(WPERuntimePaths::kSystemLibDir), TRUE,
+                           QStringLiteral("system-libdir"));
+
+    const QString runtimeDirFromEnv = QString::fromLocal8Bit(qgetenv("XDG_RUNTIME_DIR")).trimmed();
+    const QString runtimeDirFromUid = QStringLiteral("/run/user/%1")
+        .arg(static_cast<qulonglong>(::getuid()));
+    const QString legacyRuntimeDir = QString::fromUtf8(WPERuntimePaths::kRuntimeDir);
+
+    bool runtimeDirConfigured = addRuntimeDirCandidate(ctx, runtimeDirFromEnv, QStringLiteral("XDG_RUNTIME_DIR"));
+    if (!runtimeDirConfigured) {
+        runtimeDirConfigured = addRuntimeDirCandidate(ctx, runtimeDirFromUid, QStringLiteral("uid fallback"));
+    }
+    if (!runtimeDirConfigured && legacyRuntimeDir != runtimeDirFromUid) {
+        runtimeDirConfigured = addRuntimeDirCandidate(ctx, legacyRuntimeDir, QStringLiteral("legacy fallback"));
+    }
+    if (!runtimeDirConfigured) {
+        qWarning() << "[WPE] Sandbox runtime dir unavailable: no candidate could be enabled";
+    }
+
     qDebug() << "[WPE] Sandbox paths configured";
 }
 
