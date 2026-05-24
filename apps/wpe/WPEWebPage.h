@@ -195,6 +195,7 @@ public:
     bool desktopMode() const;
     void setDesktopMode(bool desktop);
     void applyInitialDeviceScale(qreal scale);
+    void setFullscreenState(bool fullscreen);
     void setMediaPlaybackState(bool audioActive, bool videoActive);
 
     Q_INVOKABLE void loadTab(const QString &url, bool force = false);

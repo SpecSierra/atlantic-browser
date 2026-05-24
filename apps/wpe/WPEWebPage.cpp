@@ -658,12 +658,15 @@ static void onMediaBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpo
 
     if (type == QLatin1String("clear")) {
         page->setMediaPlaybackState(false, false);
+        page->setFullscreenState(false);
         return;
     }
 
     const bool videoActive = obj.value(QStringLiteral("videoActive")).toBool();
     const bool audioActive = obj.value(QStringLiteral("audioActive")).toBool() || videoActive;
+    const bool fullscreenActive = obj.value(QStringLiteral("fullscreenActive")).toBool();
     page->setMediaPlaybackState(audioActive, videoActive);
+    page->setFullscreenState(fullscreenActive);
 }
 
 static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page)
@@ -688,11 +691,15 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
         var media = document.querySelectorAll('audio,video');
         var audioActive = false;
         var videoActive = false;
+        var fullscreenActive = !!(document.fullscreenElement || document.webkitFullscreenElement);
 
         for (var i = 0; i < media.length; i++) {
             var el = media[i];
             if (!isMediaElement(el))
                 continue;
+            if (!fullscreenActive && el.tagName.toLowerCase() === 'video') {
+                fullscreenActive = !!el.webkitDisplayingFullscreen;
+            }
             if (el.paused || el.ended)
                 continue;
 
@@ -707,7 +714,8 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
         return {
             type: 'state',
             audioActive: audioActive,
-            videoActive: videoActive
+            videoActive: videoActive,
+            fullscreenActive: fullscreenActive
         };
     }
 
@@ -734,6 +742,8 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
         'waiting',
         'seeking',
         'seeked',
+        'fullscreenchange',
+        'webkitfullscreenchange',
         'webkitbeginfullscreen',
         'webkitendfullscreen'
     ];
@@ -1097,20 +1107,17 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
 
     connect(this, &WPEQtView::enterFullscreenRequested,
             this, [this]() {
-        if (!m_fullscreen) {
-            m_fullscreen = true;
-            emit fullscreenChanged();
-        }
+        setFullscreenState(true);
     });
     connect(this, &WPEQtView::leaveFullscreenRequested,
             this, [this]() {
-        if (m_fullscreen) {
-            m_fullscreen = false;
-            emit fullscreenChanged();
-        }
+        setFullscreenState(false);
     });
     connect(this, &WPEQtView::webViewCreated, this, [this]() {
         if (WebKitWebView* wv = webView()) {
+            if (WebKitSettings* settings = webkit_web_view_get_settings(wv)) {
+                webkit_settings_set_enable_fullscreen(settings, TRUE);
+            }
             g_signal_connect(wv, "decide-policy", G_CALLBACK(onDecidePolicy), nullptr);
             if (WebKitNetworkSession* session = webkit_web_view_get_network_session(wv)) {
                 if (!g_object_get_data(G_OBJECT(session), "atlantic-download-hooked")) {
@@ -1267,6 +1274,14 @@ void WPEWebPage::setFullscreenHeight(qreal height)
     if (!qFuzzyCompare(m_fullscreenHeight, height)) {
         m_fullscreenHeight = height;
         emit fullscreenHeightChanged();
+    }
+}
+
+void WPEWebPage::setFullscreenState(bool fullscreen)
+{
+    if (m_fullscreen != fullscreen) {
+        m_fullscreen = fullscreen;
+        emit fullscreenChanged();
     }
 }
 
@@ -1520,6 +1535,20 @@ void WPEWebPage::sendAsyncMessage(const QString &name, const QVariant &data)
         const qreal x = map.value(QStringLiteral("xPos")).toReal();
         const qreal y = map.value(QStringLiteral("yPos")).toReal();
         startSelectionAtPoint(this, x, y);
+        return;
+    }
+
+    if (name == QStringLiteral("embedui:exitFullscreen")) {
+        runJavaScript(QStringLiteral(
+            "(function(){"
+            "  if (document.exitFullscreen && document.fullscreenElement) { document.exitFullscreen(); return; }"
+            "  if (document.webkitExitFullscreen && document.webkitFullscreenElement) { document.webkitExitFullscreen(); return; }"
+            "  var v = document.querySelector('video');"
+            "  if (!v) return;"
+            "  if (v.webkitExitFullscreen) v.webkitExitFullscreen();"
+            "  else if (v.webkitCancelFullScreen) v.webkitCancelFullScreen();"
+            "})();"));
+        setFullscreenState(false);
     }
 }
 
