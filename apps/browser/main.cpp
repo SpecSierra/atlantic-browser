@@ -580,9 +580,7 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     configureBrowserApplication(app.data(), view.data());
 
     // Ensure clean exit when window closes
-    QObject::connect(view.data(), &QQuickView::closing, [app = app.data()]() {
-        app->quit();
-    });
+    QObject::connect(view.data(), SIGNAL(closing()), app.data(), SLOT(quit()));
 
     std::unique_ptr<QLibrary> runtimeLibrary(new QLibrary);
     if (!silicaMainSmokeUi) {
