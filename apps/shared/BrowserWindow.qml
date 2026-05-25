@@ -55,9 +55,4 @@ ApplicationWindow {
         }
     }
 
-    Component.onCompleted: {
-        if (window.hasOwnProperty("displayMode")) {
-            displayMode = ApplicationDisplayMode.FullPortrait
-        }
-    }
 }

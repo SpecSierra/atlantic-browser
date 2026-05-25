@@ -110,7 +110,7 @@ QDBusConnection mainVolumeConnection()
     const QString address = pulseDbusAddress();
     if (address.isEmpty()) {
         if (!cachedAddress.isEmpty()) {
-            QDBusConnection::disconnectFromBus(connectionName);
+            QDBusConnection::disconnectFromPeer(connectionName);
             cachedAddress.clear();
         }
         return connection;
@@ -118,10 +118,10 @@ QDBusConnection mainVolumeConnection()
 
     if (cachedAddress != address || !connection.isConnected()) {
         if (!cachedAddress.isEmpty()) {
-            QDBusConnection::disconnectFromBus(connectionName);
+            QDBusConnection::disconnectFromPeer(connectionName);
         }
         cachedAddress = address;
-        connection = QDBusConnection::connectToBus(address, connectionName);
+        connection = QDBusConnection::connectToPeer(address, connectionName);
     }
 
     return connection;
@@ -189,7 +189,7 @@ bool setMainVolumeNormalized(qreal volume)
     const uint targetStepValue = static_cast<uint>(targetStep);
     request << QString::fromLatin1(kMainVolumeInterface)
             << QStringLiteral("CurrentStep")
-            << QVariant::fromValue(QDBusVariant(QVariant::fromValue(targetStepValue)));
+            << QVariant::fromValue(QDBusVariant(targetStepValue));
 
     const QDBusMessage reply = connection.call(request);
     return reply.type() == QDBusMessage::ReplyMessage;
