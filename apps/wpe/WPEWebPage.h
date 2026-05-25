@@ -14,6 +14,7 @@
 #include <QStringList>
 #include <QTimer>
 #include <QVariant>
+#include <QElapsedTimer>
 #include <qqml.h>
 
 #include "WPEQtView.h"
@@ -323,6 +324,7 @@ private slots:
     void updateSecurityInfo();
 
 private:
+    qreal selectionDisplayScale() const;
     void syncEffectiveFullscreenState();
     void updateFramePumpState();
     void scheduleVirtualKeyboardSync();
@@ -384,6 +386,8 @@ private:
     qreal m_pinchCenterX = 0.0;
     qreal m_pinchCenterY = 0.0;
     QTimer m_framePump;
+    QTimer m_deferredFullscreenLeaveTimer;
+    QElapsedTimer m_lastNativeFullscreenEnter;
     qreal m_lastInteractionX = -1.0;
     qreal m_lastInteractionY = -1.0;
     QHash<int, QTouchEvent::TouchPoint> m_trackedTouchPoints;

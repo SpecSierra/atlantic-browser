@@ -1110,6 +1110,12 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             update();
         }
     });
+    m_deferredFullscreenLeaveTimer.setSingleShot(true);
+    m_deferredFullscreenLeaveTimer.setInterval(750);
+    connect(&m_deferredFullscreenLeaveTimer, &QTimer::timeout, this, [this]() {
+        qDebug() << "[WPE-FULLSCREEN] applying deferred native leave";
+        setNativeFullscreenRequested(false);
+    });
 
     // Set a credible mobile Chrome UA from the start
     setUserAgent(QStringLiteral(
@@ -1173,11 +1179,21 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     connect(this, &WPEQtView::enterFullscreenRequested,
             this, [this]() {
         qDebug() << "[WPE-FULLSCREEN] native enter requested";
+        m_lastNativeFullscreenEnter.restart();
+        m_deferredFullscreenLeaveTimer.stop();
         setNativeFullscreenRequested(true);
     });
     connect(this, &WPEQtView::leaveFullscreenRequested,
             this, [this]() {
         qDebug() << "[WPE-FULLSCREEN] native leave requested";
+        const bool enterWasRecent = m_lastNativeFullscreenEnter.isValid()
+                && m_lastNativeFullscreenEnter.elapsed() < 1500;
+        if (m_domFullscreenActive || enterWasRecent) {
+            qDebug() << "[WPE-FULLSCREEN] deferring native leave recentEnter=" << enterWasRecent
+                     << "domFullscreen=" << m_domFullscreenActive;
+            m_deferredFullscreenLeaveTimer.start();
+            return;
+        }
         setNativeFullscreenRequested(false);
     });
     connect(this, &WPEQtView::webViewCreated, this, [this]() {
@@ -1359,6 +1375,7 @@ void WPEWebPage::syncEffectiveFullscreenState()
 
 void WPEWebPage::setFullscreenState(bool fullscreen)
 {
+    m_deferredFullscreenLeaveTimer.stop();
     const bool nativeChanged = (m_nativeFullscreenRequested != fullscreen);
     const bool domChanged = (m_domFullscreenActive != fullscreen);
     m_nativeFullscreenRequested = fullscreen;
@@ -1386,8 +1403,17 @@ void WPEWebPage::setDomFullscreenActive(bool fullscreen)
     }
 
     m_domFullscreenActive = fullscreen;
+    if (fullscreen) {
+        m_deferredFullscreenLeaveTimer.stop();
+    }
     qDebug() << "[WPE-FULLSCREEN] dom state fullscreen=" << fullscreen;
     syncEffectiveFullscreenState();
+}
+
+qreal WPEWebPage::selectionDisplayScale() const
+{
+    const qreal scale = currentPageZoomLevel();
+    return scale > 0.0 ? scale : 1.0;
 }
 
 void WPEWebPage::setMediaPlaybackState(bool audioActive, bool videoActive)
@@ -1689,6 +1715,7 @@ void WPEWebPage::sendAsyncMessage(const QString &name, const QVariant &data)
 
 void WPEWebPage::setMediaVolume(qreal volume)
 {
+    if (volume > 1.0) volume /= 100.0;
     if (volume < 0.0) volume = 0.0;
     if (volume > 1.0) volume = 1.0;
 
@@ -1769,20 +1796,25 @@ void WPEWebPage::handleJsSelectionClear()
 
 void WPEWebPage::handleJsSelectionUpdate(const QString &text, qreal startX, qreal startY, qreal endX, qreal endY)
 {
+    const qreal displayScale = selectionDisplayScale();
     const bool wasActive = m_textSelectionActive;
     const bool textChanged = (m_selectedText != text);
     const bool activeNow = !text.isEmpty();
-    const bool handlesChanged = !qFuzzyCompare(m_selectionStartX, startX)
-        || !qFuzzyCompare(m_selectionStartY, startY)
-        || !qFuzzyCompare(m_selectionEndX, endX)
-        || !qFuzzyCompare(m_selectionEndY, endY);
+    const qreal scaledStartX = startX * displayScale;
+    const qreal scaledStartY = startY * displayScale;
+    const qreal scaledEndX = endX * displayScale;
+    const qreal scaledEndY = endY * displayScale;
+    const bool handlesChanged = !qFuzzyCompare(m_selectionStartX, scaledStartX)
+        || !qFuzzyCompare(m_selectionStartY, scaledStartY)
+        || !qFuzzyCompare(m_selectionEndX, scaledEndX)
+        || !qFuzzyCompare(m_selectionEndY, scaledEndY);
 
     m_selectedText = text;
     m_textSelectionActive = activeNow;
-    m_selectionStartX = startX;
-    m_selectionStartY = startY;
-    m_selectionEndX = endX;
-    m_selectionEndY = endY;
+    m_selectionStartX = scaledStartX;
+    m_selectionStartY = scaledStartY;
+    m_selectionEndX = scaledEndX;
+    m_selectionEndY = scaledEndY;
 
     if (textChanged)
         Q_EMIT selectionTextChanged();
@@ -1793,21 +1825,27 @@ void WPEWebPage::handleJsSelectionUpdate(const QString &text, qreal startX, qrea
 
     QVariantMap data;
     data.insert(QStringLiteral("text"), text);
-    data.insert(QStringLiteral("startX"), startX);
-    data.insert(QStringLiteral("startY"), startY);
-    data.insert(QStringLiteral("endX"), endX);
-    data.insert(QStringLiteral("endY"), endY);
-    data.insert(QStringLiteral("cursorX"), endX);
-    data.insert(QStringLiteral("cursorY"), endY);
-    data.insert(QStringLiteral("sx"), startX);
-    data.insert(QStringLiteral("sy"), startY);
-    data.insert(QStringLiteral("ex"), endX);
-    data.insert(QStringLiteral("ey"), endY);
+    data.insert(QStringLiteral("startX"), scaledStartX);
+    data.insert(QStringLiteral("startY"), scaledStartY);
+    data.insert(QStringLiteral("endX"), scaledEndX);
+    data.insert(QStringLiteral("endY"), scaledEndY);
+    data.insert(QStringLiteral("cursorX"), scaledEndX);
+    data.insert(QStringLiteral("cursorY"), scaledEndY);
+    data.insert(QStringLiteral("sx"), scaledStartX);
+    data.insert(QStringLiteral("sy"), scaledStartY);
+    data.insert(QStringLiteral("ex"), scaledEndX);
+    data.insert(QStringLiteral("ey"), scaledEndY);
     emit recvAsyncMessage(QStringLiteral("Content:SelectionRange"), data);
 }
 
 void WPEWebPage::moveSelectionStart(qreal cssX, qreal cssY)
 {
+    const qreal displayScale = selectionDisplayScale();
+    if (displayScale > 0.0) {
+        cssX /= displayScale;
+        cssY /= displayScale;
+    }
+
     QString js = QStringLiteral(
         "(function(x,y){"
         "  var sel=window.getSelection();"
@@ -1824,6 +1862,12 @@ void WPEWebPage::moveSelectionStart(qreal cssX, qreal cssY)
 
 void WPEWebPage::moveSelectionEnd(qreal cssX, qreal cssY)
 {
+    const qreal displayScale = selectionDisplayScale();
+    if (displayScale > 0.0) {
+        cssX /= displayScale;
+        cssY /= displayScale;
+    }
+
     QString js = QStringLiteral(
         "(function(x,y){"
         "  var sel=window.getSelection();"

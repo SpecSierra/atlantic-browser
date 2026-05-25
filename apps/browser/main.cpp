@@ -497,19 +497,36 @@ static void installApplicationShutdownHooks(QGuiApplication *app, QQuickView *vi
         return;
     }
 
+    QTimer *forcedExitTimer = new QTimer(app);
+    forcedExitTimer->setSingleShot(true);
+    forcedExitTimer->setInterval(1500);
+    QObject::connect(forcedExitTimer, &QTimer::timeout, app, []() {
+        fprintf(stderr, "[ATLANTIC] Forcing process exit after quit timeout\n");
+        _exit(0);
+    }, Qt::UniqueConnection);
+
+    auto requestFastQuit = [app, forcedExitTimer]() {
+        fprintf(stderr, "[ATLANTIC] Requesting application quit\n");
+        forcedExitTimer->start();
+        app->quit();
+    };
+
+    QObject::connect(view, SIGNAL(closing(QQuickCloseEvent*)),
+                     forcedExitTimer, SLOT(start()),
+                     Qt::UniqueConnection);
     QObject::connect(view, SIGNAL(closing(QQuickCloseEvent*)),
                      app, SLOT(quit()),
                      Qt::UniqueConnection);
     QObject::connect(app, &QGuiApplication::lastWindowClosed, app,
-                     [app]() {
+                     [app, requestFastQuit]() {
         fprintf(stderr, "[ATLANTIC] Last window closed, quitting application\n");
-        app->quit();
+        requestFastQuit();
     },
                      Qt::UniqueConnection);
     QObject::connect(view, &QObject::destroyed, app,
-                     [app]() {
+                     [app, requestFastQuit]() {
         fprintf(stderr, "[ATLANTIC] View destroyed, quitting application\n");
-        app->quit();
+        requestFastQuit();
     },
                      Qt::UniqueConnection);
 }
