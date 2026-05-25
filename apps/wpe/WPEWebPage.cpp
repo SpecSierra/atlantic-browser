@@ -24,6 +24,9 @@
 #include <QKeyEvent>
 #include <QLineF>
 #include <QPointer>
+#include <QDBusConnection>
+#include <QDBusMessage>
+#include <QDBusVariant>
 #include <QQuickItemGrabResult>
 #include <QQuickWindow>
 #include <QRegularExpression>
@@ -45,6 +48,152 @@ constexpr double kMinimumPinchZoomFactor = 0.5;
 constexpr double kMaximumPinchZoomFactor = 3.0;
 constexpr int kDefaultFramePumpIntervalMs = 33;
 constexpr int kConservativeFramePumpIntervalMs = 50;
+const char kPulseLookupService[] = "org.pulseaudio.Server";
+const char kPulseLookupPath[] = "/org/pulseaudio/server_lookup1";
+const char kPulseLookupInterface[] = "org.PulseAudio.ServerLookup1";
+const char kPropertiesInterface[] = "org.freedesktop.DBus.Properties";
+const char kMainVolumeService[] = "com.Meego.MainVolume2";
+const char kMainVolumePath[] = "/com/meego/mainvolume2";
+const char kMainVolumeInterface[] = "com.Meego.MainVolume2";
+const char kMainVolumeConnectionName[] = "atlantic-mainvolume";
+
+struct MainVolumeState {
+    int currentStep = -1;
+    int maximumStep = -1;
+
+    bool valid() const
+    {
+        return maximumStep >= 0;
+    }
+};
+
+QVariant unwrapDbusVariant(const QVariant &value)
+{
+    if (value.canConvert<QDBusVariant>()) {
+        return qvariant_cast<QDBusVariant>(value).variant();
+    }
+    return value;
+}
+
+QString pulseDbusAddress()
+{
+    const QByteArray envAddress = qgetenv("PULSE_DBUS_SERVER").trimmed();
+    if (!envAddress.isEmpty()) {
+        return QString::fromLocal8Bit(envAddress);
+    }
+
+    QDBusMessage request = QDBusMessage::createMethodCall(
+        QString::fromLatin1(kPulseLookupService),
+        QString::fromLatin1(kPulseLookupPath),
+        QString::fromLatin1(kPropertiesInterface),
+        QStringLiteral("Get"));
+    request << QString::fromLatin1(kPulseLookupInterface) << QStringLiteral("Address");
+
+    const QDBusMessage reply = QDBusConnection::sessionBus().call(request);
+    if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
+        return {};
+    }
+
+    const QVariant value = reply.arguments().constFirst();
+    if (value.canConvert<QDBusVariant>()) {
+        return qvariant_cast<QDBusVariant>(value).variant().toString();
+    }
+    return value.toString();
+}
+
+QDBusConnection mainVolumeConnection()
+{
+    static QString cachedAddress;
+
+    const QString address = pulseDbusAddress();
+    if (address.isEmpty()) {
+        return QDBusConnection();
+    }
+
+    if (cachedAddress != address) {
+        if (!cachedAddress.isEmpty()) {
+            QDBusConnection::disconnectFromBus(QString::fromLatin1(kMainVolumeConnectionName));
+        }
+        cachedAddress = address;
+        QDBusConnection::connectToBus(address, QString::fromLatin1(kMainVolumeConnectionName));
+    }
+
+    QDBusConnection connection(QString::fromLatin1(kMainVolumeConnectionName));
+    if (!connection.isConnected()) {
+        QDBusConnection::disconnectFromBus(QString::fromLatin1(kMainVolumeConnectionName));
+        QDBusConnection::connectToBus(address, QString::fromLatin1(kMainVolumeConnectionName));
+        connection = QDBusConnection(QString::fromLatin1(kMainVolumeConnectionName));
+    }
+
+    return connection;
+}
+
+MainVolumeState queryMainVolumeState()
+{
+    const QDBusConnection connection = mainVolumeConnection();
+    if (!connection.isConnected()) {
+        return {};
+    }
+
+    QDBusMessage request = QDBusMessage::createMethodCall(
+        QString::fromLatin1(kMainVolumeService),
+        QString::fromLatin1(kMainVolumePath),
+        QString::fromLatin1(kPropertiesInterface),
+        QStringLiteral("GetAll"));
+    request << QString::fromLatin1(kMainVolumeInterface);
+
+    const QDBusMessage reply = connection.call(request);
+    if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
+        return {};
+    }
+
+    const QVariantMap properties = reply.arguments().constFirst().toMap();
+    if (!properties.contains(QStringLiteral("StepCount")) || !properties.contains(QStringLiteral("CurrentStep"))) {
+        return {};
+    }
+
+    const int stepCount = unwrapDbusVariant(properties.value(QStringLiteral("StepCount"))).toInt();
+    if (stepCount <= 0) {
+        return {};
+    }
+
+    MainVolumeState state;
+    state.maximumStep = stepCount - 1;
+    state.currentStep = qBound(0,
+                               unwrapDbusVariant(properties.value(QStringLiteral("CurrentStep"))).toInt(),
+                               state.maximumStep);
+    return state;
+}
+
+bool setMainVolumeNormalized(qreal volume)
+{
+    const MainVolumeState state = queryMainVolumeState();
+    if (!state.valid()) {
+        return false;
+    }
+
+    const int targetStep = qBound(0, qRound(volume * state.maximumStep), state.maximumStep);
+    if (targetStep == state.currentStep) {
+        return true;
+    }
+
+    const QDBusConnection connection = mainVolumeConnection();
+    if (!connection.isConnected()) {
+        return false;
+    }
+
+    QDBusMessage request = QDBusMessage::createMethodCall(
+        QString::fromLatin1(kMainVolumeService),
+        QString::fromLatin1(kMainVolumePath),
+        QString::fromLatin1(kPropertiesInterface),
+        QStringLiteral("Set"));
+    request << QString::fromLatin1(kMainVolumeInterface)
+            << QStringLiteral("CurrentStep")
+            << QVariant::fromValue(QDBusVariant(targetStep));
+
+    const QDBusMessage reply = connection.call(request);
+    return reply.type() == QDBusMessage::ReplyMessage;
+}
 
 bool envVarEnabled(const QByteArray &value)
 {
@@ -1720,6 +1869,12 @@ void WPEWebPage::setMediaVolume(qreal volume)
     if (volume > 1.0) volume = 1.0;
 
     m_mediaVolume = volume;
+    const bool nativeVolumeApplied = setMainVolumeNormalized(volume);
+    qDebug() << "[WPE-MEDIA] set volume" << volume << "nativeApplied=" << nativeVolumeApplied;
+    if (nativeVolumeApplied) {
+        return;
+    }
+
     runJavaScript(QString::fromLatin1(
         "(function(volume){"
         "  window.__wpeDesiredMediaVolume = volume;"
