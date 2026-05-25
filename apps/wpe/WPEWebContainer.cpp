@@ -31,24 +31,12 @@
 
 namespace {
 
-constexpr qreal kDefaultMaxInitialDeviceScale = 2.0;
-
 QSizeF screenSizeOrFallback(QScreen *screen)
 {
     if (screen) {
         return screen->size();
     }
     return QSizeF(WPERuntimePaths::kFallbackScreenWidth, WPERuntimePaths::kFallbackScreenHeight);
-}
-
-qreal maxInitialDeviceScale()
-{
-    bool ok = false;
-    const qreal configuredScale = qgetenv("ATLANTIC_MAX_INITIAL_DEVICE_SCALE").toDouble(&ok);
-    if (ok && configuredScale >= 1.0) {
-        return configuredScale;
-    }
-    return kDefaultMaxInitialDeviceScale;
 }
 
 bool addSandboxPathIfExists(WebKitWebContext *context, const QString &path, gboolean readOnly, const QString &label)
@@ -188,16 +176,8 @@ QSizeF WPEWebContainer::preferredPageSize(const QSizeF &screenSize) const
 qreal WPEWebContainer::initialPageDeviceScaleFactor(const QSizeF &screenSize) const
 {
     // The carried-forward Qt bridge still maps device scale to page zoom here.
-    // Keep that behavior explicit, but cap the scale so heavy pages do not start
-    // with unnecessarily large backing textures on mid-range mobile GPUs.
-    const qreal widthBasedScale = screenSize.width() / WPERuntimePaths::kReferenceViewportWidth;
-    const qreal cappedScale = qMax<qreal>(1.0, qMin(widthBasedScale, maxInitialDeviceScale()));
-    if (cappedScale < widthBasedScale) {
-        qDebug() << "[WPE-PERF] capping initial device scale"
-                 << "widthScale=" << widthBasedScale
-                 << "cappedScale=" << cappedScale;
-    }
-    return cappedScale;
+    // Keep that known-good behavior explicit until a true device-scale path exists.
+    return screenSize.width() / WPERuntimePaths::kReferenceViewportWidth;
 }
 
 void WPEWebContainer::configurePageGeometry(WPEWebPage *page, const QSizeF &screenSize)

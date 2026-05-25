@@ -43,6 +43,11 @@ static bool envVarEnabled(const QByteArray &value)
     return normalized == "1" || normalized == "true" || normalized == "yes" || normalized == "on";
 }
 
+static bool browserUsesAlphaBuffer()
+{
+    return envVarEnabled(qgetenv("ATLANTIC_ALPHA_BUFFER"));
+}
+
 // SIGABRT handler: Wayland QPA calls abort() when the compositor pipe breaks at startup.
 // Intercept and re-exec instead. Must be async-signal-safe (only write/sleep/close/execv/_exit).
 static void sigAbrtHandler(int)
@@ -131,8 +136,8 @@ static void logStartupContext(int argc, char *argv[])
         "ATLANTIC_GPU_CONSERVATIVE",
         "ATLANTIC_GPU_CONSERVATIVE_PROBE",
         "ATLANTIC_GPU_PROBE_STATUS",
+        "ATLANTIC_ALPHA_BUFFER",
         "ATLANTIC_FRAME_PUMP_INTERVAL_MS",
-        "ATLANTIC_MAX_INITIAL_DEVICE_SCALE",
         "ATLANTIC_PERF_LOG",
         nullptr
     };
@@ -567,7 +572,7 @@ static void installApplicationShutdownHooks(QGuiApplication *app, QQuickView *vi
 
 static int runSilicaMainSmokeUi(int argc, char *argv[])
 {
-    QQuickWindow::setDefaultAlphaBuffer(true);
+    QQuickWindow::setDefaultAlphaBuffer(browserUsesAlphaBuffer());
 
     QScopedPointer<QGuiApplication> app(new QGuiApplication(argc, argv));
     QScopedPointer<QQuickView> view(new QQuickView);
@@ -643,7 +648,7 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
 
     configureBrowserProcessEnvironment();
 
-    QQuickWindow::setDefaultAlphaBuffer(true);
+    QQuickWindow::setDefaultAlphaBuffer(browserUsesAlphaBuffer());
 
     if (!qgetenv("QML_DEBUGGING_ENABLED").isEmpty()) {
         QQmlDebuggingEnabler qmlDebuggingEnabler;

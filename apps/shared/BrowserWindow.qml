@@ -33,7 +33,7 @@ ApplicationWindow {
     _resizeContent: !window.rootPage.active
     _mainWindow: webView ? webView.chromeWindow : null
     _backgroundVisible: false
-    _opaque: false
+    _opaque: true
 
     cover: null
 
