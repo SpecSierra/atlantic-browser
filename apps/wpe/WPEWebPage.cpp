@@ -103,26 +103,25 @@ QString pulseDbusAddress()
 
 QDBusConnection mainVolumeConnection()
 {
+    const QString connectionName = QString::fromLatin1(kMainVolumeConnectionName);
     static QString cachedAddress;
+    QDBusConnection connection(connectionName);
 
     const QString address = pulseDbusAddress();
     if (address.isEmpty()) {
-        return QDBusConnection();
+        if (!cachedAddress.isEmpty()) {
+            QDBusConnection::disconnectFromBus(connectionName);
+            cachedAddress.clear();
+        }
+        return connection;
     }
 
-    if (cachedAddress != address) {
+    if (cachedAddress != address || !connection.isConnected()) {
         if (!cachedAddress.isEmpty()) {
-            QDBusConnection::disconnectFromBus(QString::fromLatin1(kMainVolumeConnectionName));
+            QDBusConnection::disconnectFromBus(connectionName);
         }
         cachedAddress = address;
-        QDBusConnection::connectToBus(address, QString::fromLatin1(kMainVolumeConnectionName));
-    }
-
-    QDBusConnection connection(QString::fromLatin1(kMainVolumeConnectionName));
-    if (!connection.isConnected()) {
-        QDBusConnection::disconnectFromBus(QString::fromLatin1(kMainVolumeConnectionName));
-        QDBusConnection::connectToBus(address, QString::fromLatin1(kMainVolumeConnectionName));
-        connection = QDBusConnection(QString::fromLatin1(kMainVolumeConnectionName));
+        connection = QDBusConnection::connectToBus(address, connectionName);
     }
 
     return connection;
