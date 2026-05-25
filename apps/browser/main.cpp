@@ -16,6 +16,7 @@
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
 #include <QQuickView>
+#include <QQuickWindow>
 #include <QSet>
 #include <QStringList>
 #include <qqmldebug.h>
@@ -490,6 +491,32 @@ static void installSigAbrtRestartHandler()
     sigaction(SIGABRT, &sa, nullptr);
 }
 
+static void installApplicationShutdownHooks(QGuiApplication *app, QQuickView *view)
+{
+    if (!app || !view) {
+        return;
+    }
+
+    QObject::connect(view, &QQuickWindow::closing, app,
+                     [app](QQuickCloseEvent *) {
+        fprintf(stderr, "[ATLANTIC] Window close requested, quitting application\n");
+        app->quit();
+    },
+                     Qt::UniqueConnection);
+    QObject::connect(app, &QGuiApplication::lastWindowClosed, app,
+                     [app]() {
+        fprintf(stderr, "[ATLANTIC] Last window closed, quitting application\n");
+        app->quit();
+    },
+                     Qt::UniqueConnection);
+    QObject::connect(view, &QObject::destroyed, app,
+                     [app]() {
+        fprintf(stderr, "[ATLANTIC] View destroyed, quitting application\n");
+        app->quit();
+    },
+                     Qt::UniqueConnection);
+}
+
 static int runSilicaMainSmokeUi(int argc, char *argv[])
 {
     QQuickWindow::setDefaultAlphaBuffer(true);
@@ -578,9 +605,7 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     configureGpuModeFromCapabilities();
     QScopedPointer<QQuickView> view(new QQuickView);
     configureBrowserApplication(app.data(), view.data());
-
-    // Connect window destruction to app quit (ensures proper shutdown)
-    QObject::connect(view.data(), &QObject::destroyed, app.data(), &QGuiApplication::quit);
+    installApplicationShutdownHooks(app.data(), view.data());
 
     std::unique_ptr<QLibrary> runtimeLibrary(new QLibrary);
     if (!silicaMainSmokeUi) {

@@ -657,14 +657,17 @@ static void onMediaBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpo
     const QString type = obj.value(QStringLiteral("type")).toString();
 
     if (type == QLatin1String("clear")) {
-        page->setMediaPlaybackState(false, false);
         page->setFullscreenState(false);
+        page->setMediaPlaybackState(false, false);
         return;
     }
 
     const bool videoActive = obj.value(QStringLiteral("videoActive")).toBool();
     const bool audioActive = obj.value(QStringLiteral("audioActive")).toBool() || videoActive;
-    page->setMediaPlaybackState(audioActive, videoActive);
+    const bool fullscreenActive = obj.value(QStringLiteral("fullscreenActive")).toBool();
+    const qreal volume = obj.value(QStringLiteral("volume")).toDouble(1.0);
+    const bool muted = obj.value(QStringLiteral("muted")).toBool();
+    page->updateObservedMediaState(audioActive, videoActive, fullscreenActive, volume, muted);
 }
 
 static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page)
@@ -685,6 +688,42 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
         return tag === 'audio' || tag === 'video';
     }
 
+    function normalizedDesiredVolume() {
+        var volume = window.__wpeDesiredMediaVolume;
+        if (typeof volume !== 'number' || !isFinite(volume))
+            return null;
+        return Math.max(0.0, Math.min(1.0, volume));
+    }
+
+    function applyDesiredMediaState(el) {
+        if (!isMediaElement(el))
+            return;
+
+        var desiredVolume = normalizedDesiredVolume();
+        if (desiredVolume !== null && el.volume !== desiredVolume)
+            el.volume = desiredVolume;
+
+        if (typeof window.__wpeDesiredMediaMuted === 'boolean' && el.muted !== window.__wpeDesiredMediaMuted)
+            el.muted = window.__wpeDesiredMediaMuted;
+    }
+
+    function applyDesiredMediaStateToNode(node) {
+        if (!node)
+            return;
+
+        if (isMediaElement(node))
+            applyDesiredMediaState(node);
+
+        if (!node.querySelectorAll)
+            return;
+
+        var media = node.querySelectorAll('audio,video');
+        for (var i = 0; i < media.length; i++)
+            applyDesiredMediaState(media[i]);
+    }
+
+    window.__wpeApplyDesiredMediaStateToMedia = applyDesiredMediaStateToNode;
+
     function mediaStatePayload() {
         var media = document.querySelectorAll('audio,video');
         var audioActive = false;
@@ -697,6 +736,8 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
             var el = media[i];
             if (!isMediaElement(el))
                 continue;
+
+            applyDesiredMediaState(el);
             if (!fullscreenActive && el.tagName.toLowerCase() === 'video') {
                 fullscreenActive = !!el.webkitDisplayingFullscreen;
             }
@@ -732,6 +773,8 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
         }
     }
 
+    window.__wpePostMediaState = postMediaState;
+
     var events = [
         'play',
         'playing',
@@ -756,7 +799,24 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
         document.addEventListener(events[i], postMediaState, true);
     }
 
+    var observerTarget = document.documentElement || document;
+    if (observerTarget && typeof MutationObserver === 'function') {
+        var mediaObserver = new MutationObserver(function(mutations) {
+            for (var i = 0; i < mutations.length; i++) {
+                var mutation = mutations[i];
+                if (!mutation.addedNodes)
+                    continue;
+
+                for (var j = 0; j < mutation.addedNodes.length; j++)
+                    applyDesiredMediaStateToNode(mutation.addedNodes[j]);
+            }
+            postMediaState();
+        });
+        mediaObserver.observe(observerTarget, { childList: true, subtree: true });
+    }
+
     document.addEventListener('DOMContentLoaded', postMediaState, true);
+    applyDesiredMediaStateToNode(document);
     postMediaState();
 })();
 )JS";
@@ -1112,11 +1172,13 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
 
     connect(this, &WPEQtView::enterFullscreenRequested,
             this, [this]() {
-        setFullscreenState(true);
+        qDebug() << "[WPE-FULLSCREEN] native enter requested";
+        setNativeFullscreenRequested(true);
     });
     connect(this, &WPEQtView::leaveFullscreenRequested,
             this, [this]() {
-        setFullscreenState(false);
+        qDebug() << "[WPE-FULLSCREEN] native leave requested";
+        setNativeFullscreenRequested(false);
     });
     connect(this, &WPEQtView::webViewCreated, this, [this]() {
         if (WebKitWebView* wv = webView()) {
@@ -1286,12 +1348,46 @@ void WPEWebPage::setFullscreenHeight(qreal height)
     }
 }
 
-void WPEWebPage::setFullscreenState(bool fullscreen)
+void WPEWebPage::syncEffectiveFullscreenState()
 {
+    const bool fullscreen = m_nativeFullscreenRequested || m_domFullscreenActive;
     if (m_fullscreen != fullscreen) {
         m_fullscreen = fullscreen;
         emit fullscreenChanged();
     }
+}
+
+void WPEWebPage::setFullscreenState(bool fullscreen)
+{
+    const bool nativeChanged = (m_nativeFullscreenRequested != fullscreen);
+    const bool domChanged = (m_domFullscreenActive != fullscreen);
+    m_nativeFullscreenRequested = fullscreen;
+    m_domFullscreenActive = fullscreen;
+    if (nativeChanged || domChanged) {
+        qDebug() << "[WPE-FULLSCREEN] forced state fullscreen=" << fullscreen;
+    }
+    syncEffectiveFullscreenState();
+}
+
+void WPEWebPage::setNativeFullscreenRequested(bool fullscreen)
+{
+    if (m_nativeFullscreenRequested == fullscreen) {
+        return;
+    }
+
+    m_nativeFullscreenRequested = fullscreen;
+    syncEffectiveFullscreenState();
+}
+
+void WPEWebPage::setDomFullscreenActive(bool fullscreen)
+{
+    if (m_domFullscreenActive == fullscreen) {
+        return;
+    }
+
+    m_domFullscreenActive = fullscreen;
+    qDebug() << "[WPE-FULLSCREEN] dom state fullscreen=" << fullscreen;
+    syncEffectiveFullscreenState();
 }
 
 void WPEWebPage::setMediaPlaybackState(bool audioActive, bool videoActive)
@@ -1308,6 +1404,28 @@ void WPEWebPage::setMediaPlaybackState(bool audioActive, bool videoActive)
     if (changed) {
         qDebug() << "[WPE-MEDIA] playback state audio=" << m_mediaAudioActive
                  << "video=" << m_mediaVideoActive;
+    }
+}
+
+void WPEWebPage::updateObservedMediaState(bool audioActive, bool videoActive, bool fullscreenActive,
+                                          qreal volume, bool muted)
+{
+    setMediaPlaybackState(audioActive, videoActive);
+    setDomFullscreenActive(fullscreenActive);
+
+    if (volume < 0.0)
+        volume = 0.0;
+    if (volume > 1.0)
+        volume = 1.0;
+
+    const bool volumeChanged = !qFuzzyCompare(m_mediaVolume + 1.0, volume + 1.0);
+    const bool mutedChanged = (m_mediaMuted != muted);
+    if (volumeChanged || mutedChanged) {
+        m_mediaVolume = volume;
+        m_mediaMuted = muted;
+        qDebug() << "[WPE-MEDIA] observed state volume=" << m_mediaVolume
+                 << "muted=" << m_mediaMuted
+                 << "fullscreen=" << fullscreenActive;
     }
 }
 
@@ -1573,24 +1691,41 @@ void WPEWebPage::setMediaVolume(qreal volume)
 {
     if (volume < 0.0) volume = 0.0;
     if (volume > 1.0) volume = 1.0;
+
+    m_mediaVolume = volume;
     runJavaScript(QString::fromLatin1(
-        "(function(){"
-        "  var media = document.querySelectorAll('audio,video');"
-        "  for (var i = 0; i < media.length; i++) {"
-        "    media[i].volume = %1;"
+        "(function(volume){"
+        "  window.__wpeDesiredMediaVolume = volume;"
+        "  if (window.__wpeApplyDesiredMediaStateToMedia)"
+        "    window.__wpeApplyDesiredMediaStateToMedia(document);"
+        "  else {"
+        "    var media = document.querySelectorAll('audio,video');"
+        "    for (var i = 0; i < media.length; i++) {"
+        "      media[i].volume = volume;"
+        "    }"
         "  }"
-        "})();").arg(volume));
+        "  if (window.__wpePostMediaState)"
+        "    window.__wpePostMediaState();"
+        "})(%1);").arg(volume, 0, 'f', 3));
 }
 
 void WPEWebPage::setMediaMuted(bool muted)
 {
+    m_mediaMuted = muted;
     runJavaScript(QString::fromLatin1(
-        "(function(){"
-        "  var media = document.querySelectorAll('audio,video');"
-        "  for (var i = 0; i < media.length; i++) {"
-        "    media[i].muted = %1;"
+        "(function(muted){"
+        "  window.__wpeDesiredMediaMuted = muted;"
+        "  if (window.__wpeApplyDesiredMediaStateToMedia)"
+        "    window.__wpeApplyDesiredMediaStateToMedia(document);"
+        "  else {"
+        "    var media = document.querySelectorAll('audio,video');"
+        "    for (var i = 0; i < media.length; i++) {"
+        "      media[i].muted = muted;"
+        "    }"
         "  }"
-        "})();").arg(muted ? "true" : "false"));
+        "  if (window.__wpePostMediaState)"
+        "    window.__wpePostMediaState();"
+        "})(%1);").arg(muted ? "true" : "false"));
 }
 
 void WPEWebPage::addMessageListener(const QString &)
@@ -1634,21 +1769,20 @@ void WPEWebPage::handleJsSelectionClear()
 
 void WPEWebPage::handleJsSelectionUpdate(const QString &text, qreal startX, qreal startY, qreal endX, qreal endY)
 {
-    const qreal zoom = currentPageZoomLevel();
     const bool wasActive = m_textSelectionActive;
     const bool textChanged = (m_selectedText != text);
     const bool activeNow = !text.isEmpty();
-    const bool handlesChanged = !qFuzzyCompare(m_selectionStartX, startX * zoom)
-        || !qFuzzyCompare(m_selectionStartY, startY * zoom)
-        || !qFuzzyCompare(m_selectionEndX, endX * zoom)
-        || !qFuzzyCompare(m_selectionEndY, endY * zoom);
+    const bool handlesChanged = !qFuzzyCompare(m_selectionStartX, startX)
+        || !qFuzzyCompare(m_selectionStartY, startY)
+        || !qFuzzyCompare(m_selectionEndX, endX)
+        || !qFuzzyCompare(m_selectionEndY, endY);
 
     m_selectedText = text;
     m_textSelectionActive = activeNow;
-    m_selectionStartX = startX * zoom;
-    m_selectionStartY = startY * zoom;
-    m_selectionEndX = endX * zoom;
-    m_selectionEndY = endY * zoom;
+    m_selectionStartX = startX;
+    m_selectionStartY = startY;
+    m_selectionEndX = endX;
+    m_selectionEndY = endY;
 
     if (textChanged)
         Q_EMIT selectionTextChanged();
@@ -1674,12 +1808,6 @@ void WPEWebPage::handleJsSelectionUpdate(const QString &text, qreal startX, qrea
 
 void WPEWebPage::moveSelectionStart(qreal cssX, qreal cssY)
 {
-    const qreal zoom = currentPageZoomLevel();
-    if (zoom > 0.0) {
-        cssX /= zoom;
-        cssY /= zoom;
-    }
-
     QString js = QStringLiteral(
         "(function(x,y){"
         "  var sel=window.getSelection();"
@@ -1696,12 +1824,6 @@ void WPEWebPage::moveSelectionStart(qreal cssX, qreal cssY)
 
 void WPEWebPage::moveSelectionEnd(qreal cssX, qreal cssY)
 {
-    const qreal zoom = currentPageZoomLevel();
-    if (zoom > 0.0) {
-        cssX /= zoom;
-        cssY /= zoom;
-    }
-
     QString js = QStringLiteral(
         "(function(x,y){"
         "  var sel=window.getSelection();"

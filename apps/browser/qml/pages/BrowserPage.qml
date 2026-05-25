@@ -150,7 +150,7 @@ Page {
         id: webView
 
         enabled: overlay.animator.allowContentUse
-        fullscreenHeight: portrait ? Screen.height : Screen.width
+        fullscreenHeight: browserPage.height
         portrait: browserPage.isPortrait
         maxLiveTabCount: maxliveTabs.value
         toolbarHeight: overlay.animator.opened ? overlay.toolBar.rowHeight : 0

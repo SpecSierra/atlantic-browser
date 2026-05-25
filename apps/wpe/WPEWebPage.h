@@ -196,7 +196,11 @@ public:
     void setDesktopMode(bool desktop);
     void applyInitialDeviceScale(qreal scale);
     void setFullscreenState(bool fullscreen);
+    void setNativeFullscreenRequested(bool fullscreen);
+    void setDomFullscreenActive(bool fullscreen);
     void setMediaPlaybackState(bool audioActive, bool videoActive);
+    void updateObservedMediaState(bool audioActive, bool videoActive, bool fullscreenActive,
+                                  qreal volume, bool muted);
     Q_INVOKABLE void setMediaVolume(qreal volume);
     Q_INVOKABLE void setMediaMuted(bool muted);
 
@@ -319,6 +323,7 @@ private slots:
     void updateSecurityInfo();
 
 private:
+    void syncEffectiveFullscreenState();
     void updateFramePumpState();
     void scheduleVirtualKeyboardSync();
     void syncVirtualKeyboardToFocusedElement();
@@ -336,8 +341,12 @@ private:
     bool m_chrome = true;
     bool m_forcedChrome = false;
     bool m_fullscreen = false;
+    bool m_nativeFullscreenRequested = false;
+    bool m_domFullscreenActive = false;
     bool m_mediaAudioActive = false;
     bool m_mediaVideoActive = false;
+    qreal m_mediaVolume = 1.0;
+    bool m_mediaMuted = false;
     bool m_atYBeginning = true;
     bool m_atYEnd = false;
     QString m_favicon;
