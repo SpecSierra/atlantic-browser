@@ -7,8 +7,8 @@ tests.depends = apps
 desktop.files = sailfish-browser.desktop
 desktop.path = /usr/share/applications
 
-dbus_service.files = org.sailfishos.browser.service \
-                     org.sailfishos.browser.ui.service
+dbus_service.files = org.atlantic.browser.service \
+                     org.atlantic.browser.ui.service
 dbus_service.path = /usr/share/dbus-1/services
 
 chrome_scripts.files = chrome/*.js

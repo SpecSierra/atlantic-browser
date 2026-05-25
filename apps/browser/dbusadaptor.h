@@ -27,7 +27,7 @@ public:
 public slots:
     // these two calls are kept in this service for compatibility
     // but any calls that require the UI to be shown should be added to
-    // the UIServiceDBusAdaptor org.sailfishos.browser.ui service instead
+    // the UIServiceDBusAdaptor org.atlantic.browser.ui service instead
     void openUrl(const QStringList &args);
     void activateNewTabView();
 

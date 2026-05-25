@@ -132,6 +132,7 @@ static void logStartupContext(int argc, char *argv[])
         "ATLANTIC_GPU_CONSERVATIVE_PROBE",
         "ATLANTIC_GPU_PROBE_STATUS",
         "ATLANTIC_FRAME_PUMP_INTERVAL_MS",
+        "ATLANTIC_MAX_INITIAL_DEVICE_SCALE",
         "ATLANTIC_PERF_LOG",
         nullptr
     };

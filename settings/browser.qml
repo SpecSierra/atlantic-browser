@@ -26,9 +26,9 @@ ApplicationSettings {
     DBusInterface {
         id: browserApp
 
-        service: "org.sailfishos.browser.ui"
+        service: "org.atlantic.browser.ui"
         path: "/ui"
-        iface: "org.sailfishos.browser.ui"
+        iface: "org.atlantic.browser.ui"
 
         function load(url) {
             call("openSettings", [], function() {
