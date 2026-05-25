@@ -23,6 +23,7 @@
 #include "bookmarkmanager.h"
 
 #include <QGuiApplication>
+#include <QDBusConnection>
 #include <QJSEngine>
 #include <QQmlEngine>
 #include <QQuickItem>
@@ -198,6 +199,19 @@ extern "C" Q_DECL_EXPORT bool atlanticBrowserRuntimeStart(QQuickView *view,
     }
 
     Browser *browser = new Browser(view, QString::fromLocal8Bit(dataPath ? dataPath : ""), app);
+    static const QString kBrowserUiServiceName = QStringLiteral("org.atlantic.browser.ui");
+    QDBusConnection sessionBus = QDBusConnection::sessionBus();
+    const bool uiServiceNameRegistered = sessionBus.registerService(kBrowserUiServiceName);
+    if (!uiServiceNameRegistered) {
+        fprintf(stderr, "[ATLANTIC-RUNTIME] BrowserUIService name registration failed for %s\n",
+                qPrintable(kBrowserUiServiceName));
+    }
+    BrowserUIService *uiService = new BrowserUIService(app);
+    if (uiServiceNameRegistered && uiService->registered()) {
+        fprintf(stderr, "[ATLANTIC-RUNTIME] BrowserUIService registered\n");
+    } else if (!uiService->registered()) {
+        fprintf(stderr, "[ATLANTIC-RUNTIME] BrowserUIService object registration failed\n");
+    }
     installRenderRecoveryHooks(view, app);
 
     if (service->registered()) {
@@ -211,6 +225,17 @@ extern "C" Q_DECL_EXPORT bool atlanticBrowserRuntimeStart(QQuickView *view,
                          browser, &Browser::cancelDownload);
         QObject::connect(service, &BrowserService::restartTransferRequested,
                          browser, &Browser::restartDownload);
+    }
+
+    if (uiServiceNameRegistered && uiService->registered()) {
+        QObject::connect(uiService, &BrowserUIService::openUrlRequested,
+                         browser, &Browser::openUrl);
+        QObject::connect(uiService, &BrowserUIService::openSettingsRequested,
+                         browser, &Browser::openSettings);
+        QObject::connect(uiService, &BrowserUIService::activateNewTabViewRequested,
+                         browser, &Browser::openNewTabView);
+        QObject::connect(uiService, &BrowserUIService::showChrome,
+                         browser, &Browser::showChrome);
     }
 
     browser->load();
