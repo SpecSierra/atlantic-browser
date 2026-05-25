@@ -46,8 +46,8 @@ namespace {
 
 constexpr double kMinimumPinchZoomFactor = 0.5;
 constexpr double kMaximumPinchZoomFactor = 3.0;
-constexpr int kDefaultFramePumpIntervalMs = 33;
-constexpr int kConservativeFramePumpIntervalMs = 50;
+constexpr int kDefaultFramePumpIntervalMs = 16;
+constexpr int kConservativeFramePumpIntervalMs = 33;
 const char kPulseLookupService[] = "org.pulseaudio.Server";
 const char kPulseLookupPath[] = "/org/pulseaudio/server_lookup1";
 const char kPulseLookupInterface[] = "org.PulseAudio.ServerLookup1";
@@ -204,6 +204,11 @@ bool envVarEnabled(const QByteArray &value)
 {
     const QByteArray normalized = value.trimmed().toLower();
     return normalized == "1" || normalized == "true" || normalized == "yes" || normalized == "on";
+}
+
+bool perfLoggingEnabled()
+{
+    return envVarEnabled(qgetenv("ATLANTIC_PERF_LOG"));
 }
 
 int framePumpIntervalForCurrentGpuMode()
@@ -1293,7 +1298,8 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     m_framePump.setInterval(framePumpIntervalMs);
     m_framePump.setTimerType(Qt::PreciseTimer);
     qDebug() << "[WPE] Frame pump interval" << framePumpIntervalMs
-             << "ATLANTIC_GPU_CONSERVATIVE=" << qgetenv("ATLANTIC_GPU_CONSERVATIVE");
+             << "ATLANTIC_GPU_CONSERVATIVE=" << qgetenv("ATLANTIC_GPU_CONSERVATIVE")
+             << "ATLANTIC_PERF_LOG=" << qgetenv("ATLANTIC_PERF_LOG");
     connect(&m_framePump, &QTimer::timeout, this, [this]() {
         if (isVisible()) {
             if (QQuickWindow *w = window()) {
@@ -1751,6 +1757,11 @@ void WPEWebPage::applyInitialDeviceScale(qreal scale)
 {
     setDeviceScaleFactor(scale);
     rememberDefaultZoomLevel(scale);
+    if (perfLoggingEnabled()) {
+        qDebug() << "[WPE-PERF] initial scale applied"
+                 << "deviceScaleFactor=" << scale
+                 << "defaultZoom=" << m_defaultZoomLevel;
+    }
 }
 
 double WPEWebPage::currentPageZoomLevel() const
@@ -2229,13 +2240,31 @@ void WPEWebPage::itemChange(ItemChange change, const ItemChangeData &value)
 
 void WPEWebPage::updateFramePumpState()
 {
-    const bool shouldPump = isVisible();
+    const bool shouldPump = isVisible() && m_active && !m_throttlePainting;
+    const int targetIntervalMs = framePumpIntervalForCurrentGpuMode();
+    const bool intervalChanged = m_framePump.interval() != targetIntervalMs;
+    if (intervalChanged) {
+        m_framePump.setInterval(targetIntervalMs);
+    }
+
+    const bool wasActive = m_framePump.isActive();
     if (shouldPump) {
-        if (!m_framePump.isActive()) {
+        if (!wasActive) {
             m_framePump.start();
         }
-    } else if (m_framePump.isActive()) {
+    } else if (wasActive) {
         m_framePump.stop();
+    }
+
+    if (perfLoggingEnabled() && (intervalChanged || wasActive != m_framePump.isActive())) {
+        qDebug() << "[WPE-PERF] frame pump"
+                 << (m_framePump.isActive() ? "running" : "stopped")
+                 << "intervalMs=" << targetIntervalMs
+                 << "visible=" << isVisible()
+                 << "active=" << m_active
+                 << "throttle=" << m_throttlePainting
+                 << "video=" << m_mediaVideoActive
+                 << "audio=" << m_mediaAudioActive;
     }
 }
 
@@ -2529,6 +2558,30 @@ void WPEWebPage::onFrameSwapped()
     if (!m_painted) {
         m_painted = true;
         emit paintedChanged();
+    }
+
+    if (perfLoggingEnabled()) {
+        if (!m_perfFrameLogWindow.isValid()) {
+            m_perfFrameLogWindow.start();
+            m_perfFramesInWindow = 0;
+        }
+
+        ++m_perfFramesInWindow;
+        const qint64 elapsedMs = m_perfFrameLogWindow.elapsed();
+        if (elapsedMs >= 2000) {
+            const double fps = elapsedMs > 0
+                    ? static_cast<double>(m_perfFramesInWindow) * 1000.0 / static_cast<double>(elapsedMs)
+                    : 0.0;
+            qDebug().nospace() << "[WPE-PERF] frame swaps fps=" << QString::number(fps, 'f', 1)
+                               << " intervalMs=" << m_framePump.interval()
+                               << " visible=" << isVisible()
+                               << " active=" << m_active
+                               << " throttle=" << m_throttlePainting
+                               << " video=" << m_mediaVideoActive
+                               << " audio=" << m_mediaAudioActive;
+            m_perfFrameLogWindow.restart();
+            m_perfFramesInWindow = 0;
+        }
     }
     emit afterRendering();
 }

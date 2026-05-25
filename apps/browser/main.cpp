@@ -11,6 +11,7 @@
 
 #include <QGuiApplication>
 #include <QLibrary>
+#include <QDir>
 #include <QOffscreenSurface>
 #include <QFileInfo>
 #include <QOpenGLContext>
@@ -90,6 +91,11 @@ static void writeStartupBytes(int fd, const char *data, size_t size)
 
 static void logStartupContext(int argc, char *argv[])
 {
+    const QFileInfo startupLogInfo(QString::fromLatin1(WPERuntimePaths::kBrowserStartupLog));
+    if (!startupLogInfo.absolutePath().isEmpty()) {
+        QDir().mkpath(startupLogInfo.absolutePath());
+    }
+
     int logfd = open(WPERuntimePaths::kBrowserStartupLog, O_WRONLY | O_CREAT | O_APPEND, 0644);
     if (logfd < 0) {
         return;
@@ -114,6 +120,12 @@ static void logStartupContext(int argc, char *argv[])
         "DBUS_SESSION_BUS_ADDRESS",
         "LD_LIBRARY_PATH",
         "BROWSER_RESTART_COUNT",
+        "QT_OPENGL_NO_BGRA",
+        "ATLANTIC_GPU_CONSERVATIVE",
+        "ATLANTIC_GPU_CONSERVATIVE_PROBE",
+        "ATLANTIC_GPU_PROBE_STATUS",
+        "ATLANTIC_FRAME_PUMP_INTERVAL_MS",
+        "ATLANTIC_PERF_LOG",
         nullptr
     };
     for (int i = 0; envvars[i]; ++i) {
@@ -378,17 +390,28 @@ static GpuCapabilityProbeResult probeGpuCapability()
     if (!result.probeSucceeded) {
         reasons << QStringLiteral("probe-incomplete");
     }
+
+    QStringList advisoryReasons;
     if (result.glesMajor < 0) {
-        reasons << QStringLiteral("gles-version-unknown");
+        advisoryReasons << QStringLiteral("gles-version-unknown");
     } else if (result.glesMajor < 3) {
-        reasons << QStringLiteral("gles<3");
+        advisoryReasons << QStringLiteral("gles<3");
     }
     if (!result.hasGlExternalImage) {
-        reasons << QStringLiteral("missing-gl-oes-egl-image-external");
+        advisoryReasons << QStringLiteral("missing-gl-oes-egl-image-external");
     }
 
     result.conservativeMode = !reasons.isEmpty();
-    result.reason = reasons.isEmpty() ? QStringLiteral("modern-capable") : reasons.join(QStringLiteral(","));
+    if (reasons.isEmpty() && advisoryReasons.isEmpty()) {
+        result.reason = QStringLiteral("modern-capable");
+    } else if (reasons.isEmpty()) {
+        result.reason = QStringLiteral("advisory:%1").arg(advisoryReasons.join(QStringLiteral(",")));
+    } else if (advisoryReasons.isEmpty()) {
+        result.reason = reasons.join(QStringLiteral(","));
+    } else {
+        result.reason = QStringLiteral("%1;advisory:%2")
+                .arg(reasons.join(QStringLiteral(",")), advisoryReasons.join(QStringLiteral(",")));
+    }
     return result;
 }
 

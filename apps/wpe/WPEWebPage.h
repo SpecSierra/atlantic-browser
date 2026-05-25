@@ -388,6 +388,8 @@ private:
     QTimer m_framePump;
     QTimer m_deferredFullscreenLeaveTimer;
     QElapsedTimer m_lastNativeFullscreenEnter;
+    QElapsedTimer m_perfFrameLogWindow;
+    int m_perfFramesInWindow = 0;
     qreal m_lastInteractionX = -1.0;
     qreal m_lastInteractionY = -1.0;
     QHash<int, QTouchEvent::TouchPoint> m_trackedTouchPoints;
