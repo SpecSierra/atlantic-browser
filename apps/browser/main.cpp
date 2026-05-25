@@ -37,6 +37,12 @@ static char** g_restartArgv = nullptr;
 // Restart count stored as a global (set before execv via environ, read on startup)
 static int g_restartCount = 0;
 
+static bool envVarEnabled(const QByteArray &value)
+{
+    const QByteArray normalized = value.trimmed().toLower();
+    return normalized == "1" || normalized == "true" || normalized == "yes" || normalized == "on";
+}
+
 // SIGABRT handler: Wayland QPA calls abort() when the compositor pipe breaks at startup.
 // Intercept and re-exec instead. Must be async-signal-safe (only write/sleep/close/execv/_exit).
 static void sigAbrtHandler(int)
@@ -121,6 +127,7 @@ static void logStartupContext(int argc, char *argv[])
         "LD_LIBRARY_PATH",
         "BROWSER_RESTART_COUNT",
         "QT_OPENGL_NO_BGRA",
+        "ATLANTIC_KEEP_QT_OPENGL_NO_BGRA",
         "ATLANTIC_GPU_CONSERVATIVE",
         "ATLANTIC_GPU_CONSERVATIVE_PROBE",
         "ATLANTIC_GPU_PROBE_STATUS",
@@ -190,6 +197,9 @@ static void configureBrowserProcessEnvironment()
     unsetenv("MOZ_DISABLE_CRASH_GUARD");
     unsetenv("MOZ_WEBGL_PREFER_EGL");
     setenv("WEBKIT_DISABLE_SANDBOX", "1", 1);
+    if (!envVarEnabled(qgetenv("ATLANTIC_KEEP_QT_OPENGL_NO_BGRA"))) {
+        unsetenv("QT_OPENGL_NO_BGRA");
+    }
 
     if (needsEmptyPluginPath(qgetenv("GST_PLUGIN_SYSTEM_PATH_1_0")))
         qputenv("GST_PLUGIN_SYSTEM_PATH_1_0", QByteArray());
