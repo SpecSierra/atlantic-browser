@@ -497,11 +497,8 @@ static void installApplicationShutdownHooks(QGuiApplication *app, QQuickView *vi
         return;
     }
 
-    QObject::connect(view, &QQuickWindow::closing, app,
-                     [app](QQuickCloseEvent *) {
-        fprintf(stderr, "[ATLANTIC] Window close requested, quitting application\n");
-        app->quit();
-    },
+    QObject::connect(view, SIGNAL(closing(QQuickCloseEvent*)),
+                     app, SLOT(quit()),
                      Qt::UniqueConnection);
     QObject::connect(app, &QGuiApplication::lastWindowClosed, app,
                      [app]() {
