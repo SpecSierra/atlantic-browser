@@ -186,12 +186,18 @@ bool setMainVolumeNormalized(qreal volume)
         QString::fromLatin1(kMainVolumePath),
         QString::fromLatin1(kPropertiesInterface),
         QStringLiteral("Set"));
+    const uint targetStepValue = static_cast<uint>(targetStep);
     request << QString::fromLatin1(kMainVolumeInterface)
             << QStringLiteral("CurrentStep")
-            << QVariant::fromValue(QDBusVariant(targetStep));
+            << QVariant::fromValue(QDBusVariant(QVariant::fromValue(targetStepValue)));
 
     const QDBusMessage reply = connection.call(request);
     return reply.type() == QDBusMessage::ReplyMessage;
+}
+
+bool setMainVolumeState(qreal volume, bool muted)
+{
+    return setMainVolumeNormalized(muted ? 0.0 : volume);
 }
 
 bool envVarEnabled(const QByteArray &value)
@@ -828,12 +834,39 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
 (function() {
     if (window.__wpeMediaBridgeInstalled) return;
     window.__wpeMediaBridgeInstalled = true;
+    var explicitFullscreenActive = false;
 
     function isMediaElement(el) {
         if (!el || !el.tagName)
             return false;
         var tag = el.tagName.toLowerCase();
         return tag === 'audio' || tag === 'video';
+    }
+
+    function detectFullscreenState() {
+        if (document.fullscreenElement || document.webkitFullscreenElement)
+            return true;
+
+        var videos = document.querySelectorAll ? document.querySelectorAll('video') : [];
+        for (var i = 0; i < videos.length; i++) {
+            if (videos[i] && videos[i].webkitDisplayingFullscreen)
+                return true;
+        }
+        return false;
+    }
+
+    function updateExplicitFullscreenState(event) {
+        if (event) {
+            if (event.type === 'webkitbeginfullscreen') {
+                explicitFullscreenActive = true;
+                return;
+            }
+            if (event.type === 'webkitendfullscreen') {
+                explicitFullscreenActive = false;
+                return;
+            }
+        }
+        explicitFullscreenActive = detectFullscreenState();
     }
 
     function normalizedDesiredVolume() {
@@ -876,9 +909,10 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
         var media = document.querySelectorAll('audio,video');
         var audioActive = false;
         var videoActive = false;
-        var fullscreenActive = !!(document.fullscreenElement || document.webkitFullscreenElement);
+        var fullscreenActive = explicitFullscreenActive || detectFullscreenState();
         var volume = 1.0;
         var muted = false;
+        var preferredMedia = null;
 
         for (var i = 0; i < media.length; i++) {
             var el = media[i];
@@ -886,6 +920,8 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
                 continue;
 
             applyDesiredMediaState(el);
+            if (!preferredMedia || (!el.paused && !el.ended))
+                preferredMedia = el;
             if (!fullscreenActive && el.tagName.toLowerCase() === 'video') {
                 fullscreenActive = !!el.webkitDisplayingFullscreen;
             }
@@ -896,11 +932,12 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
                 } else if (!el.muted && el.volume > 0) {
                     audioActive = true;
                 }
-                if (el.volume !== undefined) {
-                    volume = el.volume;
-                    muted = el.muted;
-                }
             }
+        }
+
+        if (preferredMedia && preferredMedia.volume !== undefined) {
+            volume = preferredMedia.volume;
+            muted = preferredMedia.muted;
         }
 
         return {
@@ -937,15 +974,21 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
         'stalled',
         'waiting',
         'seeking',
-        'seeked',
-        'fullscreenchange',
-        'webkitfullscreenchange',
-        'webkitbeginfullscreen',
-        'webkitendfullscreen'
+        'seeked'
     ];
     for (var i = 0; i < events.length; i++) {
         document.addEventListener(events[i], postMediaState, true);
     }
+
+    function onFullscreenEvent(event) {
+        updateExplicitFullscreenState(event);
+        postMediaState();
+    }
+
+    document.addEventListener('fullscreenchange', onFullscreenEvent, true);
+    document.addEventListener('webkitfullscreenchange', onFullscreenEvent, true);
+    document.addEventListener('webkitbeginfullscreen', onFullscreenEvent, true);
+    document.addEventListener('webkitendfullscreen', onFullscreenEvent, true);
 
     var observerTarget = document.documentElement || document;
     if (observerTarget && typeof MutationObserver === 'function') {
@@ -963,6 +1006,7 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
         mediaObserver.observe(observerTarget, { childList: true, subtree: true });
     }
 
+    updateExplicitFullscreenState();
     document.addEventListener('DOMContentLoaded', postMediaState, true);
     applyDesiredMediaStateToNode(document);
     postMediaState();
@@ -1597,9 +1641,11 @@ void WPEWebPage::updateObservedMediaState(bool audioActive, bool videoActive, bo
     if (volumeChanged || mutedChanged) {
         m_mediaVolume = volume;
         m_mediaMuted = muted;
+        const bool nativeVolumeApplied = setMainVolumeState(m_mediaVolume, m_mediaMuted);
         qDebug() << "[WPE-MEDIA] observed state volume=" << m_mediaVolume
                  << "muted=" << m_mediaMuted
-                 << "fullscreen=" << fullscreenActive;
+                 << "fullscreen=" << fullscreenActive
+                 << "nativeApplied=" << nativeVolumeApplied;
     }
 }
 
@@ -1868,12 +1914,8 @@ void WPEWebPage::setMediaVolume(qreal volume)
     if (volume > 1.0) volume = 1.0;
 
     m_mediaVolume = volume;
-    const bool nativeVolumeApplied = setMainVolumeNormalized(volume);
+    const bool nativeVolumeApplied = setMainVolumeState(m_mediaVolume, m_mediaMuted);
     qDebug() << "[WPE-MEDIA] set volume" << volume << "nativeApplied=" << nativeVolumeApplied;
-    if (nativeVolumeApplied) {
-        return;
-    }
-
     runJavaScript(QString::fromLatin1(
         "(function(volume){"
         "  window.__wpeDesiredMediaVolume = volume;"
@@ -1893,6 +1935,8 @@ void WPEWebPage::setMediaVolume(qreal volume)
 void WPEWebPage::setMediaMuted(bool muted)
 {
     m_mediaMuted = muted;
+    const bool nativeVolumeApplied = setMainVolumeState(m_mediaVolume, m_mediaMuted);
+    qDebug() << "[WPE-MEDIA] set muted" << muted << "nativeApplied=" << nativeVolumeApplied;
     runJavaScript(QString::fromLatin1(
         "(function(muted){"
         "  window.__wpeDesiredMediaMuted = muted;"
