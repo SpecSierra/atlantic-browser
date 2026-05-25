@@ -1111,8 +1111,12 @@ bool dispatchTextToFocusedElement(WPEWebPage* page, const QString& text, int rep
         "})(%1);")
         .arg(args);
     page->runJavaScript(script);
+    if (QQuickWindow* win = page->window())
+        win->update();
     page->update();
     QTimer::singleShot(16, page, [page]() {
+        if (QQuickWindow* win = page->window())
+            win->update();
         page->update();
     });
     return true;
@@ -1184,8 +1188,12 @@ bool dispatchBackspaceToFocusedElement(WPEWebPage* page)
         "  fireInput(el);"
         "  return true;"
         "})();"));
+    if (QQuickWindow* win = page->window())
+        win->update();
     page->update();
     QTimer::singleShot(16, page, [page]() {
+        if (QQuickWindow* win = page->window())
+            win->update();
         page->update();
     });
     return true;
@@ -1257,8 +1265,12 @@ bool startSelectionAtPoint(WPEWebPage* page, qreal x, qreal y)
         .arg(y, 0, 'f', 2);
 
     page->runJavaScript(script);
+    if (QQuickWindow* win = page->window())
+        win->update();
     page->update();
     QTimer::singleShot(16, page, [page]() {
+        if (QQuickWindow* win = page->window())
+            win->update();
         page->update();
     });
     return true;
@@ -1290,6 +1302,9 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
              << "ATLANTIC_PERF_LOG=" << qgetenv("ATLANTIC_PERF_LOG");
     connect(&m_framePump, &QTimer::timeout, this, [this]() {
         if (isVisible()) {
+            if (QQuickWindow *w = window()) {
+                w->update();
+            }
             update();
         }
     });
