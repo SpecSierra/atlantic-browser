@@ -2497,14 +2497,61 @@ void WPEWebPage::keyReleaseEvent(QKeyEvent *event)
     WPEQtView::keyReleaseEvent(event);
 }
 
+// On Sailfish OS, the Wayland compositor synthesises wl_pointer events from
+// touch gestures at the COMPOSITOR level — completely outside Qt's control.
+// These arrive as genuine QMouseEvent / QHoverEvent that bypass Qt's own
+// AA_SynthesizeMouseForUnhandledTouchEvents mechanism and our event->accept()
+// guard in touchEvent(). The result is that WebKit receives both a touch-scroll
+// gesture AND a pointer press/motion for the same finger, activating :hover on
+// whatever link is under the finger and interrupting the scroll recogniser.
+//
+// Guard: if any touch points are being tracked, drop all mouse/hover events.
+// Real mouse/stylus input can never coexist with tracked touch on Sailfish, so
+// this is safe and correct.
+
+void WPEWebPage::mousePressEvent(QMouseEvent *event)
+{
+    if (!m_trackedTouchPoints.isEmpty()) {
+        event->accept();
+        return;
+    }
+    if (event) {
+        m_lastInteractionX = event->localPos().x();
+        m_lastInteractionY = event->localPos().y();
+    }
+    WPEQtView::mousePressEvent(event);
+}
+
 void WPEWebPage::mouseReleaseEvent(QMouseEvent *event)
 {
+    if (!m_trackedTouchPoints.isEmpty()) {
+        event->accept();
+        return;
+    }
     if (event) {
         m_lastInteractionX = event->localPos().x();
         m_lastInteractionY = event->localPos().y();
     }
     WPEQtView::mouseReleaseEvent(event);
     scheduleVirtualKeyboardSync();
+}
+
+void WPEWebPage::hoverEnterEvent(QHoverEvent *event)
+{
+    if (!m_trackedTouchPoints.isEmpty()) { event->accept(); return; }
+    WPEQtView::hoverEnterEvent(event);
+}
+
+void WPEWebPage::hoverMoveEvent(QHoverEvent *event)
+{
+    if (!m_trackedTouchPoints.isEmpty()) { event->accept(); return; }
+    WPEQtView::hoverMoveEvent(event);
+}
+
+void WPEWebPage::hoverLeaveEvent(QHoverEvent *event)
+{
+    if (!m_trackedTouchPoints.isEmpty()) { event->accept(); return; }
+    WPEQtView::hoverLeaveEvent(event);
 }
 
 void WPEWebPage::touchEvent(QTouchEvent *event)
