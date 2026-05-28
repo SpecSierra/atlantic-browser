@@ -662,6 +662,37 @@ Page {
         }
     }
 
+    // Image long-press context menu
+    property string _pendingImageUrl: ""
+
+    Item {
+        id: _imageMenuAnchor
+        anchors {
+            left: parent.left
+            right: parent.right
+            bottom: parent.bottom
+        }
+        height: Theme.itemSizeSmall
+    }
+
+    ContextMenu {
+        id: _imageContextMenu
+        onClosed: browserPage._pendingImageUrl = ""
+        MenuItem {
+            text: "Save image"
+            onClicked: if (webView.contentItem) webView.contentItem.downloadUrl(browserPage._pendingImageUrl)
+        }
+    }
+
+    Connections {
+        target: webView
+        onImageLongPressed: {
+            if (imageUrl.length === 0) return
+            browserPage._pendingImageUrl = imageUrl
+            _imageContextMenu.open(_imageMenuAnchor)
+        }
+    }
+
     Component.onCompleted: {
         window.setBrowserCover(webView.tabModel)
         if (Qt.application.arguments.indexOf("-debugMode") > 0) {

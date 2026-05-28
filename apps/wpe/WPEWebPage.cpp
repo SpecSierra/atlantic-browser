@@ -860,15 +860,37 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
         longPressStartPoint = null;
     }
 
+    function imageUrlAtPoint(x, y) {
+        var el = document.elementFromPoint(x, y);
+        while (el) {
+            if (el.tagName && el.tagName.toLowerCase() === 'img') {
+                var src = el.currentSrc || el.src || el.getAttribute('src');
+                if (src) return src;
+            }
+            el = el.parentElement;
+        }
+        return null;
+    }
+
     function beginLongPress(x, y) {
         cancelLongPress();
         longPressPoint = { x: x, y: y };
         longPressStartPoint = { x: x, y: y };
         longPressTimer = setTimeout(function() {
             longPressTimer = null;
-            if (longPressPoint && selectWordAtPoint(longPressPoint.x, longPressPoint.y))
-                postSelection();
+            if (!longPressPoint) return;
+            var lx = longPressPoint.x, ly = longPressPoint.y;
             longPressPoint = null;
+            var imgUrl = imageUrlAtPoint(lx, ly);
+            if (imgUrl) {
+                try {
+                    window.webkit.messageHandlers.imageLongPressBridge.postMessage(
+                        { imageUrl: imgUrl, x: lx, y: ly });
+                } catch(e) {}
+                return;
+            }
+            if (selectWordAtPoint(lx, ly))
+                postSelection();
         }, 350);
     }
 
@@ -918,6 +940,44 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
         nullptr, nullptr);
     webkit_user_content_manager_add_script(ucm, script);
     webkit_user_script_unref(script);
+}
+
+static void onImageLongPressBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
+{
+    WPEWebPage* page = static_cast<WPEWebPage*>(userData);
+    if (!page || !value)
+        return;
+
+    gchar* json = jsc_value_to_json(value, 0);
+    if (!json)
+        return;
+
+    QByteArray jsonBytes(json);
+    g_free(json);
+
+    QJsonDocument doc = QJsonDocument::fromJson(jsonBytes);
+    if (!doc.isObject())
+        return;
+
+    const QJsonObject obj = doc.object();
+    const QString imageUrl = obj.value(QStringLiteral("imageUrl")).toString();
+    const qreal x = obj.value(QStringLiteral("x")).toDouble();
+    const qreal y = obj.value(QStringLiteral("y")).toDouble();
+    if (imageUrl.isEmpty())
+        return;
+
+    QVariantMap data;
+    data[QStringLiteral("imageUrl")] = imageUrl;
+    data[QStringLiteral("x")] = x;
+    data[QStringLiteral("y")] = y;
+    emit page->recvAsyncMessage(QStringLiteral("Content:ImageLongPress"), data);
+}
+
+static void onImageLongPressBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page)
+{
+    g_signal_connect(ucm, "script-message-received::imageLongPressBridge",
+                     G_CALLBACK(onImageLongPressBridgeMessage), page);
+    webkit_user_content_manager_register_script_message_handler(ucm, "imageLongPressBridge", nullptr);
 }
 
 static void onScrollBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
@@ -1677,6 +1737,7 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             webkit_user_script_unref(script);
 
             onSelectionBridgeInstall(ucm, this);
+            onImageLongPressBridgeInstall(ucm, this);
             onScrollBridgeInstall(ucm, this);
             onMediaBridgeInstall(ucm, this);
 
@@ -3064,6 +3125,14 @@ void WPEWebPage::openSelectMenu(const QStringList &options, int selectedIndex)
     emit selectMenuOptionsChanged();
     emit selectMenuSelectedIndexChanged();
     emit selectMenuActiveChanged();
+}
+
+void WPEWebPage::downloadUrl(const QString &url)
+{
+    WebKitWebView* wv = webView();
+    if (!wv || url.isEmpty())
+        return;
+    webkit_web_view_download_uri(wv, url.toUtf8().constData());
 }
 
 void WPEWebPage::selectMenuOption(int index)

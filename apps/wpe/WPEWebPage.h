@@ -234,6 +234,7 @@ public:
 
     // HTML <select> dropdown
     Q_INVOKABLE void selectMenuOption(int index);
+    Q_INVOKABLE void downloadUrl(const QString &url);
     Q_INVOKABLE void closeSelectMenu();
     Q_INVOKABLE void chooseFiles(const QStringList &filePaths);
     Q_INVOKABLE void cancelFileChooser();
