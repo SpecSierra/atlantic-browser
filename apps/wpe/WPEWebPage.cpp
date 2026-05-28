@@ -883,7 +883,7 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
 
     document.addEventListener('selectionchange', postSelection, true);
     document.addEventListener('mouseup', postSelection, true);
-    document.addEventListener('touchend', postSelection, true);
+    document.addEventListener('touchend', postSelection, {capture: true, passive: true});
     document.addEventListener('keyup', postSelection, true);
     document.addEventListener('contextmenu', function(e) {
         if (selectWordAtPoint(e.clientX, e.clientY)) {
@@ -891,11 +891,13 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
             postSelection();
         }
     }, true);
+    // passive:true lets WebKit compositor scroll without waiting for main-thread
+    // confirmation that preventDefault() won't be called (none of these handlers call it)
     document.addEventListener('touchstart', function(e) {
         var p = touchPointFromEvent(e);
         if (p)
             beginLongPress(p.clientX, p.clientY);
-    }, true);
+    }, {capture: true, passive: true});
     document.addEventListener('touchmove', function(e) {
         var p = touchPointFromEvent(e);
         if (!p || !longPressStartPoint)
@@ -904,9 +906,9 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
         var dy = p.clientY - longPressStartPoint.y;
         if ((dx * dx) + (dy * dy) > longPressMoveThreshold * longPressMoveThreshold)
             cancelLongPress();
-    }, true);
-    document.addEventListener('touchcancel', cancelLongPress, true);
-    document.addEventListener('touchend', cancelLongPress, true);
+    }, {capture: true, passive: true});
+    document.addEventListener('touchcancel', cancelLongPress, {capture: true, passive: true});
+    document.addEventListener('touchend', cancelLongPress, {capture: true, passive: true});
 })();
 )JS";
 
@@ -1589,7 +1591,7 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
         }
     }
     document.addEventListener('mousedown',   handleSelectActivation, true);
-    document.addEventListener('touchstart',  handleSelectActivation, true);
+    document.addEventListener('touchstart',  handleSelectActivation, {capture: true, passive: true});
     document.addEventListener('pointerdown', handleSelectActivation, true);
     document.addEventListener('click',       handleSelectActivation, true);
     console.error('[WPE-SELECT-JS] event listeners registered');
