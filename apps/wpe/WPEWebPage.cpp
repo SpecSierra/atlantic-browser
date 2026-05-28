@@ -2515,6 +2515,14 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
 
     forceActiveFocus();
 
+    // On Sailfish (Wayland+touch), Qt synthesizes QHoverEvents from the touch
+    // position because WPEQtView sets setAcceptHoverEvents(true). Those hover
+    // events propagate to WPE as pointer/mouse events, causing link :hover CSS
+    // to fire and WebKit's scroll gesture to be interrupted. Disable hover
+    // acceptance for the duration of any active touch, re-enable when released.
+    if (event->type() == QEvent::TouchBegin)
+        setAcceptHoverEvents(false);
+
     const QList<QTouchEvent::TouchPoint> activePoints = mergeTrackedTouchPoints(
         m_trackedTouchPoints,
         event->touchPoints(),
@@ -2597,6 +2605,7 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
 
     if (activePoints.isEmpty() && (event->type() == QEvent::TouchEnd || event->type() == QEvent::TouchCancel)) {
         m_trackedTouchPoints.clear();
+        setAcceptHoverEvents(true);  // restore hover for mouse/stylus after all fingers lifted
     }
 
     WPEQtView::touchEvent(event);
