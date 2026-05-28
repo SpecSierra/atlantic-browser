@@ -25,14 +25,6 @@ SilicaFlickable {
     signal showCertDetail
     signal closeCertInfo
 
-    function openSiteSettings() {
-        pageStack.push("../SitePermissionPage.qml",
-                       {
-                           title: webView.title,
-                           url: toolBarRow.url
-                       })
-    }
-
     onSecurityChanged: {
         // Jump back to the top
         contentY = originY
@@ -110,15 +102,6 @@ SilicaFlickable {
             enabled: security && !security.certIsNull
             visible: enabled
             onClicked: showCertDetail()
-        }
-
-
-        Button {
-            anchors.horizontalCenter: parent.horizontalCenter
-            //: Manage permission for current site
-            //% "Site permissions"
-            text: qsTrId("sailfish_browser-sh-site-permissions")
-            onClicked: openSiteSettings()
         }
     }
 }

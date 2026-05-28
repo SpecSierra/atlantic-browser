@@ -40,7 +40,7 @@ Page {
     ConfigurationValue { id: useDownloadDirConf; key: "/apps/atlantic-browser/settings/use_download_dir"; defaultValue: false }
     ConfigurationValue { id: downloadDirConf; key: "/apps/atlantic-browser/settings/download_dir"; defaultValue: "" }
 
-    readonly property int _textSwitchIconCenter: Math.round((permissionIcon.width - Theme.itemSizeExtraSmall) / 2.0)
+    readonly property int _textSwitchIconCenter: Math.round((Theme.iconSizeMedium - Theme.itemSizeExtraSmall) / 2.0)
 
     function removeProtocolTypeFromUri(uri) {
         if (uri.length === 0)
@@ -243,29 +243,6 @@ Page {
                     }
                 }
                 onClicked: pageStack.push("LoginsPage.qml")
-            }
-
-            BackgroundItem {
-                width: parent.width
-                contentHeight: Theme.itemSizeMedium
-                Row {
-                    width: parent.width - 2*Theme.horizontalPageMargin
-                    x: Theme.horizontalPageMargin
-                    spacing: Theme.paddingMedium
-                    anchors.verticalCenter: parent.verticalCenter
-
-                    Icon {
-                        id: permissionIcon
-                        source: "image://theme/icon-m-browser-permissions"
-                    }
-                    Label {
-                        width: parent.width - parent.spacing - permissionIcon.width
-                        //% "Permissions"
-                        text: qsTrId("settings_browser-la-permissions")
-                        anchors.verticalCenter: permissionIcon.verticalCenter
-                    }
-                }
-                onClicked: pageStack.push("PermissionPage.qml")
             }
 
             BackgroundItem {
