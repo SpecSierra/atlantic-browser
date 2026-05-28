@@ -920,6 +920,73 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
     webkit_user_script_unref(script);
 }
 
+static void onScrollBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
+{
+    WPEWebPage* page = static_cast<WPEWebPage*>(userData);
+    if (!page || !value)
+        return;
+
+    gchar* json = jsc_value_to_json(value, 0);
+    if (!json)
+        return;
+
+    QByteArray jsonBytes(json);
+    g_free(json);
+
+    QJsonDocument doc = QJsonDocument::fromJson(jsonBytes);
+    if (!doc.isObject())
+        return;
+
+    const QJsonObject obj = doc.object();
+    const qreal scrollY      = obj.value(QStringLiteral("scrollY")).toDouble();
+    const qreal scrollHeight = obj.value(QStringLiteral("scrollHeight")).toDouble();
+    const qreal innerHeight  = obj.value(QStringLiteral("innerHeight")).toDouble();
+    emit page->scrollPositionChanged(scrollY, scrollHeight, innerHeight);
+}
+
+static void onScrollBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page)
+{
+    g_signal_connect(ucm, "script-message-received::scrollBridge",
+                     G_CALLBACK(onScrollBridgeMessage), page);
+    webkit_user_content_manager_register_script_message_handler(ucm, "scrollBridge", nullptr);
+
+    // Throttled scroll reporter: fires at most every 100 ms to avoid flooding
+    // the native side. Reports scrollY, total scrollHeight, and innerHeight so
+    // the chrome gesture logic in WPEWebPage can show/hide the toolbar.
+    static const gchar* scrollBridgeJs = R"JS(
+(function() {
+    if (window.__wpeScrollBridgeInstalled) return;
+    window.__wpeScrollBridgeInstalled = true;
+
+    var pending = false;
+    function report() {
+        pending = false;
+        try {
+            window.webkit.messageHandlers.scrollBridge.postMessage({
+                scrollY:      window.scrollY,
+                scrollHeight: document.documentElement.scrollHeight,
+                innerHeight:  window.innerHeight
+            });
+        } catch(e) {}
+    }
+    window.addEventListener('scroll', function() {
+        if (!pending) {
+            pending = true;
+            setTimeout(report, 100);
+        }
+    }, {passive: true, capture: true});
+})();
+)JS";
+
+    WebKitUserScript* script = webkit_user_script_new(
+        scrollBridgeJs,
+        WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+        nullptr, nullptr);
+    webkit_user_content_manager_add_script(ucm, script);
+    webkit_user_script_unref(script);
+}
+
 static void onMediaBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
 {
     WPEWebPage* page = static_cast<WPEWebPage*>(userData);
@@ -1618,6 +1685,7 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             webkit_user_script_unref(script);
 
             onSelectionBridgeInstall(ucm, this);
+            onScrollBridgeInstall(ucm, this);
             onMediaBridgeInstall(ucm, this);
 
             WebKitNetworkSession* session = webkit_web_view_get_network_session(wv);
