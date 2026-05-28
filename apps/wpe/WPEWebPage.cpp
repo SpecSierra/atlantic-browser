@@ -50,7 +50,7 @@ constexpr double kMinimumPinchZoomFactor = 0.5;
 constexpr double kMaximumPinchZoomFactor = 3.0;
 constexpr int kDefaultFramePumpIntervalMs = 16;
 constexpr int kConservativeFramePumpIntervalMs = 33;
-const char kContentBlockerIdentifier[] = "atlantic-default";
+const char kContentBlockerIdentifierBase[] = "atlantic-default";
 const char kPulseLookupService[] = "org.pulseaudio.Server";
 const char kPulseLookupPath[] = "/org/pulseaudio/server_lookup1";
 const char kPulseLookupInterface[] = "org.PulseAudio.ServerLookup1";
@@ -74,6 +74,7 @@ struct ContentBlockerContext {
     WebKitUserContentManager* manager = nullptr;
     WebKitUserContentFilterStore* store = nullptr;
     GFile* sourceFile = nullptr;
+    QByteArray identifier; // versioned: base + mtime suffix
 
     ~ContentBlockerContext()
     {
@@ -145,7 +146,7 @@ void onContentBlockerLoaded(GObject* sourceObject, GAsyncResult* result, gpointe
 
     webkit_user_content_filter_store_save_from_file(
         context->store,
-        kContentBlockerIdentifier,
+        context->identifier.constData(),
         context->sourceFile,
         nullptr,
         onContentBlockerSaved,
@@ -163,6 +164,13 @@ void ensureContentBlocker(WebKitUserContentManager* manager)
         return;
     }
 
+    // Build a versioned identifier: base + mtime so the compiled cache is
+    // automatically invalidated whenever the JSON is updated.
+    QFileInfo fi(sourcePath);
+    const qint64 mtime = fi.lastModified().toSecsSinceEpoch();
+    QByteArray identifier = QByteArray(kContentBlockerIdentifierBase)
+                            + '-' + QByteArray::number((qlonglong)mtime);
+
     const QString storePath = contentBlockerStorePath();
     if (!QDir().mkpath(storePath)) {
         qWarning() << "[WPE-BLOCKER] failed to create filter store path:" << storePath;
@@ -173,10 +181,11 @@ void ensureContentBlocker(WebKitUserContentManager* manager)
     context->manager = WEBKIT_USER_CONTENT_MANAGER(g_object_ref(manager));
     context->store = webkit_user_content_filter_store_new(storePath.toUtf8().constData());
     context->sourceFile = g_file_new_for_path(sourcePath.toUtf8().constData());
+    context->identifier = identifier;
 
     webkit_user_content_filter_store_load(
         context->store,
-        kContentBlockerIdentifier,
+        context->identifier.constData(),
         nullptr,
         onContentBlockerLoaded,
         context.release());
