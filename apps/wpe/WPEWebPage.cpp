@@ -2609,6 +2609,16 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
     }
 
     WPEQtView::touchEvent(event);
+
+    // Accept the touch event so Qt does not synthesize QMouseEvents from it via
+    // Qt::AA_SynthesizeMouseForUnhandledTouchEvents. Without this, Qt generates
+    // fake mousePressEvent/mouseReleaseEvent calls from every touch, which
+    // propagate to WPEQtView::mousePressEvent -> dispatchMousePressEvent ->
+    // wpe_view_backend_dispatch_pointer_event(). WebKit then receives BOTH a
+    // touch scroll gesture AND a pointer button press for the same gesture,
+    // causing :hover activation on links and breaking the scroll recognizer.
+    event->accept();
+
     if (shouldSyncKeyboard) {
         if (!event->touchPoints().isEmpty()) {
             const QTouchEvent::TouchPoint &point = event->touchPoints().constLast();
