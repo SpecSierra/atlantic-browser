@@ -98,6 +98,7 @@ WPEWebContainer::~WPEWebContainer()
 void WPEWebContainer::configureSandboxPaths()
 {
     WebKitWebContext *ctx = webkit_web_context_get_default();
+    webkit_web_context_set_cache_model(ctx, WEBKIT_CACHE_MODEL_WEB_BROWSER);
     addSandboxPathIfExists(ctx, QString::fromUtf8(WPERuntimePaths::kRuntimePrefix), TRUE,
                            QStringLiteral("runtime-prefix"));
     addSandboxPathIfExists(ctx, QString::fromUtf8(WPERuntimePaths::kGStreamerPluginDir), TRUE,

@@ -7,6 +7,7 @@
  */
 
 #include "WPEWebPage.h"
+#include "WPERuntimePaths.h"
 #include "downloadmanager.h"
 
 #include <QBuffer>
@@ -36,6 +37,7 @@
 #include <QUrl>
 #include <QVector>
 #include <array>
+#include <memory>
 
 #include "WPEQtViewLoadRequest.h"
 
@@ -48,6 +50,7 @@ constexpr double kMinimumPinchZoomFactor = 0.5;
 constexpr double kMaximumPinchZoomFactor = 3.0;
 constexpr int kDefaultFramePumpIntervalMs = 16;
 constexpr int kConservativeFramePumpIntervalMs = 33;
+const char kContentBlockerIdentifier[] = "atlantic-default";
 const char kPulseLookupService[] = "org.pulseaudio.Server";
 const char kPulseLookupPath[] = "/org/pulseaudio/server_lookup1";
 const char kPulseLookupInterface[] = "org.PulseAudio.ServerLookup1";
@@ -66,6 +69,118 @@ struct MainVolumeState {
         return maximumStep >= 0;
     }
 };
+
+struct ContentBlockerContext {
+    WebKitUserContentManager* manager = nullptr;
+    WebKitUserContentFilterStore* store = nullptr;
+    GFile* sourceFile = nullptr;
+
+    ~ContentBlockerContext()
+    {
+        if (manager)
+            g_object_unref(manager);
+        if (store)
+            g_object_unref(store);
+        if (sourceFile)
+            g_object_unref(sourceFile);
+    }
+};
+
+QString contentBlockerStorePath()
+{
+    QString cacheRoot = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation);
+    if (cacheRoot.isEmpty())
+        cacheRoot = QDir::homePath() + QStringLiteral("/.cache");
+    return cacheRoot + QStringLiteral("/atlantic-browser/content-filter-store");
+}
+
+void installContentBlockerFilter(ContentBlockerContext* context, WebKitUserContentFilter* filter, const char* source)
+{
+    if (!context || !context->manager || !filter)
+        return;
+
+    webkit_user_content_manager_add_filter(context->manager, filter);
+    qDebug() << "[WPE-BLOCKER] installed content blocker from" << source
+             << "id=" << webkit_user_content_filter_get_identifier(filter);
+    webkit_user_content_filter_unref(filter);
+}
+
+void onContentBlockerSaved(GObject* sourceObject, GAsyncResult* result, gpointer userData)
+{
+    std::unique_ptr<ContentBlockerContext> context(static_cast<ContentBlockerContext*>(userData));
+    GError* error = nullptr;
+    WebKitUserContentFilter* filter =
+        webkit_user_content_filter_store_save_from_file_finish(
+            WEBKIT_USER_CONTENT_FILTER_STORE(sourceObject), result, &error);
+    if (!filter) {
+        qWarning() << "[WPE-BLOCKER] failed to compile content blocker:"
+                   << (error ? error->message : "unknown error");
+        g_clear_error(&error);
+        return;
+    }
+
+    installContentBlockerFilter(context.get(), filter, "compile");
+}
+
+void onContentBlockerLoaded(GObject* sourceObject, GAsyncResult* result, gpointer userData)
+{
+    std::unique_ptr<ContentBlockerContext> context(static_cast<ContentBlockerContext*>(userData));
+    GError* error = nullptr;
+    WebKitUserContentFilter* filter =
+        webkit_user_content_filter_store_load_finish(
+            WEBKIT_USER_CONTENT_FILTER_STORE(sourceObject), result, &error);
+    if (filter) {
+        installContentBlockerFilter(context.get(), filter, "cache");
+        return;
+    }
+
+    qDebug() << "[WPE-BLOCKER] cached content blocker unavailable, compiling from source:"
+             << (error ? error->message : "missing filter");
+    g_clear_error(&error);
+
+    if (!context->store || !context->sourceFile) {
+        qWarning() << "[WPE-BLOCKER] cannot compile content blocker: missing store or source file";
+        return;
+    }
+
+    webkit_user_content_filter_store_save_from_file(
+        context->store,
+        kContentBlockerIdentifier,
+        context->sourceFile,
+        nullptr,
+        onContentBlockerSaved,
+        context.release());
+}
+
+void ensureContentBlocker(WebKitUserContentManager* manager)
+{
+    if (!manager)
+        return;
+
+    const QString sourcePath = QString::fromUtf8(WPERuntimePaths::kAtlanticContentBlockerPath);
+    if (!QFileInfo::exists(sourcePath)) {
+        qDebug() << "[WPE-BLOCKER] source file missing:" << sourcePath;
+        return;
+    }
+
+    const QString storePath = contentBlockerStorePath();
+    if (!QDir().mkpath(storePath)) {
+        qWarning() << "[WPE-BLOCKER] failed to create filter store path:" << storePath;
+        return;
+    }
+
+    auto context = std::make_unique<ContentBlockerContext>();
+    context->manager = WEBKIT_USER_CONTENT_MANAGER(g_object_ref(manager));
+    context->store = webkit_user_content_filter_store_new(storePath.toUtf8().constData());
+    context->sourceFile = g_file_new_for_path(sourcePath.toUtf8().constData());
+
+    webkit_user_content_filter_store_load(
+        context->store,
+        kContentBlockerIdentifier,
+        nullptr,
+        onContentBlockerLoaded,
+        context.release());
+}
 
 QVariant unwrapDbusVariant(const QVariant &value)
 {
@@ -1399,6 +1514,8 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             if (WebKitSettings* settings = webkit_web_view_get_settings(wv)) {
                 webkit_settings_set_enable_fullscreen(settings, TRUE);
                 // Enable performance features
+                webkit_settings_set_hardware_acceleration_policy(
+                    settings, WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS);
                 webkit_settings_set_enable_webgl(settings, TRUE);
                 webkit_settings_set_enable_2d_canvas_acceleration(settings, TRUE);
                 webkit_settings_set_enable_smooth_scrolling(settings, TRUE);
@@ -1420,6 +1537,7 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
 
             // --- HTML <select> via JS bridge ---
             WebKitUserContentManager* ucm = webkit_web_view_get_user_content_manager(wv);
+            ensureContentBlocker(ucm);
             // Connect BEFORE registering (per documentation, to avoid race conditions)
             g_signal_connect(ucm, "script-message-received::selectBridge",
                              G_CALLBACK(onSelectBridgeMessage), this);

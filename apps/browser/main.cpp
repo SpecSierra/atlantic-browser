@@ -20,6 +20,7 @@
 #include <QQuickWindow>
 #include <QSet>
 #include <QStringList>
+#include <QSurfaceFormat>
 #include <qqmldebug.h>
 #include <QTimer>
 #include <QTranslator>
@@ -131,6 +132,9 @@ static void logStartupContext(int argc, char *argv[])
         "ATLANTIC_GPU_CONSERVATIVE",
         "ATLANTIC_GPU_CONSERVATIVE_PROBE",
         "ATLANTIC_GPU_PROBE_STATUS",
+        "WEBKIT_DEBUG",
+        "QSG_RENDER_LOOP",
+        "QSG_INFO",
         "ATLANTIC_FRAME_PUMP_INTERVAL_MS",
         "ATLANTIC_PERF_LOG",
         nullptr
@@ -641,6 +645,12 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     signal(SIGTERM, SIG_DFL);
 
     configureBrowserProcessEnvironment();
+
+    QSurfaceFormat format = QSurfaceFormat::defaultFormat();
+    format.setRenderableType(QSurfaceFormat::OpenGLES);
+    format.setProfile(QSurfaceFormat::NoProfile);
+    format.setSwapInterval(1);
+    QSurfaceFormat::setDefaultFormat(format);
 
     QQuickWindow::setDefaultAlphaBuffer(true);
 
