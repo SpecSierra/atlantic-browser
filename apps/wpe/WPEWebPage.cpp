@@ -1532,6 +1532,14 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                 // adds a second animation layer that makes pages feel rubber-banded
                 // instead of tracking the finger 1:1.
                 webkit_settings_set_enable_smooth_scrolling(settings, FALSE);
+                // Honest user-agent: mobile, WebKit, Sailfish OS.
+                // "Mobile" in the platform string + "Mobile Safari" token ensure
+                // sites serve mobile layouts. AppleWebKit/605.1.15 is the version
+                // string reported by WPE WebKit 2.52.x.
+                webkit_settings_set_user_agent(settings,
+                    "Mozilla/5.0 (Linux; Sailfish OS; Mobile) "
+                    "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+                    "Atlantic/2.3.30 Mobile Safari/604.1");
             }
             g_signal_connect(wv, "decide-policy", G_CALLBACK(onDecidePolicy), nullptr);
             if (WebKitNetworkSession* session = webkit_web_view_get_network_session(wv)) {
