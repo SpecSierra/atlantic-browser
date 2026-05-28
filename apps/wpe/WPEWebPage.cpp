@@ -1512,11 +1512,11 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
         setNativeFullscreenRequested(false);
     });
 
-    // Set a credible mobile Chrome UA from the start
+    // Honest mobile UA: Sailfish OS, WebKit engine, Atlantic browser
     setUserAgent(QStringLiteral(
-        "Mozilla/5.0 (Linux; Android 13; Pixel 7) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/131.0.0.0 Mobile Safari/537.36"));
+        "Mozilla/5.0 (Linux; Sailfish OS; Mobile) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+        "Atlantic/2.3.30 Mobile Safari/604.1"));
 
     connect(this, &WPEQtView::loadingChanged,
             this, &WPEWebPage::onLoadingChanged);
@@ -1604,14 +1604,6 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                 // adds a second animation layer that makes pages feel rubber-banded
                 // instead of tracking the finger 1:1.
                 webkit_settings_set_enable_smooth_scrolling(settings, FALSE);
-                // Honest user-agent: mobile, WebKit, Sailfish OS.
-                // "Mobile" in the platform string + "Mobile Safari" token ensure
-                // sites serve mobile layouts. AppleWebKit/605.1.15 is the version
-                // string reported by WPE WebKit 2.52.x.
-                webkit_settings_set_user_agent(settings,
-                    "Mozilla/5.0 (Linux; Sailfish OS; Mobile) "
-                    "AppleWebKit/605.1.15 (KHTML, like Gecko) "
-                    "Atlantic/2.3.30 Mobile Safari/604.1");
             }
             g_signal_connect(wv, "decide-policy", G_CALLBACK(onDecidePolicy), nullptr);
             if (WebKitNetworkSession* session = webkit_web_view_get_network_session(wv)) {
@@ -1950,13 +1942,13 @@ void WPEWebPage::setDesktopMode(bool desktop)
     const bool changed = (m_desktopMode != desktop);
     m_desktopMode = desktop;
     static const char* mobileUA =
-        "Mozilla/5.0 (Linux; Android 13; Pixel 7) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/131.0.0.0 Mobile Safari/537.36";
+        "Mozilla/5.0 (Linux; Sailfish OS; Mobile) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+        "Atlantic/2.3.30 Mobile Safari/604.1";
     static const char* desktopUA =
         "Mozilla/5.0 (X11; Linux x86_64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/131.0.0.0 Safari/537.36";
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+        "Atlantic/2.3.30 Safari/604.1";
     setUserAgent(QString::fromUtf8(desktop ? desktopUA : mobileUA));
     if (changed) {
         emit desktopModeChanged();
