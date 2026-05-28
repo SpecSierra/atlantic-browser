@@ -167,7 +167,7 @@ void ensureContentBlocker(WebKitUserContentManager* manager)
     // Build a versioned identifier: base + mtime so the compiled cache is
     // automatically invalidated whenever the JSON is updated.
     QFileInfo fi(sourcePath);
-    const qint64 mtime = fi.lastModified().toSecsSinceEpoch();
+    const qint64 mtime = fi.lastModified().toMSecsSinceEpoch() / 1000;
     QByteArray identifier = QByteArray(kContentBlockerIdentifierBase)
                             + '-' + QByteArray::number((qlonglong)mtime);
 
