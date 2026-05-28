@@ -2240,7 +2240,7 @@ void WPEWebPage::itemChange(ItemChange change, const ItemChangeData &value)
 
 void WPEWebPage::updateFramePumpState()
 {
-    const bool shouldPump = isVisible() && m_active && !m_throttlePainting;
+    const bool shouldPump = isVisible();
     const int targetIntervalMs = framePumpIntervalForCurrentGpuMode();
     const bool intervalChanged = m_framePump.interval() != targetIntervalMs;
     if (intervalChanged) {
