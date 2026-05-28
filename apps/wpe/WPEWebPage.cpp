@@ -49,7 +49,6 @@ namespace {
 constexpr double kMinimumPinchZoomFactor = 0.5;
 constexpr double kMaximumPinchZoomFactor = 3.0;
 constexpr int kDefaultFramePumpIntervalMs = 16;
-constexpr int kConservativeFramePumpIntervalMs = 33;
 const char kContentBlockerIdentifierBase[] = "atlantic-default";
 const char kPulseLookupService[] = "org.pulseaudio.Server";
 const char kPulseLookupPath[] = "/org/pulseaudio/server_lookup1";
@@ -337,13 +336,13 @@ bool perfLoggingEnabled()
 
 int framePumpIntervalForCurrentGpuMode()
 {
+    // Always target 60 FPS (16 ms). The conservative 30-FPS mode was removed
+    // because it causes visible scroll jank without meaningful GPU savings on
+    // the Xperia 10 II hardware. Keep the env override for lab testing only.
     bool ok = false;
     const int overrideMs = qEnvironmentVariableIntValue("ATLANTIC_FRAME_PUMP_INTERVAL_MS", &ok);
     if (ok && overrideMs >= 16 && overrideMs <= 1000) {
         return overrideMs;
-    }
-    if (envVarEnabled(qgetenv("ATLANTIC_GPU_CONSERVATIVE"))) {
-        return kConservativeFramePumpIntervalMs;
     }
     return kDefaultFramePumpIntervalMs;
 }
