@@ -1526,7 +1526,11 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                 // Enable WebGL and 2D canvas acceleration explicitly.
                 webkit_settings_set_enable_webgl(settings, TRUE);
                 webkit_settings_set_enable_2d_canvas_acceleration(settings, TRUE);
-                webkit_settings_set_enable_smooth_scrolling(settings, TRUE);
+                // Disable smooth scrolling: on a touch device the WPE kinetic scroll
+                // gesture recogniser already handles momentum. Enabling smooth scrolling
+                // adds a second animation layer that makes pages feel rubber-banded
+                // instead of tracking the finger 1:1.
+                webkit_settings_set_enable_smooth_scrolling(settings, FALSE);
             }
             g_signal_connect(wv, "decide-policy", G_CALLBACK(onDecidePolicy), nullptr);
             if (WebKitNetworkSession* session = webkit_web_view_get_network_session(wv)) {
