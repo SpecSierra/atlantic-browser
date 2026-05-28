@@ -1513,9 +1513,8 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
         if (WebKitWebView* wv = webView()) {
             if (WebKitSettings* settings = webkit_web_view_get_settings(wv)) {
                 webkit_settings_set_enable_fullscreen(settings, TRUE);
-                // Enable performance features
-                webkit_settings_set_hardware_acceleration_policy(
-                    settings, WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS);
+                // WPE always uses hardware acceleration (no GTK ON_DEMAND policy).
+                // Enable WebGL and 2D canvas acceleration explicitly.
                 webkit_settings_set_enable_webgl(settings, TRUE);
                 webkit_settings_set_enable_2d_canvas_acceleration(settings, TRUE);
                 webkit_settings_set_enable_smooth_scrolling(settings, TRUE);
