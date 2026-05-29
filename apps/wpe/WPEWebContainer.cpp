@@ -119,17 +119,6 @@ void WPEWebContainer::configureSandboxPaths()
     WebKitWebContext *ctx = webkit_web_context_get_default();
     webkit_web_context_set_cache_model(ctx, WEBKIT_CACHE_MODEL_WEB_BROWSER);
 
-    // Force shared secondary process model: all frames (including cross-origin
-    // iframes) run in a single WPEWebProcess instead of one-per-origin.
-    // On Snapdragon 665 (4 big cores / 4 GB RAM) the default per-origin model
-    // spawns 3-4 WPEWebProcess instances for a single heavy page like
-    // radiofrance.fr (main frame + ad/player/social iframes), each competing
-    // for the same 4 taskset-pinned cores. A shared process eliminates that
-    // scheduling contention and cuts per-process overhead (JIT warmup × N,
-    // GC × N, memory × N). Trade-off: no cross-origin JS isolation — acceptable
-    // for a mobile browser on this hardware class.
-    webkit_web_context_set_process_model(ctx, WEBKIT_PROCESS_MODEL_SHARED_SECONDARY_PROCESS);
-
     // WebProcess memory pressure: WTF Linux defaults already match target thresholds for a 4 GB device:
     //   baseThreshold = min(3 GB, ramSize()) = 3 GB
     //   conservative  = 0.33 × 3 GB ≈ 1.0 GB  ← start evicting caches
