@@ -662,25 +662,36 @@ Page {
         }
     }
 
-    // Image long-press context menu
+    // Image long-press panel — DockedPanel avoids the SilicaFlickable
+    // ancestor requirement that ContextMenu has, so it works correctly
+    // when triggered programmatically from inside a plain Page.
     property string _pendingImageUrl: ""
 
-    Item {
-        id: _imageMenuAnchor
-        anchors {
-            left: parent.left
-            right: parent.right
-            bottom: parent.bottom
-        }
-        height: Theme.itemSizeSmall
-    }
+    DockedPanel {
+        id: _imagePanel
+        width: parent.width
+        height: Theme.itemSizeLarge + Theme.paddingLarge
+        dock: Dock.Bottom
+        open: false
+        onOpenChanged: if (!open) browserPage._pendingImageUrl = ""
 
-    ContextMenu {
-        id: _imageContextMenu
-        onClosed: browserPage._pendingImageUrl = ""
-        MenuItem {
-            text: "Save image"
-            onClicked: if (webView.contentItem) webView.contentItem.downloadUrl(browserPage._pendingImageUrl)
+        Row {
+            anchors.centerIn: parent
+            spacing: Theme.paddingLarge
+
+            Button {
+                text: "Save image"
+                onClicked: {
+                    if (webView.contentItem && browserPage._pendingImageUrl.length > 0)
+                        webView.contentItem.downloadUrl(browserPage._pendingImageUrl)
+                    _imagePanel.open = false
+                }
+            }
+
+            Button {
+                text: "Cancel"
+                onClicked: _imagePanel.open = false
+            }
         }
     }
 
@@ -689,7 +700,7 @@ Page {
         onImageLongPressed: {
             if (imageUrl.length === 0) return
             browserPage._pendingImageUrl = imageUrl
-            _imageContextMenu.open(_imageMenuAnchor)
+            _imagePanel.open = true
         }
     }
 
