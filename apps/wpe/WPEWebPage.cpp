@@ -1607,21 +1607,19 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     // from taps (touchstart+touchend), so CSS :hover menus still work on tap.
     setAcceptHoverEvents(false);
 
-    // Safety-only fallback timer (2 s). The real frame driver is WPEQtView::triggerUpdate()
-    // which calls QQuickItem::update() whenever WPE exports a new frame. See
-    // updateFramePumpState() for the rationale. The timer is kept only to recover from
-    // any edge-case where a triggerUpdate() event is transiently lost (e.g. rapid tab
-    // switch). QCoarseTimer is fine — precision does not matter for a 2 s safety net.
-    m_framePump.setInterval(2000);
-    m_framePump.setTimerType(Qt::CoarseTimer);
-    qDebug() << "[WPE] Frame pump: safety-only 2 s fallback"
+    const int framePumpIntervalMs = framePumpIntervalForCurrentGpuMode();
+    m_framePump.setInterval(framePumpIntervalMs);
+    m_framePump.setTimerType(Qt::PreciseTimer);
+    qDebug() << "[WPE] Frame pump interval" << framePumpIntervalMs
              << "ATLANTIC_GPU_CONSERVATIVE=" << qgetenv("ATLANTIC_GPU_CONSERVATIVE")
              << "ATLANTIC_PERF_LOG=" << qgetenv("ATLANTIC_PERF_LOG");
     connect(&m_framePump, &QTimer::timeout, this, [this]() {
-        // Safety net only: nudge the item in case a triggerUpdate() was lost.
-        // Do NOT call QQuickWindow::update() — that forces a full window repaint.
-        if (isVisible())
+        if (isVisible()) {
+            if (QQuickWindow *w = window()) {
+                w->update();
+            }
             update();
+        }
     });
     m_deferredFullscreenLeaveTimer.setSingleShot(true);
     m_deferredFullscreenLeaveTimer.setInterval(750);
@@ -2568,36 +2566,26 @@ void WPEWebPage::itemChange(ItemChange change, const ItemChangeData &value)
 
 void WPEWebPage::updateFramePumpState()
 {
-    // WPEQtView::triggerUpdate() (inside libqtwpe.so) already calls QQuickItem::update()
-    // every time WPE exports a new frame via wpe_fdo_egl_exported_image. Running a
-    // continuous 60 fps timer on top forces Qt to re-composite the scene 60× per second
-    // even when the page is completely idle, burning 60-65 % of the Adreno GPU doing
-    // redundant no-op compositing. Stop the pump entirely and let WPE drive frame delivery.
-    //
-    // A low-frequency safety timer (2 s) is kept as a last-resort fallback in case a
-    // WPE frame is exported while Qt's dirty-mark is transiently lost (e.g. during a
-    // rapid tab switch). At 0.5 fps this contributes < 0.5 % GPU overhead.
-    const int safetyIntervalMs = 2000;
-    const bool intervalChanged = m_framePump.interval() != safetyIntervalMs;
-    if (intervalChanged)
-        m_framePump.setInterval(safetyIntervalMs);
+    const bool shouldPump = isVisible();
+    const int targetIntervalMs = framePumpIntervalForCurrentGpuMode();
+    const bool intervalChanged = m_framePump.interval() != targetIntervalMs;
+    if (intervalChanged) {
+        m_framePump.setInterval(targetIntervalMs);
+    }
 
-    const bool shouldKeepAlive = isVisible();
     const bool wasActive = m_framePump.isActive();
-    if (shouldKeepAlive) {
-        if (!wasActive)
+    if (shouldPump) {
+        if (!wasActive) {
             m_framePump.start();
-        // Trigger a single repaint now so any buffered WPE frame is shown immediately
-        // when the page becomes visible (e.g. on tab switch or app restore).
-        update();
+        }
     } else if (wasActive) {
         m_framePump.stop();
     }
 
     if (perfLoggingEnabled() && (intervalChanged || wasActive != m_framePump.isActive())) {
-        qDebug() << "[WPE-PERF] frame pump (safety-only)"
+        qDebug() << "[WPE-PERF] frame pump"
                  << (m_framePump.isActive() ? "running" : "stopped")
-                 << "safetyIntervalMs=" << safetyIntervalMs
+                 << "intervalMs=" << targetIntervalMs
                  << "visible=" << isVisible()
                  << "active=" << m_active
                  << "throttle=" << m_throttlePainting
