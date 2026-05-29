@@ -95,10 +95,35 @@ WPEWebContainer::~WPEWebContainer()
     qDeleteAll(m_pages);
 }
 
+static void configureNetworkProcessMemoryPressure()
+{
+    // Apply conservative memory pressure to the NetworkProcess before any
+    // network session is created.  The NetworkProcess only handles HTTP/DNS;
+    // 256 MB is already generous for mobile workloads.
+    WebKitMemoryPressureSettings *s = webkit_memory_pressure_settings_new();
+    webkit_memory_pressure_settings_set_memory_limit(s, 256);        // 256 MB hard ceiling
+    webkit_memory_pressure_settings_set_conservative_threshold(s, 0.5);  // 128 MB → start evicting
+    webkit_memory_pressure_settings_set_strict_threshold(s, 0.75);       // 192 MB → aggressive eviction
+    webkit_memory_pressure_settings_set_kill_threshold(s, 1.0);          // 256 MB → kill and restart
+    webkit_memory_pressure_settings_set_poll_interval(s, 30.0);          // poll every 30 s
+    webkit_network_session_set_memory_pressure_settings(s);
+    webkit_memory_pressure_settings_free(s);
+    qDebug() << "[WPE] NetworkProcess memory pressure: limit=256 MB, conservative=128 MB, strict=192 MB, kill=256 MB";
+}
+
 void WPEWebContainer::configureSandboxPaths()
 {
+    // NetworkProcess memory limits must be applied before any session is created.
+    configureNetworkProcessMemoryPressure();
+
     WebKitWebContext *ctx = webkit_web_context_get_default();
     webkit_web_context_set_cache_model(ctx, WEBKIT_CACHE_MODEL_WEB_BROWSER);
+    // WebProcess memory pressure: WTF Linux defaults already match target thresholds for a 4 GB device:
+    //   baseThreshold = min(3 GB, ramSize()) = 3 GB
+    //   conservative  = 0.33 × 3 GB ≈ 1.0 GB  ← start evicting caches
+    //   strict        = 0.50 × 3 GB = 1.5 GB  ← aggressive eviction
+    // No kill threshold by default; killing the WebProcess would crash all open tabs.
+    // OS-level OOM handles truly runaway growth.
     addSandboxPathIfExists(ctx, QString::fromUtf8(WPERuntimePaths::kRuntimePrefix), TRUE,
                            QStringLiteral("runtime-prefix"));
     addSandboxPathIfExists(ctx, QString::fromUtf8(WPERuntimePaths::kGStreamerPluginDir), TRUE,

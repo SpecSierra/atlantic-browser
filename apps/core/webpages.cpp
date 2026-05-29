@@ -35,7 +35,7 @@
 #include <QDebug>
 #endif
 
-static const qint64 gMemoryPressureTimeout = 600 * 1000; // 600 sec
+static const qint64 gMemoryPressureTimeout = 300 * 1000; // 300 sec — background tabs released after 5 min on mobile
 // In normal cases gLowMemoryEnabled is true. Can be disabled e.g. for test runs.
 static const bool gLowMemoryEnabled = qgetenv("LOW_MEMORY_DISABLED").isEmpty();
 
