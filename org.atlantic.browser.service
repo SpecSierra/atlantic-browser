@@ -1,3 +1,7 @@
 [D-BUS Service]
 Name=org.atlantic.browser
-Exec=/usr/bin/invoker --type=browser,silica-qt5 -A -- /usr/bin/sailfish-browser -prestart
+# taskset -c 4-7 pins the browser and all its child processes (WebProcess,
+# NetworkProcess, GPUProcess) to the 4 big Kryo 260 Gold cores (≈ Cortex-A73
+# @ 2.0 GHz).  JSC JIT compilation and JS execution land on the fast cores
+# instead of being scheduled onto the A53 little cores by the Linux CFS.
+Exec=/usr/bin/taskset -c 4-7 /usr/bin/invoker --type=browser,silica-qt5 -A -- /usr/bin/sailfish-browser -prestart
