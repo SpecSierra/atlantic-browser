@@ -48,7 +48,7 @@ namespace {
 
 constexpr double kMinimumPinchZoomFactor = 0.5;
 constexpr double kMaximumPinchZoomFactor = 3.0;
-constexpr int kDefaultFramePumpIntervalMs = 16;
+constexpr int kDefaultFramePumpIntervalMs = 2000;
 const char kContentBlockerIdentifierBase[] = "atlantic-default";
 const char kPulseLookupService[] = "org.pulseaudio.Server";
 const char kPulseLookupPath[] = "/org/pulseaudio/server_lookup1";
@@ -336,12 +336,15 @@ bool perfLoggingEnabled()
 
 int framePumpIntervalForCurrentGpuMode()
 {
-    // Always target 60 FPS (16 ms). The conservative 30-FPS mode was removed
-    // because it causes visible scroll jank without meaningful GPU savings on
-    // the Xperia 10 II hardware. Keep the env override for lab testing only.
+    // The pump is now a safety watchdog (default 2000 ms), not a 60 fps
+    // compositor driver. Actual frame delivery is demand-driven: whenever
+    // WPEQtViewBackend::displayImage() is called (i.e. WPE has new output),
+    // it posts QQuickWindow::update() so the Qt render thread composites
+    // exactly when there is something new to show, with no busy-idle GPU cost.
+    // The watchdog only fires to unblock the render thread if it somehow stalls.
     bool ok = false;
     const int overrideMs = qEnvironmentVariableIntValue("ATLANTIC_FRAME_PUMP_INTERVAL_MS", &ok);
-    if (ok && overrideMs >= 16 && overrideMs <= 1000) {
+    if (ok && overrideMs >= 16 && overrideMs <= 10000) {
         return overrideMs;
     }
     return kDefaultFramePumpIntervalMs;
@@ -1614,11 +1617,15 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
              << "ATLANTIC_GPU_CONSERVATIVE=" << qgetenv("ATLANTIC_GPU_CONSERVATIVE")
              << "ATLANTIC_PERF_LOG=" << qgetenv("ATLANTIC_PERF_LOG");
     connect(&m_framePump, &QTimer::timeout, this, [this]() {
+        // Safety watchdog only. Real frame delivery is now demand-driven:
+        // WPEQtViewBackend::displayImage() posts QQuickWindow::update() every
+        // time WPE produces output, so the Qt render thread only composites
+        // when there is actually something new to show. This watchdog fires
+        // every 2 s as a last resort to prevent the render thread from
+        // stalling permanently in rare edge cases.
         if (isVisible()) {
-            if (QQuickWindow *w = window()) {
+            if (QQuickWindow *w = window())
                 w->update();
-            }
-            update();
         }
     });
     m_deferredFullscreenLeaveTimer.setSingleShot(true);
