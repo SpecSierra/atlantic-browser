@@ -1247,6 +1247,20 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
     document.addEventListener('webkitbeginfullscreen', onFullscreenEvent, true);
     document.addEventListener('webkitendfullscreen', onFullscreenEvent, true);
 
+    // Debounced media state posting: many DOM mutations (e.g. SvelteKit hydration)
+    // must not each trigger a full querySelectorAll + IPC round-trip. Collapse all
+    // mutation-triggered updates into a single async dispatch per turn.
+    var mediaBridgePending = false;
+    function scheduleMediaState() {
+        if (!mediaBridgePending) {
+            mediaBridgePending = true;
+            setTimeout(function() {
+                mediaBridgePending = false;
+                postMediaState();
+            }, 0);
+        }
+    }
+
     var observerTarget = document.documentElement || document;
     if (observerTarget && typeof MutationObserver === 'function') {
         var mediaObserver = new MutationObserver(function(mutations) {
@@ -1258,7 +1272,7 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
                 for (var j = 0; j < mutation.addedNodes.length; j++)
                     applyDesiredMediaStateToNode(mutation.addedNodes[j]);
             }
-            postMediaState();
+            scheduleMediaState();
         });
         mediaObserver.observe(observerTarget, { childList: true, subtree: true });
     }
@@ -1664,6 +1678,11 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                 // adds a second animation layer that makes pages feel rubber-banded
                 // instead of tracking the finger 1:1.
                 webkit_settings_set_enable_smooth_scrolling(settings, FALSE);
+                // Require an explicit user gesture before any media element starts
+                // playing. This prevents GStreamer pipelines from being initialized
+                // in the background on page load (e.g. podcast cards on RadioFrance),
+                // which would stall the WebProcess main thread and compete for CPU.
+                webkit_settings_set_media_playback_requires_user_gesture(settings, TRUE);
             }
             g_signal_connect(wv, "decide-policy", G_CALLBACK(onDecidePolicy), nullptr);
             if (WebKitNetworkSession* session = webkit_web_view_get_network_session(wv)) {
