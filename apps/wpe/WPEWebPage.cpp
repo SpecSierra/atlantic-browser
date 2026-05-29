@@ -809,18 +809,18 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
         if (!text)
             return { type: 'clear' };
 
-        var anchor = caretRect(sel.anchorNode, sel.anchorOffset);
-        var focus = caretRect(sel.focusNode, sel.focusOffset);
         var range = sel.getRangeAt(0);
-        var bounds = range.getBoundingClientRect();
-        var rects = range.getClientRects();
-        var firstRect = rects && rects.length ? rects[0] : null;
-        var lastRect = rects && rects.length ? rects[rects.length - 1] : null;
+        // Use range.start/end (order-invariant) instead of anchor/focus (drag-direction dependent).
+        // Avoid getClientRects() — it forces synchronous layout on every selectionchange, which
+        // is very expensive on heavy-DOM pages. Caret rects on collapsed ranges are much cheaper.
+        var startRect = caretRect(range.startContainer, range.startOffset);
+        var endRect = caretRect(range.endContainer, range.endOffset);
+        var bounds = (!startRect || !endRect) ? range.getBoundingClientRect() : null;
 
-        var sx = firstRect ? firstRect.left : (anchor ? anchor.left : (bounds ? bounds.left : 0));
-        var sy = firstRect ? firstRect.bottom : (anchor ? anchor.bottom : (bounds ? bounds.bottom : 0));
-        var ex = lastRect ? lastRect.right : (focus ? focus.right : (bounds ? bounds.right : 0));
-        var ey = lastRect ? lastRect.bottom : (focus ? focus.bottom : (bounds ? bounds.bottom : 0));
+        var sx = startRect ? startRect.left : (bounds ? bounds.left : 0);
+        var sy = startRect ? startRect.bottom : (bounds ? bounds.bottom : 0);
+        var ex = endRect ? endRect.right : (bounds ? bounds.right : 0);
+        var ey = endRect ? endRect.bottom : (bounds ? bounds.bottom : 0);
 
         return {
             type: 'select',
@@ -838,12 +838,33 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
         };
     }
 
-    function postSelection() {
+    var pendingSelectionRaf = null;
+
+    function flushSelection() {
         try {
             window.webkit.messageHandlers.selectionBridge.postMessage(selectionPayload());
         } catch (ex) {
             console.error('[WPE-SEL-JS] postMessage error: ' + ex);
         }
+    }
+
+    // Throttle continuous selectionchange events to one IPC message per animation frame.
+    function postSelection() {
+        if (pendingSelectionRaf) return;
+        pendingSelectionRaf = requestAnimationFrame(function() {
+            pendingSelectionRaf = null;
+            flushSelection();
+        });
+    }
+
+    // For gesture-end events, cancel any pending frame and send immediately so the
+    // final handle positions are never one frame late.
+    function postSelectionFinal() {
+        if (pendingSelectionRaf) {
+            cancelAnimationFrame(pendingSelectionRaf);
+            pendingSelectionRaf = null;
+        }
+        flushSelection();
     }
 
     var longPressTimer = null;
@@ -890,7 +911,7 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
                 return;
             }
             if (selectWordAtPoint(lx, ly))
-                postSelection();
+                postSelectionFinal();
         }, 350);
     }
 
@@ -903,13 +924,13 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
     }
 
     document.addEventListener('selectionchange', postSelection, true);
-    document.addEventListener('mouseup', postSelection, true);
-    document.addEventListener('touchend', postSelection, {capture: true, passive: true});
-    document.addEventListener('keyup', postSelection, true);
+    document.addEventListener('mouseup', postSelectionFinal, true);
+    document.addEventListener('touchend', postSelectionFinal, {capture: true, passive: true});
+    document.addEventListener('keyup', postSelectionFinal, true);
     document.addEventListener('contextmenu', function(e) {
         if (selectWordAtPoint(e.clientX, e.clientY)) {
             e.preventDefault();
-            postSelection();
+            postSelectionFinal();
         }
     }, true);
     // passive:true lets WebKit compositor scroll without waiting for main-thread
@@ -940,6 +961,27 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
         nullptr, nullptr);
     webkit_user_content_manager_add_script(ucm, script);
     webkit_user_script_unref(script);
+
+    // Disable backdrop-filter site-wide: it forces the GPU to composite a
+    // blurred copy of every element behind the filtered layer, which is very
+    // expensive on Adreno 610.  The visual effect (frosted-glass nav bars) is
+    // a cosmetic nicety that costs too much on this hardware.
+    static const gchar* perfCssJs = R"JS(
+(function() {
+    if (document.getElementById('__wpe_perf_style')) return;
+    var s = document.createElement('style');
+    s.id = '__wpe_perf_style';
+    s.textContent = '* { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }';
+    (document.head || document.documentElement).appendChild(s);
+})();
+)JS";
+    WebKitUserScript* perfScript = webkit_user_script_new(
+        perfCssJs,
+        WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_END,
+        nullptr, nullptr);
+    webkit_user_content_manager_add_script(ucm, perfScript);
+    webkit_user_script_unref(perfScript);
 }
 
 static void onImageLongPressBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
