@@ -975,28 +975,15 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
     // blurred copy of every element behind the filtered layer, which is very
     // expensive on Adreno 610.  The visual effect (frosted-glass nav bars) is
     // a cosmetic nicety that costs too much on this hardware.
-    // Also inject touch-feel improvements:
-    //   overscroll-behavior: none — suppresses elastic rubber-band overshoot at
-    //     page boundaries (html and body level).
-    //   -webkit-overflow-scrolling: touch — enables momentum scrolling for inner
-    //     overflow:auto/scroll containers (chat feeds, carousels, etc.).
-    //   -webkit-tap-highlight-color: transparent — removes the tap flash.
-    // NOTE: touch-action is intentionally NOT set here. Setting touch-action on
-    // the root causes WPE to switch to an alternative pan code path that breaks
-    // scroll entirely. WPE's native touch-scroll recogniser must stay in control.
+    // Also suppress the tap-highlight flash (blue overlay on long-press / tap
+    // of links) — purely cosmetic removal of a visual delay.
     static const gchar* perfCssJs = R"JS(
 (function() {
     if (document.getElementById('__wpe_perf_style')) return;
     var s = document.createElement('style');
     s.id = '__wpe_perf_style';
-    s.textContent = [
-        '* { backdrop-filter: none !important; -webkit-backdrop-filter: none !important;',
-        '    -webkit-tap-highlight-color: rgba(0,0,0,0) !important; }',
-        'html, body {',
-        '    overscroll-behavior: none;',
-        '    -webkit-overflow-scrolling: touch;',
-        '}'
-    ].join('\n');
+    s.textContent = '* { backdrop-filter: none !important; -webkit-backdrop-filter: none !important;'
+                  + ' -webkit-tap-highlight-color: rgba(0,0,0,0) !important; }';
     (document.head || document.documentElement).appendChild(s);
 })();
 )JS";
@@ -1007,34 +994,6 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
         nullptr, nullptr);
     webkit_user_content_manager_add_script(ucm, perfScript);
     webkit_user_script_unref(perfScript);
-
-    // Ensure every page has a mobile viewport declaration. Without it, WebKit
-    // uses a 980 px desktop viewport: touch coordinates are mapped through the
-    // scale factor, scroll speed is wrong, and text is rendered too small to read.
-    // We attempt injection immediately (works if <head> is already present) and
-    // again on DOMContentLoaded as a fallback for pages parsed after DOCUMENT_START.
-    static const gchar* viewportJs = R"JS(
-(function() {
-    function injectViewport() {
-        var head = document.head || document.querySelector('head');
-        if (!head) return;
-        if (head.querySelector('meta[name="viewport"]')) return;
-        var m = document.createElement('meta');
-        m.name = 'viewport';
-        m.content = 'width=device-width, initial-scale=1.0, minimum-scale=0.25, maximum-scale=5.0';
-        head.insertBefore(m, head.firstChild);
-    }
-    document.addEventListener('DOMContentLoaded', injectViewport, true);
-    injectViewport();
-})();
-)JS";
-    WebKitUserScript* viewportScript = webkit_user_script_new(
-        viewportJs,
-        WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
-        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
-        nullptr, nullptr);
-    webkit_user_content_manager_add_script(ucm, viewportScript);
-    webkit_user_script_unref(viewportScript);
 }
 
 static void onImageLongPressBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
@@ -2943,12 +2902,7 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
         return;
     }
 
-    // Only grab input focus on the first touch in a gesture — calling
-    // forceActiveFocus() on every TouchUpdate traverses the QQuickItem parent
-    // chain and emits property-change signals on the hot input path.
-    if (event->type() == QEvent::TouchBegin) {
-        forceActiveFocus();
-    }
+    forceActiveFocus();
 
     const QList<QTouchEvent::TouchPoint> activePoints = mergeTrackedTouchPoints(
         m_trackedTouchPoints,
