@@ -49,7 +49,7 @@ namespace {
 constexpr double kMinimumPinchZoomFactor = 0.5;
 constexpr double kMaximumPinchZoomFactor = 3.0;
 constexpr int kDefaultFramePumpIntervalMs = 2000;
-constexpr int kMediaInactiveDebounceMs = 1500;
+constexpr int kMediaInactiveDebounceMs = 400;
 const char kContentBlockerIdentifierBase[] = "atlantic-default";
 const char kPulseLookupService[] = "org.pulseaudio.Server";
 const char kPulseLookupPath[] = "/org/pulseaudio/server_lookup1";
@@ -1186,15 +1186,25 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
     function updateExplicitFullscreenState(event) {
         if (event) {
             if (event.type === 'webkitbeginfullscreen') {
+                // Cancel any pending end-fullscreen clear — this fires first on retrigger.
+                if (window.__wpeEndFullscreenTimer) {
+                    clearTimeout(window.__wpeEndFullscreenTimer);
+                    window.__wpeEndFullscreenTimer = null;
+                }
                 explicitFullscreenActive = true;
                 return;
             }
             if (event.type === 'webkitendfullscreen') {
-                // Only clear explicit fullscreen if the document truly has no active fullscreen element.
-                // webkitendfullscreen can fire transiently during enter transitions on some implementations.
-                if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                // webkitendfullscreen can fire transiently during enter transitions on WPE
+                // (native video fullscreen leaves document.fullscreenElement == null, so
+                //  checking the DOM API is not reliable here).  Use a timer to allow any
+                //  immediately-following webkitbeginfullscreen to cancel it.
+                clearTimeout(window.__wpeEndFullscreenTimer);
+                window.__wpeEndFullscreenTimer = setTimeout(function() {
+                    window.__wpeEndFullscreenTimer = null;
                     explicitFullscreenActive = false;
-                }
+                    scheduleMediaState(null);
+                }, 900);
                 return;
             }
         }
@@ -1901,32 +1911,6 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
         }
     });
 
-    m_volumePollTimer.setInterval(500);
-    m_volumePollTimer.setSingleShot(false);
-    connect(&m_volumePollTimer, &QTimer::timeout, this, [this]() {
-        if (!m_mediaAudioActive)
-            return;
-
-        const MainVolumeState state = queryMainVolumeState();
-        if (!state.valid())
-            return;
-
-        if (state.currentStep == m_lastKnownVolumeStep)
-            return;
-
-        m_lastKnownVolumeStep = state.currentStep;
-        const qreal newVolume = state.maximumStep > 0
-            ? qreal(state.currentStep) / qreal(state.maximumStep)
-            : 1.0;
-        qDebug() << "[WPE-MEDIA] system volume step changed:" << state.currentStep
-                 << "/" << state.maximumStep << "-> volume=" << newVolume;
-
-        if (!qFuzzyCompare(m_mediaVolume + 1.0, newVolume + 1.0)) {
-            m_mediaVolume = newVolume;
-            applyMediaVolumeToPage(this, newVolume, false);
-        }
-    });
-
     updateFramePumpState();
 }
 
@@ -2030,6 +2014,12 @@ void WPEWebPage::setDomFullscreenActive(bool fullscreen)
         return;
     }
 
+    // Block spurious false reports while a fullscreen entry is still pending.
+    if (!fullscreen && m_pendingFullscreenEntry) {
+        qDebug() << "[WPE-FULLSCREEN] blocking false report during pending entry";
+        return;
+    }
+
     m_domFullscreenActive = fullscreen;
     if (fullscreen) {
         m_deferredFullscreenLeaveTimer.stop();
@@ -2051,7 +2041,6 @@ void WPEWebPage::setMediaPlaybackState(bool audioActive, bool videoActive)
     if (m_mediaInactiveDebounceTimer.isActive())
         m_mediaInactiveDebounceTimer.stop();
 
-    const bool wasAudioActive = m_mediaAudioActive;
     const bool changed = (m_mediaAudioActive != audioActive) || (m_mediaVideoActive != videoActive);
     if (m_mediaAudioActive != audioActive) {
         m_mediaAudioActive = audioActive;
@@ -2062,27 +2051,8 @@ void WPEWebPage::setMediaPlaybackState(bool audioActive, bool videoActive)
         emit mediaVideoActiveChanged();
     }
 
-    if (m_mediaAudioActive) {
-        if (!wasAudioActive) {
-            const MainVolumeState state = queryMainVolumeState();
-            if (state.valid()) {
-                m_lastKnownVolumeStep = state.currentStep;
-                const qreal systemVolume = state.maximumStep > 0
-                    ? qreal(state.currentStep) / qreal(state.maximumStep)
-                    : 1.0;
-                if (!qFuzzyCompare(systemVolume + 1.0, m_mediaVolume + 1.0)) {
-                    m_mediaVolume = systemVolume;
-                    applyMediaVolumeToPage(this, systemVolume, false);
-                }
-            }
-        }
-        if (!m_volumePollTimer.isActive())
-            m_volumePollTimer.start();
-    } else {
-        m_volumePollTimer.stop();
-        m_lastKnownVolumeStep = -1;
+    if (!m_mediaAudioActive)
         m_pageInitiatedVolumeChange = false;
-    }
 
     if (changed) {
         qDebug() << "[WPE-MEDIA] playback state audio=" << m_mediaAudioActive
@@ -2406,9 +2376,6 @@ void WPEWebPage::setMediaVolume(qreal volume)
     if (volume > 1.0) volume = 1.0;
 
     m_mediaVolume = volume;
-    m_lastKnownVolumeStep = -1;
-    if (m_mediaAudioActive && !m_volumePollTimer.isActive())
-        m_volumePollTimer.start();
 
     const bool nativeVolumeApplied = setMainVolumeState(m_mediaVolume, m_mediaMuted);
     qDebug() << "[WPE-MEDIA] set volume" << volume << "nativeApplied=" << nativeVolumeApplied;

@@ -392,7 +392,6 @@ private:
     qreal m_pinchCenterX = 0.0;
     qreal m_pinchCenterY = 0.0;
     QTimer m_framePump;
-    QTimer m_volumePollTimer;
     QTimer m_mediaInactiveDebounceTimer;
     QTimer m_deferredFullscreenLeaveTimer;
     bool m_pendingFullscreenEntry = false;
@@ -406,7 +405,6 @@ private:
     QString m_lastSoftKeyboardText;
     QString m_lastPreeditText;
     qint64 m_lastSoftKeyboardTextTimeMs = 0;
-    int m_lastKnownVolumeStep = -1;
     qint64 m_lastSoftBackspaceTimeMs = 0;
 
     bool m_selectMenuActive = false;
