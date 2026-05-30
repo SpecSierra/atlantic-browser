@@ -392,6 +392,8 @@ private:
     qreal m_pinchCenterY = 0.0;
     QTimer m_framePump;
     QTimer m_deferredFullscreenLeaveTimer;
+    bool m_pendingFullscreenEntry = false;
+    QTimer m_pendingFullscreenEntryGuard;
     QElapsedTimer m_lastNativeFullscreenEnter;
     QElapsedTimer m_perfFrameLogWindow;
     int m_perfFramesInWindow = 0;

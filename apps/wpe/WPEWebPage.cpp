@@ -1164,7 +1164,11 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
                 return;
             }
             if (event.type === 'webkitendfullscreen') {
-                explicitFullscreenActive = false;
+                // Only clear explicit fullscreen if the document truly has no active fullscreen element.
+                // webkitendfullscreen can fire transiently during enter transitions on some implementations.
+                if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                    explicitFullscreenActive = false;
+                }
                 return;
             }
         }
@@ -1629,10 +1633,16 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
         }
     });
     m_deferredFullscreenLeaveTimer.setSingleShot(true);
-    m_deferredFullscreenLeaveTimer.setInterval(750);
+    m_deferredFullscreenLeaveTimer.setInterval(1200);
     connect(&m_deferredFullscreenLeaveTimer, &QTimer::timeout, this, [this]() {
         qDebug() << "[WPE-FULLSCREEN] applying deferred native leave";
         setNativeFullscreenRequested(false);
+    });
+    m_pendingFullscreenEntryGuard.setSingleShot(true);
+    m_pendingFullscreenEntryGuard.setInterval(3000); // 3s guard window
+    connect(&m_pendingFullscreenEntryGuard, &QTimer::timeout, this, [this]() {
+        m_pendingFullscreenEntry = false;
+        qDebug() << "[WPE-FULLSCREEN] pending entry guard expired";
     });
 
     // Honest mobile UA: Sailfish OS, WebKit engine, Atlantic browser
@@ -1699,15 +1709,19 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
         qDebug() << "[WPE-FULLSCREEN] native enter requested";
         m_lastNativeFullscreenEnter.restart();
         m_deferredFullscreenLeaveTimer.stop();
+        m_pendingFullscreenEntry = true;
+        m_pendingFullscreenEntryGuard.start();
         setNativeFullscreenRequested(true);
     });
     connect(this, &WPEQtView::leaveFullscreenRequested,
             this, [this]() {
         qDebug() << "[WPE-FULLSCREEN] native leave requested";
         const bool enterWasRecent = m_lastNativeFullscreenEnter.isValid()
-                && m_lastNativeFullscreenEnter.elapsed() < 1500;
-        if (m_domFullscreenActive || enterWasRecent) {
-            qDebug() << "[WPE-FULLSCREEN] deferring native leave recentEnter=" << enterWasRecent
+                && m_lastNativeFullscreenEnter.elapsed() < 2500;
+        if (m_pendingFullscreenEntry || m_domFullscreenActive || enterWasRecent) {
+            qDebug() << "[WPE-FULLSCREEN] deferring native leave"
+                     << "pending=" << m_pendingFullscreenEntry
+                     << "recentEnter=" << enterWasRecent
                      << "domFullscreen=" << m_domFullscreenActive;
             m_deferredFullscreenLeaveTimer.start();
             return;
@@ -1936,6 +1950,8 @@ void WPEWebPage::setDomFullscreenActive(bool fullscreen)
     m_domFullscreenActive = fullscreen;
     if (fullscreen) {
         m_deferredFullscreenLeaveTimer.stop();
+        m_pendingFullscreenEntry = false;
+        m_pendingFullscreenEntryGuard.stop();
     }
     qDebug() << "[WPE-FULLSCREEN] dom state fullscreen=" << fullscreen;
     syncEffectiveFullscreenState();
