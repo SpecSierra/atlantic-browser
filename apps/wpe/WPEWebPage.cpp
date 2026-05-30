@@ -976,15 +976,14 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
     // expensive on Adreno 610.  The visual effect (frosted-glass nav bars) is
     // a cosmetic nicety that costs too much on this hardware.
     // Also inject touch-feel improvements:
-    //   touch-action: manipulation — eliminates the 300ms tap delay WebKit adds
-    //     while waiting for a potential double-tap, and signals the scroll
-    //     recogniser to start panning without gesture disambiguation.
     //   overscroll-behavior: none — suppresses elastic rubber-band overshoot at
-    //     page boundaries (chrome and body level).
+    //     page boundaries (html and body level).
     //   -webkit-overflow-scrolling: touch — enables momentum scrolling for inner
     //     overflow:auto/scroll containers (chat feeds, carousels, etc.).
-    //   -webkit-tap-highlight-color: transparent — removes the tap flash (no
-    //     visual delay between touch-down and action).
+    //   -webkit-tap-highlight-color: transparent — removes the tap flash.
+    // NOTE: touch-action is intentionally NOT set here. Setting touch-action on
+    // the root causes WPE to switch to an alternative pan code path that breaks
+    // scroll entirely. WPE's native touch-scroll recogniser must stay in control.
     static const gchar* perfCssJs = R"JS(
 (function() {
     if (document.getElementById('__wpe_perf_style')) return;
@@ -993,12 +992,7 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
     s.textContent = [
         '* { backdrop-filter: none !important; -webkit-backdrop-filter: none !important;',
         '    -webkit-tap-highlight-color: rgba(0,0,0,0) !important; }',
-        'html {',
-        '    touch-action: manipulation;',
-        '    overscroll-behavior: none;',
-        '    -webkit-overflow-scrolling: touch;',
-        '}',
-        'body {',
+        'html, body {',
         '    overscroll-behavior: none;',
         '    -webkit-overflow-scrolling: touch;',
         '}'
