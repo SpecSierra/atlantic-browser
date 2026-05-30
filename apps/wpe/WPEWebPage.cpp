@@ -1036,7 +1036,7 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
 )JS";
     WebKitUserScript* viewportScript = webkit_user_script_new(
         viewportJs,
-        WEBKIT_USER_CONTENT_INJECT_TOP_FRAME_ONLY,
+        WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
         WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
         nullptr, nullptr);
     webkit_user_content_manager_add_script(ucm, viewportScript);
