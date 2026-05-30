@@ -396,7 +396,10 @@ private:
     QTimer m_deferredFullscreenLeaveTimer;
     bool m_pendingFullscreenEntry = false;
     QTimer m_pendingFullscreenEntryGuard;
+    QTimer m_fullscreenEnteredGuard;      // 3s guard after entering: blocks spurious false reports
     QElapsedTimer m_lastNativeFullscreenEnter;
+    QTimer m_volumePollTimer;
+    int m_lastKnownVolumeStep = -1;
     QElapsedTimer m_perfFrameLogWindow;
     int m_perfFramesInWindow = 0;
     qreal m_lastInteractionX = -1.0;

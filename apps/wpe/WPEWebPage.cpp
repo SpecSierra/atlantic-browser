@@ -227,28 +227,11 @@ QString pulseDbusAddress()
 
 QDBusConnection mainVolumeConnection()
 {
-    const QString connectionName = QString::fromLatin1(kMainVolumeConnectionName);
-    static QString cachedAddress;
-    QDBusConnection connection(connectionName);
-
-    const QString address = pulseDbusAddress();
-    if (address.isEmpty()) {
-        if (!cachedAddress.isEmpty()) {
-            QDBusConnection::disconnectFromPeer(connectionName);
-            cachedAddress.clear();
-        }
-        return connection;
-    }
-
-    if (cachedAddress != address || !connection.isConnected()) {
-        if (!cachedAddress.isEmpty()) {
-            QDBusConnection::disconnectFromPeer(connectionName);
-        }
-        cachedAddress = address;
-        connection = QDBusConnection::connectToPeer(address, connectionName);
-    }
-
-    return connection;
+    // com.Meego.MainVolume2 is registered on the SESSION bus on SFOS.
+    // Previous implementation tried the PulseAudio peer bus (via org.pulseaudio.Server
+    // address lookup), which fails on SFOS 5.x where module-dbus-protocol may not be
+    // loaded. Using QDBusConnection::sessionBus() directly is the correct approach.
+    return QDBusConnection::sessionBus();
 }
 
 MainVolumeState queryMainVolumeState()
@@ -1186,7 +1169,7 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
     function updateExplicitFullscreenState(event) {
         if (event) {
             if (event.type === 'webkitbeginfullscreen') {
-                // Cancel any pending end-fullscreen clear — this fires first on retrigger.
+                // Cancel any pending clear and mark fullscreen active.
                 if (window.__wpeEndFullscreenTimer) {
                     clearTimeout(window.__wpeEndFullscreenTimer);
                     window.__wpeEndFullscreenTimer = null;
@@ -1195,21 +1178,25 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
                 return;
             }
             if (event.type === 'webkitendfullscreen') {
-                // webkitendfullscreen can fire transiently during enter transitions on WPE
-                // (native video fullscreen leaves document.fullscreenElement == null, so
-                //  checking the DOM API is not reliable here).  Use a timer to allow any
-                //  immediately-following webkitbeginfullscreen to cancel it.
-                clearTimeout(window.__wpeEndFullscreenTimer);
-                window.__wpeEndFullscreenTimer = setTimeout(function() {
-                    window.__wpeEndFullscreenTimer = null;
-                    explicitFullscreenActive = false;
-                    scheduleMediaState(null);
-                }, 900);
+                // Intentionally ignore: webkitendfullscreen fires spuriously on WPE
+                // during the viewport resize that accompanies fullscreen entry.
+                // Real exits are signaled by C++ (leaveFullscreenRequested) injecting
+                // window.__wpeClearExplicitFullscreen(), or by fullscreenchange.
                 return;
             }
         }
         explicitFullscreenActive = detectFullscreenState();
     }
+
+    // C++ (leaveFullscreenRequested) calls this to signal a real fullscreen exit.
+    window.__wpeClearExplicitFullscreen = function() {
+        if (window.__wpeEndFullscreenTimer) {
+            clearTimeout(window.__wpeEndFullscreenTimer);
+            window.__wpeEndFullscreenTimer = null;
+        }
+        explicitFullscreenActive = false;
+        scheduleMediaState(null);
+    };
 
     function normalizedDesiredVolume() {
         var volume = window.__wpeDesiredMediaVolume;
@@ -1711,6 +1698,31 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
         m_pendingFullscreenEntry = false;
         qDebug() << "[WPE-FULLSCREEN] pending entry guard expired";
     });
+    m_fullscreenEnteredGuard.setSingleShot(true); // started by setDomFullscreenActive(true)
+
+    // Volume poll timer: reads com.Meego.MainVolume2 on the session bus every 500ms
+    // and applies the step as el.volume when the slider changes.
+    m_volumePollTimer.setInterval(500);
+    connect(&m_volumePollTimer, &QTimer::timeout, this, [this]() {
+        const MainVolumeState state = queryMainVolumeState();
+        if (!state.valid()) {
+            qDebug() << "[WPE-VOLUME] poll: MainVolumeState invalid (session bus unavailable?)";
+            return;
+        }
+        if (state.currentStep == m_lastKnownVolumeStep) {
+            return; // no change
+        }
+        m_lastKnownVolumeStep = state.currentStep;
+        const qreal volume = (state.maximumStep > 0)
+            ? qreal(state.currentStep) / qreal(state.maximumStep)
+            : 1.0;
+        qDebug() << "[WPE-VOLUME] poll: step=" << state.currentStep
+                 << "/" << state.maximumStep << "→ el.volume=" << volume;
+        // Apply to page: set __wpeDesiredMediaVolume and trigger applyDesiredMediaState.
+        // We do NOT set m_pageInitiatedVolumeChange so updateObservedMediaState won't
+        // write back to the hardware slider (avoids round-trip).
+        applyMediaVolumeToPage(this, volume, false);
+    });
 
     // Honest mobile UA: Sailfish OS, WebKit engine, Atlantic browser
     setUserAgent(QStringLiteral(
@@ -1783,6 +1795,15 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     connect(this, &WPEQtView::leaveFullscreenRequested,
             this, [this]() {
         qDebug() << "[WPE-FULLSCREEN] native leave requested";
+        // Always stop the entry guard: a real leave must be honoured.
+        m_fullscreenEnteredGuard.stop();
+        // Inject JS to clear explicitFullscreenActive so mediaBridge reports false.
+        if (WebKitWebView* wv = webView()) {
+            webkit_web_view_evaluate_javascript(
+                    wv,
+                    "window.__wpeClearExplicitFullscreen && window.__wpeClearExplicitFullscreen();",
+                    -1, nullptr, nullptr, nullptr, nullptr, nullptr);
+        }
         const bool enterWasRecent = m_lastNativeFullscreenEnter.isValid()
                 && m_lastNativeFullscreenEnter.elapsed() < 2500;
         if (m_pendingFullscreenEntry || m_domFullscreenActive || enterWasRecent) {
@@ -2014,9 +2035,11 @@ void WPEWebPage::setDomFullscreenActive(bool fullscreen)
         return;
     }
 
-    // Block spurious false reports while a fullscreen entry is still pending.
-    if (!fullscreen && m_pendingFullscreenEntry) {
-        qDebug() << "[WPE-FULLSCREEN] blocking false report during pending entry";
+    // Block spurious false reports while entry is pending OR within 3s of having
+    // entered. WPE fires webkitendfullscreen transiently during the viewport resize
+    // that accompanies native video fullscreen entry — both timers guard this window.
+    if (!fullscreen && (m_pendingFullscreenEntry || m_fullscreenEnteredGuard.isActive())) {
+        qDebug() << "[WPE-FULLSCREEN] blocking false report during entry/entered guard";
         return;
     }
 
@@ -2025,6 +2048,10 @@ void WPEWebPage::setDomFullscreenActive(bool fullscreen)
         m_deferredFullscreenLeaveTimer.stop();
         m_pendingFullscreenEntry = false;
         m_pendingFullscreenEntryGuard.stop();
+        // Start 3-second guard to suppress transient false reports after entering.
+        m_fullscreenEnteredGuard.start(3000);
+    } else {
+        m_fullscreenEnteredGuard.stop();
     }
     qDebug() << "[WPE-FULLSCREEN] dom state fullscreen=" << fullscreen;
     syncEffectiveFullscreenState();
@@ -2053,6 +2080,20 @@ void WPEWebPage::setMediaPlaybackState(bool audioActive, bool videoActive)
 
     if (!m_mediaAudioActive)
         m_pageInitiatedVolumeChange = false;
+
+    // Start/stop volume poll timer based on audio activity.
+    if (m_mediaAudioActive || m_mediaVideoActive) {
+        if (!m_volumePollTimer.isActive()) {
+            m_lastKnownVolumeStep = -1; // force immediate apply on first poll
+            m_volumePollTimer.start();
+            qDebug() << "[WPE-VOLUME] started poll timer";
+        }
+    } else {
+        if (m_volumePollTimer.isActive()) {
+            m_volumePollTimer.stop();
+            qDebug() << "[WPE-VOLUME] stopped poll timer";
+        }
+    }
 
     if (changed) {
         qDebug() << "[WPE-MEDIA] playback state audio=" << m_mediaAudioActive
