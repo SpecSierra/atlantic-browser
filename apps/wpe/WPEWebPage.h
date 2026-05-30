@@ -391,6 +391,7 @@ private:
     qreal m_pinchCenterX = 0.0;
     qreal m_pinchCenterY = 0.0;
     QTimer m_framePump;
+    QTimer m_mediaInactiveDebounceTimer;
     QTimer m_deferredFullscreenLeaveTimer;
     bool m_pendingFullscreenEntry = false;
     QTimer m_pendingFullscreenEntryGuard;

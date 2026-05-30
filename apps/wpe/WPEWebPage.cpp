@@ -49,6 +49,7 @@ namespace {
 constexpr double kMinimumPinchZoomFactor = 0.5;
 constexpr double kMaximumPinchZoomFactor = 3.0;
 constexpr int kDefaultFramePumpIntervalMs = 2000;
+constexpr int kMediaInactiveDebounceMs = 1500;
 const char kContentBlockerIdentifierBase[] = "atlantic-default";
 const char kPulseLookupService[] = "org.pulseaudio.Server";
 const char kPulseLookupPath[] = "/org/pulseaudio/server_lookup1";
@@ -1137,6 +1138,8 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
     if (window.__wpeMediaBridgeInstalled) return;
     window.__wpeMediaBridgeInstalled = true;
     var explicitFullscreenActive = false;
+    var lastActiveTimestamp = 0;
+    var lastTriggerEvent = null;
 
     function isMediaElement(el) {
         if (!el || !el.tagName)
@@ -1209,6 +1212,12 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
             applyDesiredMediaState(media[i]);
     }
 
+    function deferApplyDesiredMediaStateToNode(node) {
+        setTimeout(function() {
+            applyDesiredMediaStateToNode(node);
+        }, 0);
+    }
+
     window.__wpeApplyDesiredMediaStateToMedia = applyDesiredMediaStateToNode;
 
     function mediaStatePayload() {
@@ -1246,6 +1255,19 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
             muted = preferredMedia.muted;
         }
 
+        var definitiveInactive = lastTriggerEvent === 'pause'
+            || lastTriggerEvent === 'ended'
+            || lastTriggerEvent === 'emptied';
+        if (audioActive) {
+            lastActiveTimestamp = Date.now();
+        } else if (lastTriggerEvent === 'waiting'
+                   || lastTriggerEvent === 'stall'
+                   || lastTriggerEvent === 'stalled') {
+            audioActive = true;
+        } else if (!definitiveInactive && (Date.now() - lastActiveTimestamp) < 2000) {
+            audioActive = true;
+        }
+
         return {
             type: 'state',
             audioActive: audioActive,
@@ -1262,6 +1284,7 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
         } catch (ex) {
             console.error('[WPE-MEDIA-JS] postMessage error: ' + ex);
         }
+        lastTriggerEvent = null;
     }
 
     window.__wpePostMediaState = postMediaState;
@@ -1275,20 +1298,21 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
         'volumechange',
         'loadeddata',
         'loadedmetadata',
-        'canplay',
-        'canplaythrough',
-        'stalled',
-        'waiting',
         'seeking',
         'seeked'
     ];
+
+    function onMediaEvent(event) {
+        scheduleMediaState(event);
+    }
+
     for (var i = 0; i < events.length; i++) {
-        document.addEventListener(events[i], postMediaState, true);
+        document.addEventListener(events[i], onMediaEvent, true);
     }
 
     function onFullscreenEvent(event) {
         updateExplicitFullscreenState(event);
-        postMediaState();
+        scheduleMediaState(event);
     }
 
     document.addEventListener('fullscreenchange', onFullscreenEvent, true);
@@ -1296,11 +1320,14 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
     document.addEventListener('webkitbeginfullscreen', onFullscreenEvent, true);
     document.addEventListener('webkitendfullscreen', onFullscreenEvent, true);
 
-    // Debounced media state posting: many DOM mutations (e.g. SvelteKit hydration)
-    // must not each trigger a full querySelectorAll + IPC round-trip. Collapse all
-    // mutation-triggered updates into a single async dispatch per turn.
+    // Debounced media state posting: collapse rapid-fire DOM and media events into
+    // a single async querySelectorAll + IPC round-trip per turn.
     var mediaBridgePending = false;
-    function scheduleMediaState() {
+    function scheduleMediaState(event) {
+        if (event && event.type)
+            lastTriggerEvent = event.type;
+        else if (!mediaBridgePending)
+            lastTriggerEvent = null;
         if (!mediaBridgePending) {
             mediaBridgePending = true;
             setTimeout(function() {
@@ -1319,7 +1346,7 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
                     continue;
 
                 for (var j = 0; j < mutation.addedNodes.length; j++)
-                    applyDesiredMediaStateToNode(mutation.addedNodes[j]);
+                    deferApplyDesiredMediaStateToNode(mutation.addedNodes[j]);
             }
             scheduleMediaState();
         });
@@ -1631,6 +1658,12 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             if (QQuickWindow *w = window())
                 w->update();
         }
+    });
+    m_mediaInactiveDebounceTimer.setSingleShot(true);
+    m_mediaInactiveDebounceTimer.setInterval(kMediaInactiveDebounceMs);
+    connect(&m_mediaInactiveDebounceTimer, &QTimer::timeout, this, [this]() {
+        qDebug() << "[WPE-MEDIA] applying deferred inactive playback state";
+        setMediaPlaybackState(false, false);
     });
     m_deferredFullscreenLeaveTimer.setSingleShot(true);
     m_deferredFullscreenLeaveTimer.setInterval(1200);
@@ -1965,6 +1998,9 @@ qreal WPEWebPage::selectionDisplayScale() const
 
 void WPEWebPage::setMediaPlaybackState(bool audioActive, bool videoActive)
 {
+    if (m_mediaInactiveDebounceTimer.isActive())
+        m_mediaInactiveDebounceTimer.stop();
+
     const bool changed = (m_mediaAudioActive != audioActive) || (m_mediaVideoActive != videoActive);
     if (m_mediaAudioActive != audioActive) {
         m_mediaAudioActive = audioActive;
@@ -1983,7 +2019,22 @@ void WPEWebPage::setMediaPlaybackState(bool audioActive, bool videoActive)
 void WPEWebPage::updateObservedMediaState(bool audioActive, bool videoActive, bool fullscreenActive,
                                           qreal volume, bool muted)
 {
-    setMediaPlaybackState(audioActive, videoActive);
+    if (audioActive || videoActive) {
+        if (m_mediaInactiveDebounceTimer.isActive()) {
+            m_mediaInactiveDebounceTimer.stop();
+            qDebug() << "[WPE-MEDIA] cancelled deferred inactive playback state";
+        }
+        setMediaPlaybackState(audioActive, videoActive);
+    } else if (m_mediaAudioActive || m_mediaVideoActive) {
+        if (!m_mediaInactiveDebounceTimer.isActive()) {
+            qDebug() << "[WPE-MEDIA] deferring inactive playback state";
+            m_mediaInactiveDebounceTimer.start();
+        }
+    } else {
+        if (m_mediaInactiveDebounceTimer.isActive())
+            m_mediaInactiveDebounceTimer.stop();
+        setMediaPlaybackState(false, false);
+    }
     setDomFullscreenActive(fullscreenActive);
 
     if (volume < 0.0)
@@ -2478,6 +2529,8 @@ void WPEWebPage::onLoadingChanged(WPEQtViewLoadRequest *loadRequest)
             Q_EMIT selectionTextChanged();
             Q_EMIT textSelectionActiveChanged();
         }
+        if (m_mediaInactiveDebounceTimer.isActive())
+            m_mediaInactiveDebounceTimer.stop();
         setMediaPlaybackState(false, false);
         // Reset security on new navigation
         static_cast<WPESecurityInfo*>(m_security)->reset();
