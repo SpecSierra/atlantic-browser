@@ -324,6 +324,28 @@ bool setMainVolumeState(qreal volume, bool muted)
     return setMainVolumeNormalized(muted ? 0.0 : volume);
 }
 
+void applyMediaVolumeToPage(WPEWebPage* page, qreal volume, bool postState)
+{
+    if (!page) {
+        return;
+    }
+
+    page->runJavaScript(QString::fromLatin1(
+        "(function(volume, postState){"
+        "  window.__wpeDesiredMediaVolume = volume;"
+        "  if (window.__wpeApplyDesiredMediaStateToMedia)"
+        "    window.__wpeApplyDesiredMediaStateToMedia(document);"
+        "  else {"
+        "    var media = document.querySelectorAll('audio,video');"
+        "    for (var i = 0; i < media.length; i++) {"
+        "      media[i].volume = volume;"
+        "    }"
+        "  }"
+        "  if (postState && window.__wpePostMediaState)"
+        "    window.__wpePostMediaState();"
+        "})(%1,%2);").arg(volume, 0, 'f', 3).arg(postState ? QStringLiteral("true") : QStringLiteral("false")));
+}
+
 bool envVarEnabled(const QByteArray &value)
 {
     const QByteArray normalized = value.trimmed().toLower();
@@ -1124,7 +1146,8 @@ static void onMediaBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpo
     const bool fullscreenActive = obj.value(QStringLiteral("fullscreenActive")).toBool();
     const qreal volume = obj.value(QStringLiteral("volume")).toDouble(1.0);
     const bool muted = obj.value(QStringLiteral("muted")).toBool();
-    page->updateObservedMediaState(audioActive, videoActive, fullscreenActive, volume, muted);
+    const bool volumeChangedByPage = obj.value(QStringLiteral("volumeChangedByPage")).toBool();
+    page->updateObservedMediaState(audioActive, videoActive, fullscreenActive, volume, muted, volumeChangedByPage);
 }
 
 static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page)
@@ -1274,7 +1297,8 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
             videoActive: videoActive,
             fullscreenActive: fullscreenActive,
             volume: volume,
-            muted: muted
+            muted: muted,
+            volumeChangedByPage: lastTriggerEvent === 'volumechange'
         };
     }
 
@@ -1877,6 +1901,32 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
         }
     });
 
+    m_volumePollTimer.setInterval(500);
+    m_volumePollTimer.setSingleShot(false);
+    connect(&m_volumePollTimer, &QTimer::timeout, this, [this]() {
+        if (!m_mediaAudioActive)
+            return;
+
+        const MainVolumeState state = queryMainVolumeState();
+        if (!state.valid())
+            return;
+
+        if (state.currentStep == m_lastKnownVolumeStep)
+            return;
+
+        m_lastKnownVolumeStep = state.currentStep;
+        const qreal newVolume = state.maximumStep > 0
+            ? qreal(state.currentStep) / qreal(state.maximumStep)
+            : 1.0;
+        qDebug() << "[WPE-MEDIA] system volume step changed:" << state.currentStep
+                 << "/" << state.maximumStep << "-> volume=" << newVolume;
+
+        if (!qFuzzyCompare(m_mediaVolume + 1.0, newVolume + 1.0)) {
+            m_mediaVolume = newVolume;
+            applyMediaVolumeToPage(this, newVolume, false);
+        }
+    });
+
     updateFramePumpState();
 }
 
@@ -2001,6 +2051,7 @@ void WPEWebPage::setMediaPlaybackState(bool audioActive, bool videoActive)
     if (m_mediaInactiveDebounceTimer.isActive())
         m_mediaInactiveDebounceTimer.stop();
 
+    const bool wasAudioActive = m_mediaAudioActive;
     const bool changed = (m_mediaAudioActive != audioActive) || (m_mediaVideoActive != videoActive);
     if (m_mediaAudioActive != audioActive) {
         m_mediaAudioActive = audioActive;
@@ -2010,6 +2061,29 @@ void WPEWebPage::setMediaPlaybackState(bool audioActive, bool videoActive)
         m_mediaVideoActive = videoActive;
         emit mediaVideoActiveChanged();
     }
+
+    if (m_mediaAudioActive) {
+        if (!wasAudioActive) {
+            const MainVolumeState state = queryMainVolumeState();
+            if (state.valid()) {
+                m_lastKnownVolumeStep = state.currentStep;
+                const qreal systemVolume = state.maximumStep > 0
+                    ? qreal(state.currentStep) / qreal(state.maximumStep)
+                    : 1.0;
+                if (!qFuzzyCompare(systemVolume + 1.0, m_mediaVolume + 1.0)) {
+                    m_mediaVolume = systemVolume;
+                    applyMediaVolumeToPage(this, systemVolume, false);
+                }
+            }
+        }
+        if (!m_volumePollTimer.isActive())
+            m_volumePollTimer.start();
+    } else {
+        m_volumePollTimer.stop();
+        m_lastKnownVolumeStep = -1;
+        m_pageInitiatedVolumeChange = false;
+    }
+
     if (changed) {
         qDebug() << "[WPE-MEDIA] playback state audio=" << m_mediaAudioActive
                  << "video=" << m_mediaVideoActive;
@@ -2017,7 +2091,7 @@ void WPEWebPage::setMediaPlaybackState(bool audioActive, bool videoActive)
 }
 
 void WPEWebPage::updateObservedMediaState(bool audioActive, bool videoActive, bool fullscreenActive,
-                                          qreal volume, bool muted)
+                                          qreal volume, bool muted, bool volumeChangedByPage)
 {
     if (audioActive || videoActive) {
         if (m_mediaInactiveDebounceTimer.isActive()) {
@@ -2042,17 +2116,24 @@ void WPEWebPage::updateObservedMediaState(bool audioActive, bool videoActive, bo
     if (volume > 1.0)
         volume = 1.0;
 
+    m_pageInitiatedVolumeChange = volumeChangedByPage;
+
     const bool volumeChanged = !qFuzzyCompare(m_mediaVolume + 1.0, volume + 1.0);
     const bool mutedChanged = (m_mediaMuted != muted);
     if (volumeChanged || mutedChanged) {
         m_mediaVolume = volume;
         m_mediaMuted = muted;
-        const bool nativeVolumeApplied = setMainVolumeState(m_mediaVolume, m_mediaMuted);
-        qDebug() << "[WPE-MEDIA] observed state volume=" << m_mediaVolume
-                 << "muted=" << m_mediaMuted
-                 << "fullscreen=" << fullscreenActive
-                 << "nativeApplied=" << nativeVolumeApplied;
+        if (m_pageInitiatedVolumeChange) {
+            m_pageInitiatedVolumeChange = false;
+            const bool nativeVolumeApplied = setMainVolumeState(m_mediaVolume, m_mediaMuted);
+            qDebug() << "[WPE-MEDIA] observed state volume=" << m_mediaVolume
+                     << "muted=" << m_mediaMuted
+                     << "fullscreen=" << fullscreenActive
+                     << "nativeApplied=" << nativeVolumeApplied;
+        }
     }
+
+    m_pageInitiatedVolumeChange = false;
 }
 
 qreal WPEWebPage::toolbarHeight() const { return m_toolbarHeight; }
@@ -2325,22 +2406,13 @@ void WPEWebPage::setMediaVolume(qreal volume)
     if (volume > 1.0) volume = 1.0;
 
     m_mediaVolume = volume;
+    m_lastKnownVolumeStep = -1;
+    if (m_mediaAudioActive && !m_volumePollTimer.isActive())
+        m_volumePollTimer.start();
+
     const bool nativeVolumeApplied = setMainVolumeState(m_mediaVolume, m_mediaMuted);
     qDebug() << "[WPE-MEDIA] set volume" << volume << "nativeApplied=" << nativeVolumeApplied;
-    runJavaScript(QString::fromLatin1(
-        "(function(volume){"
-        "  window.__wpeDesiredMediaVolume = volume;"
-        "  if (window.__wpeApplyDesiredMediaStateToMedia)"
-        "    window.__wpeApplyDesiredMediaStateToMedia(document);"
-        "  else {"
-        "    var media = document.querySelectorAll('audio,video');"
-        "    for (var i = 0; i < media.length; i++) {"
-        "      media[i].volume = volume;"
-        "    }"
-        "  }"
-        "  if (window.__wpePostMediaState)"
-        "    window.__wpePostMediaState();"
-        "})(%1);").arg(volume, 0, 'f', 3));
+    applyMediaVolumeToPage(this, volume, true);
 }
 
 void WPEWebPage::setMediaMuted(bool muted)

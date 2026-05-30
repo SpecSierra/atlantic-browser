@@ -201,7 +201,7 @@ public:
     void setDomFullscreenActive(bool fullscreen);
     void setMediaPlaybackState(bool audioActive, bool videoActive);
     void updateObservedMediaState(bool audioActive, bool videoActive, bool fullscreenActive,
-                                  qreal volume, bool muted);
+                                  qreal volume, bool muted, bool volumeChangedByPage);
     Q_INVOKABLE void setMediaVolume(qreal volume);
     Q_INVOKABLE void setMediaMuted(bool muted);
 
@@ -354,6 +354,7 @@ private:
     bool m_mediaVideoActive = false;
     qreal m_mediaVolume = 1.0;
     bool m_mediaMuted = false;
+    bool m_pageInitiatedVolumeChange = false;
     bool m_atYBeginning = true;
     bool m_atYEnd = false;
     QString m_favicon;
@@ -391,6 +392,7 @@ private:
     qreal m_pinchCenterX = 0.0;
     qreal m_pinchCenterY = 0.0;
     QTimer m_framePump;
+    QTimer m_volumePollTimer;
     QTimer m_mediaInactiveDebounceTimer;
     QTimer m_deferredFullscreenLeaveTimer;
     bool m_pendingFullscreenEntry = false;
@@ -404,6 +406,7 @@ private:
     QString m_lastSoftKeyboardText;
     QString m_lastPreeditText;
     qint64 m_lastSoftKeyboardTextTimeMs = 0;
+    int m_lastKnownVolumeStep = -1;
     qint64 m_lastSoftBackspaceTimeMs = 0;
 
     bool m_selectMenuActive = false;
