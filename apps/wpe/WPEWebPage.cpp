@@ -2327,53 +2327,125 @@ void WPEWebPage::loadTab(const QString &url, bool force)
     }
 }
 
-void WPEWebPage::grabToFile(const QSize &size)
+// Convert a WebKitImage (BGRA8 premultiplied) to a scaled/cropped QImage.
+// webkit_image_as_bytes() is transfer-none; we deep-copy before wkImage is freed.
+static QImage snapshotToQImage(WebKitImage *wkImage, const QSize &targetSize)
 {
-    QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
-                       + QStringLiteral("/thumbnails");
-    QDir().mkpath(cacheDir);
-    const QString filePath = cacheDir + QStringLiteral("/") + QString::number(m_tabId) + QStringLiteral(".png");
+    int w = webkit_image_get_width(wkImage);
+    int h = webkit_image_get_height(wkImage);
+    guint stride = webkit_image_get_stride(wkImage);
+    GBytes *bytes = webkit_image_as_bytes(wkImage); // transfer none
 
-    // Capture at target width but full item height, then crop top to target height.
-    // This avoids squishing the page content to fit the thumbnail aspect ratio.
-    QSize captureSize(size.width(), qRound(height()));
-    m_grabResult = grabToImage(captureSize);
-    if (!m_grabResult)
-        return;
+    gsize dataSize = 0;
+    const uchar *data = static_cast<const uchar *>(g_bytes_get_data(bytes, &dataSize));
+    if (!data || w <= 0 || h <= 0 || dataSize < static_cast<gsize>(stride) * static_cast<gsize>(h))
+        return QImage();
 
-    QSharedPointer<QQuickItemGrabResult> result = m_grabResult;
-    connect(result.data(), &QQuickItemGrabResult::ready, this, [this, result, filePath, size]() {
-        QImage img = result->image();
-        if (img.height() > size.height())
-            img = img.copy(0, 0, img.width(), size.height());
-        if (img.save(filePath, "PNG")) {
-            emit fileGrabWritten(filePath);
-        }
-        m_grabResult.clear();
-    });
+    // WebKitImage pixel format is BGRA8 premultiplied.
+    // On little-endian ARM, QImage::Format_ARGB32_Premultiplied stores bytes as B,G,R,A — identical layout.
+    QImage img(data, w, h, static_cast<int>(stride), QImage::Format_ARGB32_Premultiplied);
+    img = img.copy(); // deep copy before wkImage is released by the caller
+
+    if (targetSize.width() > 0 && img.width() != targetSize.width())
+        img = img.scaledToWidth(targetSize.width(), Qt::SmoothTransformation);
+    if (targetSize.height() > 0 && img.height() > targetSize.height())
+        img = img.copy(0, 0, img.width(), targetSize.height());
+
+    return img;
 }
 
-void WPEWebPage::grabThumbnail(const QSize &size)
+struct SnapshotFileData {
+    QPointer<WPEWebPage> page;
+    QString filePath;
+    QSize targetSize;
+};
+
+struct SnapshotThumbnailData {
+    QPointer<WPEWebPage> page;
+    QSize targetSize;
+};
+
+static void onSnapshotFileReady(GObject *object, GAsyncResult *result, gpointer userData)
 {
-    // Same: capture full height, crop top to target height.
-    QSize captureSize(size.width(), qRound(height()));
-    m_thumbnailResult = grabToImage(captureSize);
-    if (!m_thumbnailResult)
+    std::unique_ptr<SnapshotFileData> ctx(static_cast<SnapshotFileData *>(userData));
+    if (!ctx->page)
         return;
 
-    QSharedPointer<QQuickItemGrabResult> result = m_thumbnailResult;
-    connect(result.data(), &QQuickItemGrabResult::ready, this, [this, result, size]() {
-        QImage img = result->image();
-        if (img.height() > size.height())
-            img = img.copy(0, 0, img.width(), size.height());
+    GError *error = nullptr;
+    WebKitImage *wkImage = webkit_web_view_get_snapshot_finish(WEBKIT_WEB_VIEW(object), result, &error);
+    if (!wkImage) {
+        if (error)
+            g_error_free(error);
+        return;
+    }
+
+    QImage img = snapshotToQImage(wkImage, ctx->targetSize);
+    g_object_unref(wkImage);
+
+    if (!img.isNull() && img.save(ctx->filePath, "PNG"))
+        emit ctx->page->fileGrabWritten(ctx->filePath);
+}
+
+static void onSnapshotThumbnailReady(GObject *object, GAsyncResult *result, gpointer userData)
+{
+    std::unique_ptr<SnapshotThumbnailData> ctx(static_cast<SnapshotThumbnailData *>(userData));
+    if (!ctx->page)
+        return;
+
+    GError *error = nullptr;
+    WebKitImage *wkImage = webkit_web_view_get_snapshot_finish(WEBKIT_WEB_VIEW(object), result, &error);
+    if (!wkImage) {
+        if (error)
+            g_error_free(error);
+        return;
+    }
+
+    QImage img = snapshotToQImage(wkImage, ctx->targetSize);
+    g_object_unref(wkImage);
+
+    if (!img.isNull()) {
         QByteArray ba;
         QBuffer buf(&ba);
         buf.open(QIODevice::WriteOnly);
         img.save(&buf, "PNG");
         buf.close();
-        emit thumbnailResult(QString::fromLatin1(ba.toBase64()));
-        m_thumbnailResult.clear();
-    });
+        emit ctx->page->thumbnailResult(QString::fromLatin1(ba.toBase64()));
+    }
+}
+
+void WPEWebPage::grabToFile(const QSize &size)
+{
+    WebKitWebView *wv = webView();
+    if (!wv)
+        return;
+
+    QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
+                       + QStringLiteral("/thumbnails");
+    QDir().mkpath(cacheDir);
+    const QString filePath = cacheDir + QStringLiteral("/") + QString::number(m_tabId) + QStringLiteral(".png");
+
+    auto *ctx = new SnapshotFileData { this, filePath, size };
+    webkit_web_view_get_snapshot(wv,
+        WEBKIT_SNAPSHOT_REGION_VISIBLE,
+        WEBKIT_SNAPSHOT_OPTIONS_NONE,
+        nullptr,
+        onSnapshotFileReady,
+        ctx);
+}
+
+void WPEWebPage::grabThumbnail(const QSize &size)
+{
+    WebKitWebView *wv = webView();
+    if (!wv)
+        return;
+
+    auto *ctx = new SnapshotThumbnailData { this, size };
+    webkit_web_view_get_snapshot(wv,
+        WEBKIT_SNAPSHOT_REGION_VISIBLE,
+        WEBKIT_SNAPSHOT_OPTIONS_NONE,
+        nullptr,
+        onSnapshotThumbnailReady,
+        ctx);
 }
 
 void WPEWebPage::forceChrome(bool forced)
