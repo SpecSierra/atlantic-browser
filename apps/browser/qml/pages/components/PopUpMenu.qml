@@ -149,8 +149,11 @@ SilicaControl {
                         height: footerLoader.y - y
 
                         color: Qt.tint(
-                                    popUpMenu.palette.colorScheme === Theme.LightOnDark ? "black" : "white",
-                                    Theme.rgba(popUpMenu.palette.primaryColor, Theme.opacityFaint))
+                                    popUpMenu.palette.colorScheme === Theme.LightOnDark ? "#1c1c1c" : "#f2f2f2",
+                                    Qt.rgba(Theme.highlightColor.r,
+                                            Theme.highlightColor.g,
+                                            Theme.highlightColor.b,
+                                            0.65))
                     },
                     Item {
                         id: decoratorParent

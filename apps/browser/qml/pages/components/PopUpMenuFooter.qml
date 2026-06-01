@@ -19,8 +19,11 @@ Rectangle {
     implicitWidth: content.width
     implicitHeight: Theme.iconSizeMedium
     color: Qt.tint(
-               Theme.colorScheme === Theme.LightOnDark ? "black" : "white",
-               Theme.rgba(Theme.primaryColor, root.overlayOpacity))
+               Theme.colorScheme === Theme.LightOnDark ? "#1c1c1c" : "#f2f2f2",
+               Qt.rgba(Theme.highlightColor.r,
+                       Theme.highlightColor.g,
+                       Theme.highlightColor.b,
+                       0.65))
 
     Row {
         id: content

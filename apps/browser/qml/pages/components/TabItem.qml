@@ -62,7 +62,7 @@ BackgroundItem {
                     Qt.rgba(Theme.highlightColor.r,
                             Theme.highlightColor.g,
                             Theme.highlightColor.b,
-                            0.20)
+                            0.60)
                 )
 
                 ColorOverlay {

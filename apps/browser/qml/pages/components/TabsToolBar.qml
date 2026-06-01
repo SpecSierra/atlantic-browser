@@ -40,7 +40,7 @@ Item {
             Qt.rgba(Theme.highlightColor.r,
                     Theme.highlightColor.g,
                     Theme.highlightColor.b,
-                    0.30)
+                    0.65)
         )
         opacity: 0.97
     }
