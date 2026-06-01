@@ -40,9 +40,15 @@ Item {
             Qt.rgba(Theme.highlightColor.r,
                     Theme.highlightColor.g,
                     Theme.highlightColor.b,
-                    0.65)
+                    0.45)
         )
-        opacity: 0.97
+
+        Image {
+            anchors.fill: parent
+            source: "image://theme/graphic-shader-texture"
+            fillMode: Image.Tile
+            opacity: 0.15
+        }
     }
 
 

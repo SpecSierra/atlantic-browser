@@ -32,15 +32,14 @@ Item {
                 Qt.rgba(Theme.highlightColor.r,
                         Theme.highlightColor.g,
                         Theme.highlightColor.b,
-                        0.65)
+                        0.45)
             )
-            opacity: 0.97
             anchors.fill: parent
         }
 
         Image {
             id: glassTextureImage
-            opacity: 0.1 // TODO: constants?
+            opacity: 0.25
             source: "image://theme/graphic-shader-texture"
         }
     }
