@@ -116,6 +116,7 @@ BackgroundItem {
                     }
 
                     text: title || WebUtils.displayableUrl(url)
+                    font.pixelSize: Theme.fontSizeSmall
                     verticalAlignment: Qt.AlignVCenter
                     truncationMode: TruncationMode.Fade
                     color: down || activeTab ? root.highlightColor : Theme.primaryColor
@@ -160,7 +161,37 @@ BackgroundItem {
                 fillMode: Image.PreserveAspectCrop
                 verticalAlignment: Image.AlignTop
                 Behavior on opacity { FadeAnimation {} }
+            }
 
+            // Domain strip overlaid on the bottom of the thumbnail
+            Rectangle {
+                id: domainBar
+
+                anchors {
+                    left: parent.left
+                    right: parent.right
+                    bottom: parent.bottom
+                }
+                height: domainLabel.implicitHeight + Theme.paddingSmall * 2
+                color: Qt.rgba(0, 0, 0, 0.55)
+                visible: url !== ""
+
+                Label {
+                    id: domainLabel
+
+                    anchors {
+                        left: parent.left
+                        right: parent.right
+                        leftMargin: Theme.paddingSmall
+                        rightMargin: Theme.paddingSmall
+                        verticalCenter: parent.verticalCenter
+                    }
+                    text: WebUtils.displayableUrl(url)
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    color: Theme.primaryColor
+                    truncationMode: TruncationMode.Fade
+                    horizontalAlignment: Text.AlignHCenter
+                }
             }
         },
         Timer {
