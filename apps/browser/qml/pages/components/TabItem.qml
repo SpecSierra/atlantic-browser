@@ -79,17 +79,6 @@ BackgroundItem {
                     color: root.highlightColor
                     opacity: activeTab ? 0.12 : 0.0
                 }
-
-                Rectangle {
-                    anchors.fill: parent
-                    radius: Theme.paddingMedium
-                    color: "transparent"
-                    border.width: activeTab ? Math.max(2, Math.round(2 * Theme.pixelRatio)) : 0
-                    border.color: root.highlightColor
-                    opacity: activeTab ? 0.9 : 0.0
-
-                    Behavior on opacity { FadeAnimation {} }
-                }
             }
 
             Item {

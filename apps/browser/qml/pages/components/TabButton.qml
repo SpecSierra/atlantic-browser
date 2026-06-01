@@ -21,30 +21,16 @@ Shared.IconButton {
     enabled: opacity === 1.0
     icon.anchors.horizontalCenterOffset: horizontalOffset
 
-    Rectangle {
-        id: badge
+    Label {
+        id: label
 
         anchors {
             centerIn: parent
             horizontalCenterOffset: horizontalOffset
         }
-
-        width: Math.max(Theme.iconSizeSmall, label.implicitWidth + Theme.paddingSmall * 2)
-        height: Theme.iconSizeSmall
-        radius: height / 2
-        color: down ? Theme.primaryColor : Theme.highlightColor
-        opacity: label.text !== "" ? 0.9 : 0.0
-
-        Behavior on opacity { FadeAnimation {} }
-
-        Label {
-            id: label
-
-            anchors.centerIn: parent
-            font.pixelSize: Theme.fontSizeExtraSmall
-            font.bold: true
-            color: down ? Theme.highlightColor : Theme.primaryColor
-            horizontalAlignment: Text.AlignHCenter
-        }
+        font.pixelSize: Theme.fontSizeExtraSmall
+        font.bold: true
+        color: down ? Theme.highlightColor : Theme.primaryColor
+        horizontalAlignment: Text.AlignHCenter
     }
 }
