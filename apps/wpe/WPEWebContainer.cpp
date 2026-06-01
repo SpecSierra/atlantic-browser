@@ -679,6 +679,11 @@ void WPEWebContainer::connectPage(WPEWebPage *page)
         if (m_tabModel)
             m_tabModel->updateThumbnailPath(page->tabId(), filePath);
     });
+    connect(page, &WPEWebPage::crashedChanged, this, [page]() {
+        if (page->crashed())
+            qWarning() << "[WPE] WebProcess crashed for tab" << page->tabId()
+                       << "— tab isolated, browser alive";
+    });
 }
 
 void WPEWebContainer::onPageUrlChanged()

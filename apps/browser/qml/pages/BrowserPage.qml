@@ -498,6 +498,55 @@ Page {
         }
     }
 
+    // Tab crash banner — shown when the WebProcess for the active tab crashes.
+    // The banner sits above the (now blank) web content and offers a reload.
+    // Dismissed automatically when a new load starts (crashed resets to false).
+    Rectangle {
+        id: crashBanner
+        visible: webView.contentItem !== null && webView.contentItem.crashed
+        anchors {
+            left: parent.left
+            right: parent.right
+            bottom: parent.bottom
+            bottomMargin: webView.contentItem ? webView.contentItem.toolbarHeight : 0
+        }
+        height: crashColumn.height + Theme.paddingLarge * 2
+        color: Theme.overlayBackgroundColor
+        z: 900
+
+        Column {
+            id: crashColumn
+            anchors {
+                left: parent.left
+                right: parent.right
+                verticalCenter: parent.verticalCenter
+                margins: Theme.paddingLarge
+            }
+            spacing: Theme.paddingMedium
+
+            Label {
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+                font.pixelSize: Theme.fontSizeMedium
+                color: Theme.primaryColor
+                text: qsTr("This tab has crashed")
+            }
+            Label {
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.secondaryColor
+                wrapMode: Text.WordWrap
+                text: qsTr("The page stopped unexpectedly. Your other tabs are fine.")
+            }
+            Button {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: qsTr("Reload")
+                onClicked: webView.reload()
+            }
+        }
+    }
+
     // HTML <select> dropdown overlay — driven by contentItem property bindings
     Item {
         id: selectOverlay

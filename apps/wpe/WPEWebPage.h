@@ -135,6 +135,8 @@ class WPEWebPage : public WPEQtView
     Q_PROPERTY(QStringList fileChooserNameFilters READ fileChooserNameFilters NOTIFY fileChooserNameFiltersChanged FINAL)
     Q_PROPERTY(bool fileChooserSelectMultiple READ fileChooserSelectMultiple NOTIFY fileChooserSelectMultipleChanged FINAL)
 
+    Q_PROPERTY(bool crashed READ crashed NOTIFY crashedChanged FINAL)
+
     // Pinch zoom visual scale — compositor-level transform during gesture; WebKit zoom committed on end
     Q_PROPERTY(qreal visualScale READ visualScale NOTIFY visualScaleChanged)
     Q_PROPERTY(qreal pinchCenterX READ pinchCenterX NOTIFY pinchCenterChanged)
@@ -251,6 +253,8 @@ public:
     qreal pinchCenterX() const { return m_pinchCenterX; }
     qreal pinchCenterY() const { return m_pinchCenterY; }
 
+    bool crashed() const { return m_crashed; }
+
     bool textSelectionActive() const;
     QObject* textSelectionController();
     QString selectedText() const;
@@ -309,6 +313,7 @@ signals:
 
     void visualScaleChanged();
     void pinchCenterChanged();
+    void crashedChanged();
 
 protected:
     QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
@@ -417,6 +422,7 @@ private:
     bool m_fileChooserActive = false;
     QStringList m_fileChooserNameFilters;
     bool m_fileChooserSelectMultiple = false;
+    bool m_crashed = false;
 };
 
 QML_DECLARE_TYPE(WPEWebPage)

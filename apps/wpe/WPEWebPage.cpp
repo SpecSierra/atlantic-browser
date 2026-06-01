@@ -1856,6 +1856,22 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             // --- HTML <select> via JS bridge ---
             WebKitUserContentManager* ucm = webkit_web_view_get_user_content_manager(wv);
             ensureContentBlocker(ucm);
+
+            // Tab-level crash isolation: catch WebProcess crashes before they
+            // propagate up and kill the UI. Returning TRUE tells WebKit we
+            // handled the crash ourselves so it doesn't attempt any default
+            // teardown that could affect the whole app.
+            g_signal_connect(
+                wv, "web-process-crashed",
+                G_CALLBACK(+[](WebKitWebView*, gpointer userData) -> gboolean {
+                    WPEWebPage* page = static_cast<WPEWebPage*>(userData);
+                    if (!page->m_crashed) {
+                        page->m_crashed = true;
+                        Q_EMIT page->crashedChanged();
+                    }
+                    return TRUE;
+                }),
+                this);
             // Connect BEFORE registering (per documentation, to avoid race conditions)
             g_signal_connect(ucm, "script-message-received::selectBridge",
                              G_CALLBACK(onSelectBridgeMessage), this);
@@ -2606,6 +2622,10 @@ void WPEWebPage::onLoadingChanged(WPEQtViewLoadRequest *loadRequest)
         m_lastScrollY = 0.0;
         m_atYBeginning = true;
         m_atYEnd = false;
+        if (m_crashed) {
+            m_crashed = false;
+            Q_EMIT crashedChanged();
+        }
         if (m_textSelectionActive) {
             m_selectedText.clear();
             m_textSelectionActive = false;
