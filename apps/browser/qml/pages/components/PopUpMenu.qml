@@ -148,12 +148,14 @@ SilicaControl {
                         width: footerLoader.width
                         height: footerLoader.y - y
 
-                        color: Qt.tint(
-                                    popUpMenu.palette.colorScheme === Theme.LightOnDark ? "#1c1c1c" : "#f2f2f2",
-                                    Qt.rgba(Theme.highlightColor.r,
-                                            Theme.highlightColor.g,
-                                            Theme.highlightColor.b,
-                                            0.45))
+                        color: Qt.darker(
+                            Qt.tint(
+                                popUpMenu.palette.colorScheme === Theme.LightOnDark ? "#1c1c1c" : "#f2f2f2",
+                                Qt.hsla(Theme.highlightColor.hslHue,
+                                        Math.min(1.0, Theme.highlightColor.hslSaturation * 1.5),
+                                        Theme.highlightColor.hslLightness,
+                                        0.55)),
+                            1.25)
 
                         Image {
                             anchors.fill: parent
