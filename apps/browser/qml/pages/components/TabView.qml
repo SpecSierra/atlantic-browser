@@ -91,12 +91,13 @@ SilicaControl {
                 anchors.fill: parent
 
                 z: -100
-                // Use ambience overlay colour so the tab-bar header blends with
-                // the rest of the chrome rather than being a raw dark/light block.
-                color: Theme.overlayBackgroundColor ? Theme.overlayBackgroundColor
-                       : tabView.palette.colorScheme === Theme.LightOnDark
-                           ? Theme.darkPrimaryColor
-                           : Theme.lightPrimaryColor
+                color: Qt.tint(
+                    tabView.palette.colorScheme === Theme.LightOnDark ? "#1c1c1c" : "#f2f2f2",
+                    Qt.rgba(Theme.highlightColor.r,
+                            Theme.highlightColor.g,
+                            Theme.highlightColor.b,
+                            0.30)
+                )
                 opacity: 0.97
             }
         }

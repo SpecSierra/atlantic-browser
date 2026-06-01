@@ -57,10 +57,13 @@ BackgroundItem {
 
             Rectangle {
                 anchors.fill: parent
-                // Use ambience overlay colour as the card background so the
-                // tab switcher feels native to the current SFOS ambience.
-                color: Theme.overlayBackgroundColor ? Theme.overlayBackgroundColor
-                       : Theme.colorScheme === Theme.LightOnDark ? "#1c1c1c" : "#f2f2f2"
+                color: Qt.tint(
+                    Theme.colorScheme === Theme.LightOnDark ? "#1c1c1c" : "#f2f2f2",
+                    Qt.rgba(Theme.highlightColor.r,
+                            Theme.highlightColor.g,
+                            Theme.highlightColor.b,
+                            0.20)
+                )
 
                 ColorOverlay {
                     anchors.fill: parent

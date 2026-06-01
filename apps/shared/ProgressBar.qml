@@ -77,21 +77,6 @@ Item {
                 }
             }
         }
-
-        // Glowing dot at the leading edge (overflows track, not clipped)
-        Rectangle {
-            id: glowDot
-
-            readonly property real pos: fill.width
-            x: pos - width / 2
-            y: -(height - progressBar._h) / 2
-            width: progressBar._h * 6
-            height: progressBar._h * 6
-            radius: height / 2
-            color: Theme.highlightColor
-            opacity: progressBar.progress > 0.02 && progressBar.progress < 0.98 ? 0.65 : 0.0
-            Behavior on opacity { FadeAnimation {} }
-        }
     }
 
     Behavior on opacity { FadeAnimation {} }

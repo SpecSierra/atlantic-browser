@@ -24,11 +24,17 @@ Item {
         height: glassTextureImage.height
 
         Rectangle {
-            // Follow ambience: use overlayBackgroundColor when available,
-            // otherwise fall back to a theme-aware dark/light tone.
-            color: Theme.overlayBackgroundColor ? Theme.overlayBackgroundColor
-                   : Theme.colorScheme === Theme.LightOnDark ? "#1a1a1a" : "#f0f0f0"
-            opacity: 0.93
+            // Ambience-derived chrome colour: blend the ambience accent into
+            // a dark or light base so the bar is NEVER black but always
+            // reflects the current ambience.
+            color: Qt.tint(
+                Theme.colorScheme === Theme.LightOnDark ? "#1c1c1c" : "#f2f2f2",
+                Qt.rgba(Theme.highlightColor.r,
+                        Theme.highlightColor.g,
+                        Theme.highlightColor.b,
+                        0.30)
+            )
+            opacity: 0.97
             anchors.fill: parent
         }
 
