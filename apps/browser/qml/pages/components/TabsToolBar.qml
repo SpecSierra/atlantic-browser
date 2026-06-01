@@ -35,18 +35,14 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: Theme.overlayBackgroundColor
-               ? (Theme.colorScheme === Theme.LightOnDark
-                  ? Qt.darker(Theme.overlayBackgroundColor, 1.18)
-                  : Theme.overlayBackgroundColor)
-               : Qt.darker(
-                     Qt.tint(
-                         Theme.colorScheme === Theme.LightOnDark ? "#1c1c1c" : "#f2f2f2",
-                         Qt.rgba(Theme.highlightColor.r,
-                                 Theme.highlightColor.g,
-                                 Theme.highlightColor.b,
-                                 0.52)),
-                     1.55)
+        color: Qt.darker(
+            Qt.tint(
+                Theme.colorScheme === Theme.LightOnDark ? "#1c1c1c" : "#f2f2f2",
+                Qt.rgba(Theme.highlightColor.r,
+                        Theme.highlightColor.g,
+                        Theme.highlightColor.b,
+                        0.52)),
+            1.55)
 
         Image {
             anchors.fill: parent

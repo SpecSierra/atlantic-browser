@@ -27,18 +27,14 @@ Item {
             // Ambience-derived chrome colour: blend the ambience accent into
             // a dark or light base so the bar is NEVER black but always
             // reflects the current ambience.
-            color: Theme.overlayBackgroundColor
-                   ? (Theme.colorScheme === Theme.LightOnDark
-                      ? Qt.darker(Theme.overlayBackgroundColor, 1.18)
-                      : Theme.overlayBackgroundColor)
-                   : Qt.darker(
-                         Qt.tint(
-                             Theme.colorScheme === Theme.LightOnDark ? "#1c1c1c" : "#f2f2f2",
-                             Qt.rgba(Theme.highlightColor.r,
-                                     Theme.highlightColor.g,
-                                     Theme.highlightColor.b,
-                                     0.52)),
-                         1.55)
+            color: Qt.darker(
+                Qt.tint(
+                    Theme.colorScheme === Theme.LightOnDark ? "#1c1c1c" : "#f2f2f2",
+                    Qt.rgba(Theme.highlightColor.r,
+                            Theme.highlightColor.g,
+                            Theme.highlightColor.b,
+                            0.52)),
+                1.55)
             anchors.fill: parent
         }
 

@@ -57,18 +57,14 @@ BackgroundItem {
 
             Rectangle {
                 anchors.fill: parent
-                color: Theme.overlayBackgroundColor
-                       ? (Theme.colorScheme === Theme.LightOnDark
-                          ? Qt.darker(Theme.overlayBackgroundColor, 1.15)
-                          : Theme.overlayBackgroundColor)
-                       : Qt.darker(
-                             Qt.tint(
-                                 Theme.colorScheme === Theme.LightOnDark ? "#1c1c1c" : "#f2f2f2",
-                                 Qt.rgba(Theme.highlightColor.r,
-                                         Theme.highlightColor.g,
-                                         Theme.highlightColor.b,
-                                         0.52)),
-                             1.55)
+                color: Qt.darker(
+                    Qt.tint(
+                        Theme.colorScheme === Theme.LightOnDark ? "#1c1c1c" : "#f2f2f2",
+                        Qt.rgba(Theme.highlightColor.r,
+                                Theme.highlightColor.g,
+                                Theme.highlightColor.b,
+                                0.52)),
+                    1.55)
 
                 Image {
                     anchors.fill: parent
@@ -168,9 +164,7 @@ BackgroundItem {
                     bottom: parent.bottom
                 }
                 height: domainLabel.implicitHeight + Theme.paddingSmall * 2
-                color: Theme.overlayBackgroundColor
-                       ? Qt.darker(Theme.overlayBackgroundColor, 1.35)
-                       : Qt.rgba(0, 0, 0, 0.55)
+                color: Qt.rgba(0, 0, 0, 0.55)
                 visible: url !== ""
 
                 Label {

@@ -91,18 +91,14 @@ SilicaControl {
                 anchors.fill: parent
 
                 z: -100
-                color: Theme.overlayBackgroundColor
-                       ? (tabView.palette.colorScheme === Theme.LightOnDark
-                          ? Qt.darker(Theme.overlayBackgroundColor, 1.18)
-                          : Theme.overlayBackgroundColor)
-                       : Qt.darker(
-                             Qt.tint(
-                                 tabView.palette.colorScheme === Theme.LightOnDark ? "#1c1c1c" : "#f2f2f2",
-                                 Qt.rgba(Theme.highlightColor.r,
-                                         Theme.highlightColor.g,
-                                         Theme.highlightColor.b,
-                                         0.52)),
-                             1.55)
+                color: Qt.darker(
+                    Qt.tint(
+                        tabView.palette.colorScheme === Theme.LightOnDark ? "#1c1c1c" : "#f2f2f2",
+                        Qt.rgba(Theme.highlightColor.r,
+                                Theme.highlightColor.g,
+                                Theme.highlightColor.b,
+                                0.52)),
+                    1.55)
 
                 Image {
                     anchors.fill: parent
@@ -129,7 +125,6 @@ SilicaControl {
 
                 horizontalMargin: tabView.horizontalMargin
                 portrait: tabView.portrait
-                privateMode: tabItem.privateMode
                 model: TabFilterModel {
                     sourceModel: tabItem.privateMode ? webView.privateTabModel : webView.persistentTabModel
                     showHidden: false
