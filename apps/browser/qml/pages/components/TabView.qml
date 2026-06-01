@@ -98,7 +98,7 @@ SilicaControl {
                                 Theme.highlightColor.g,
                                 Theme.highlightColor.b,
                                 0.68)),
-                    1.25)
+                    1.11)
 
                 Image {
                     anchors.fill: parent
