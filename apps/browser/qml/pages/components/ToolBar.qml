@@ -139,80 +139,6 @@ Column {
         width: parent.width - 2*x
         height: browserPage.isPortrait ? scaledPortraitHeight : scaledLandscapeHeight
 
-        // Container item for cross fading tabs, close, find in page button (and keep Row's width still).
-        Item {
-            id: tabButton
-
-            width: toolBarRow.iconWidth + toolBarRow.horizontalOffset
-            height: parent.height
-
-            Browser.TabButton {
-                id: tabs
-
-                width: parent.width
-                height: parent.height
-                icon.source: {
-                    if (webView.privateMode) {
-                        return webView.tabModel.count > 0 ? "image://theme/icon-m-incognito-selected"
-                                                          : "image://theme/icon-m-incognito"
-                    }
-
-                    return "image://theme/icon-m-tabs"
-                }
-
-                label.color: {
-                    if (webView.privateMode) {
-                        return Theme.overlayBackgroundColor ? Theme.overlayBackgroundColor : "black"
-                    }
-
-                    return highlighted ? Theme.highlightColor : Theme.primaryColor
-                }
-
-                opacity: findInPageActive ? 0.0 : 1.0
-                horizontalOffset: toolBarRow.horizontalOffset
-                label.text: webView.privateMode && (webView.tabModel.count === 0) ? "" : webView.tabModel.count
-                onTapped: toolBarRow.showTabs()
-
-                RotationAnimator {
-                    id: rotationAnimator
-
-                    target: tabs.icon
-                    duration: 1500
-                    alwaysRunToEnd: true
-                }
-
-                Connections {
-                    target: webView.tabModel
-                    onNewTabRequested: {
-                        // New tab request triggers 360 degrees clockwise rotation
-                        // for the tab icon.
-                        rotationAnimator.from = 0
-                        rotationAnimator.to = 360
-                        rotationAnimator.restart()
-                    }
-
-                    onTabClosed: {
-                        // Counter closewise when closing.
-                        rotationAnimator.from = 0
-                        rotationAnimator.to = -360
-                        rotationAnimator.restart()
-                    }
-                }
-            }
-
-            Shared.IconButton {
-                width: parent.width
-                height: parent.height
-                opacity: !secondaryToolsActive && findInPageActive ? 1.0 : 0.0
-                icon.source: "image://theme/icon-m-search"
-                icon.anchors.horizontalCenterOffset: toolBarRow.horizontalOffset
-                onTapped: {
-                    findInPageActive = true
-                    findInPage()
-                }
-            }
-        }
-
         Shared.ExpandingButton {
             id: backIcon
 
@@ -424,6 +350,77 @@ Column {
             onTapped: {
                 webView.stop()
                 toolBarRow.showChrome()
+            }
+        }
+
+        // Container item for cross fading tabs, close, find in page button (and keep Row's width still).
+        Item {
+            id: tabButton
+
+            width: toolBarRow.iconWidth + toolBarRow.horizontalOffset
+            height: parent.height
+
+            Browser.TabButton {
+                id: tabs
+
+                width: parent.width
+                height: parent.height
+                icon.source: {
+                    if (webView.privateMode) {
+                        return webView.tabModel.count > 0 ? "image://theme/icon-m-incognito-selected"
+                                                          : "image://theme/icon-m-incognito"
+                    }
+
+                    return "image://theme/icon-m-tabs"
+                }
+
+                label.color: {
+                    if (webView.privateMode) {
+                        return Theme.overlayBackgroundColor ? Theme.overlayBackgroundColor : "black"
+                    }
+
+                    return highlighted ? Theme.highlightColor : Theme.primaryColor
+                }
+
+                opacity: findInPageActive ? 0.0 : 1.0
+                horizontalOffset: -toolBarRow.horizontalOffset
+                label.text: webView.privateMode && (webView.tabModel.count === 0) ? "" : webView.tabModel.count
+                onTapped: toolBarRow.showTabs()
+
+                RotationAnimator {
+                    id: rotationAnimator
+
+                    target: tabs.icon
+                    duration: 1500
+                    alwaysRunToEnd: true
+                }
+
+                Connections {
+                    target: webView.tabModel
+                    onNewTabRequested: {
+                        rotationAnimator.from = 0
+                        rotationAnimator.to = 360
+                        rotationAnimator.restart()
+                    }
+
+                    onTabClosed: {
+                        rotationAnimator.from = 0
+                        rotationAnimator.to = -360
+                        rotationAnimator.restart()
+                    }
+                }
+            }
+
+            Shared.IconButton {
+                width: parent.width
+                height: parent.height
+                opacity: !secondaryToolsActive && findInPageActive ? 1.0 : 0.0
+                icon.source: "image://theme/icon-m-search"
+                icon.anchors.horizontalCenterOffset: -toolBarRow.horizontalOffset
+                onTapped: {
+                    findInPageActive = true
+                    findInPage()
+                }
             }
         }
 

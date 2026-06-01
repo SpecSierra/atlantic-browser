@@ -89,7 +89,7 @@ SilicaControl {
             Flickable {
                 id: menuFlickable
 
-                x: popUpMenu.width - width - popUpMenu.horizontalMargin
+                x: popUpMenu.horizontalMargin
                 y: popUpMenu.height
                         - height
                         - popUpMenu.verticalMargin
@@ -154,8 +154,8 @@ SilicaControl {
                                 Qt.rgba(Theme.highlightColor.r,
                                         Theme.highlightColor.g,
                                         Theme.highlightColor.b,
-                                        0.52)),
-                            1.55)
+                                        0.72)),
+                            1.25)
 
                         Image {
                             anchors.fill: parent
