@@ -12,7 +12,7 @@ import Sailfish.Silica 1.0
 Page {
     id: certDetailsPage
 
-    Rectangle { anchors.fill: parent; z: -100; color: "#1e1e1e" }
+    Rectangle { anchors.fill: parent; z: -100; color: "black" }
 
     property var security
 

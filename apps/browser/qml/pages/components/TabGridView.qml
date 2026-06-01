@@ -95,6 +95,12 @@ SilicaGridView {
 
     // Behind tab delegates
     children: [
+        Rectangle {
+            z: -2
+            width: tabGridView.width
+            height: tabGridView.height
+            color: "black"
+        },
         MouseArea {
             z: -1
             width: tabGridView.width

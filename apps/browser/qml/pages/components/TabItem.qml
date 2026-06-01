@@ -85,34 +85,17 @@ BackgroundItem {
                 id: header
 
                 width: root.implicitWidth
-                height: iconHeader.height + Theme.paddingMedium * 2
-
-                Image {
-                    id: iconHeader
-
-                    anchors {
-                        left: parent.left
-                        leftMargin: Theme.paddingMedium
-                        verticalCenter: parent.verticalCenter
-                    }
-
-                    height: Theme.iconSizeSmall
-                    width: height
-                    // TODO: Add favicon
-                    // source: favicon
-                    cache: false
-                    asynchronous: true
-                }
+                height: Theme.iconSizeSmall + Theme.paddingMedium * 2
 
                 Label {
                     id: titleLabel
 
                     anchors {
-                        left: iconHeader.right
+                        left: parent.left
                         leftMargin: Theme.paddingMedium
                         right: close.left
-                        rightMargin: Theme.paddingMedium
-                        verticalCenter: iconHeader.verticalCenter
+                        rightMargin: Theme.paddingSmall
+                        verticalCenter: parent.verticalCenter
                     }
 
                     text: title || WebUtils.displayableUrl(url)
@@ -127,8 +110,7 @@ BackgroundItem {
 
                     anchors {
                         right: parent.right
-                        top: parent.top
-                        verticalCenter: iconHeader.verticalCenter
+                        verticalCenter: parent.verticalCenter
                     }
                     icon.color: Theme.primaryColor
                     icon.highlightColor: root.highlightColor
@@ -137,8 +119,6 @@ BackgroundItem {
 
                     icon.source: "image://theme/icon-s-clear-opaque-cross"
                     onClicked: {
-                        // Break binding, so that texture size would not change when
-                        // closing tab (animating height).
                         root.implicitHeight = root.height
                         root.implicitWidth = root.width
 

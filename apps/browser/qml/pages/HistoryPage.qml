@@ -16,7 +16,7 @@ import "components"
 Page {
     id: root
 
-    Rectangle { anchors.fill: parent; z: -100; color: "#1e1e1e" }
+    Rectangle { anchors.fill: parent; z: -100; color: "black" }
 
     property QtObject model
     property var remorse
