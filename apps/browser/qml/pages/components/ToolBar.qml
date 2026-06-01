@@ -273,11 +273,33 @@ Column {
                 text: qsTrId("sailfish_browser-la-url_copied_to_clipboard")
             }
 
+            Image {
+                id: favicon
+
+                anchors {
+                    left: parent.left
+                    leftMargin: Theme.paddingSmall
+                    verticalCenter: parent.verticalCenter
+                }
+                width: Theme.iconSizeSmall
+                height: width
+                source: webView.favicon
+                sourceSize.width: width
+                sourceSize.height: height
+                cache: true
+                asynchronous: true
+                opacity: !showFindButtons && source !== "" && status === Image.Ready ? 1.0 : 0.0
+
+                Behavior on opacity { FadeAnimation {} }
+            }
+
             Label {
                 anchors {
                     verticalCenter: parent.verticalCenter
                     left: parent.left
+                    leftMargin: Theme.iconSizeSmall + Theme.paddingMedium
                     right: parent.right
+                    rightMargin: Theme.iconSizeSmall + Theme.paddingMedium
                 }
                 horizontalAlignment: Text.AlignHCenter
                 color: touchArea.highlighted ? Theme.highlightColor : Theme.primaryColor
@@ -304,6 +326,17 @@ Column {
 
                 opacity: showFindButtons ? 0.0 : 1.0
                 Behavior on opacity { FadeAnimation {} }
+            }
+
+            Shared.ProgressBar {
+                anchors {
+                    left: parent.left
+                    right: parent.right
+                    bottom: parent.bottom
+                }
+                height: Math.max(3, Math.round(3 * Theme.pixelRatio))
+                opacity: webView.loading && !showFindButtons ? 1.0 : 0.0
+                progress: webView.loadProgress / 100.0
             }
 
             Shared.ExpandingButton {
