@@ -30,6 +30,8 @@ SilicaFlickable {
         contentY = originY
     }
 
+    Rectangle { anchors.fill: parent; z: -1; color: "#1e1e1e" }
+
     VerticalScrollDecorator {}
 
     MouseArea {

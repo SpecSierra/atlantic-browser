@@ -116,7 +116,7 @@ BackgroundItem {
                     }
 
                     text: title || WebUtils.displayableUrl(url)
-                    font.pixelSize: Theme.fontSizeSmall
+                    font.pixelSize: Theme.fontSizeExtraSmall
                     verticalAlignment: Qt.AlignVCenter
                     truncationMode: TruncationMode.Fade
                     color: down || activeTab ? root.highlightColor : Theme.primaryColor

@@ -12,6 +12,8 @@ import Sailfish.Silica 1.0
 Page {
     id: certDetailsPage
 
+    Rectangle { anchors.fill: parent; z: -100; color: "#1e1e1e" }
+
     property var security
 
     readonly property bool _secure: security && security.allGood

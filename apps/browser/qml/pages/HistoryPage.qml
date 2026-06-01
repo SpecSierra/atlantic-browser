@@ -16,6 +16,8 @@ import "components"
 Page {
     id: root
 
+    Rectangle { anchors.fill: parent; z: -100; color: "#1e1e1e" }
+
     property QtObject model
     property var remorse
     readonly property bool pendingRemorse: !!remorse && remorse.pending
