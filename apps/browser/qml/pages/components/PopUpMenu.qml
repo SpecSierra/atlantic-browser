@@ -89,7 +89,7 @@ SilicaControl {
             Flickable {
                 id: menuFlickable
 
-                x: popUpMenu.horizontalMargin
+                x: popUpMenu.width - width - popUpMenu.horizontalMargin
                 y: popUpMenu.height
                         - height
                         - popUpMenu.verticalMargin

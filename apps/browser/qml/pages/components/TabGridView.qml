@@ -97,7 +97,8 @@ SilicaGridView {
     children: [
         Rectangle {
             z: -2
-            width: tabGridView.width
+            x: -tabGridView.horizontalMargin
+            width: tabGridView.width + tabGridView.horizontalMargin
             height: tabGridView.height
             color: "black"
         },
