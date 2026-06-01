@@ -63,8 +63,8 @@ BackgroundItem {
                         Qt.rgba(Theme.highlightColor.r,
                                 Theme.highlightColor.g,
                                 Theme.highlightColor.b,
-                                0.68)),
-                    1.38)
+                                0.52)),
+                    1.55)
 
                 Image {
                     anchors.fill: parent
