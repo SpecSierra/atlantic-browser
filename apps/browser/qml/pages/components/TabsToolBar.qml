@@ -38,10 +38,10 @@ Item {
         color: Qt.darker(
             Qt.tint(
                 Theme.colorScheme === Theme.LightOnDark ? "#1c1c1c" : "#f2f2f2",
-                Qt.hsla(Theme.highlightColor.hslHue,
-                        Math.min(1.0, Theme.highlightColor.hslSaturation * 1.5),
-                        Theme.highlightColor.hslLightness,
-                        0.55)),
+                Qt.rgba(Theme.highlightColor.r,
+                        Theme.highlightColor.g,
+                        Theme.highlightColor.b,
+                        0.68)),
             1.25)
 
         Image {
