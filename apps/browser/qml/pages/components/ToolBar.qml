@@ -274,8 +274,12 @@ Column {
             }
 
             Label {
-                anchors.verticalCenter: parent.verticalCenter
-                width: parent.width + Theme.paddingMedium
+                anchors {
+                    verticalCenter: parent.verticalCenter
+                    left: parent.left
+                    right: parent.right
+                }
+                horizontalAlignment: Text.AlignHCenter
                 color: touchArea.highlighted ? Theme.highlightColor : Theme.primaryColor
 
                 text: {
