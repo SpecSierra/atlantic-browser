@@ -173,29 +173,38 @@ Column {
             }
         }
 
-        Shared.ExpandingButton {
+        Item {
             id: padlockIcon
 
             readonly property var sec: webView.contentItem ? webView.contentItem.security : null
-            property bool danger: sec && sec.validState && !sec.allGood
+            readonly property bool danger: sec && sec.validState && !sec.allGood
+            readonly property bool active: sec && sec.validState && !findInPageActive
+                    && !(webView.url.indexOf("about:") === 0)
+                    && (!webView.contentItem || !webView.contentItem.textSelectionActive)
             property real glow
 
             height: parent.height
-            expandedWidth: toolBarRow.smallIconWidth
-            icon.source: danger ? "image://theme/icon-s-filled-warning" : "image://theme/icon-s-outline-secure"
-            active: sec && sec.validState && !findInPageActive
-                    && !(webView.url.indexOf("about:") === 0)
-                    && (!webView.contentItem || !webView.contentItem.textSelectionActive)
-            icon.color: danger ? Qt.tint(Theme.primaryColor,
-                                         Qt.rgba(Theme.errorColor.r, Theme.errorColor.g,
-                                                 Theme.errorColor.b, glow))
-                               : Theme.primaryColor
-            enabled: !!sec
-            onTapped: {
-                if (certOverlayActive) {
-                    showChrome()
-                } else {
-                    certOverlayLoader.active = true
+            width: toolBarRow.smallIconWidth
+
+            Shared.IconButton {
+                anchors.fill: parent
+                opacity: padlockIcon.active ? 1.0 : 0.0
+                Behavior on opacity { FadeAnimation {} }
+
+                icon.source: padlockIcon.danger ? "image://theme/icon-s-filled-warning"
+                                                : "image://theme/icon-s-outline-secure"
+                icon.color: padlockIcon.danger
+                    ? Qt.tint(Theme.primaryColor,
+                              Qt.rgba(Theme.errorColor.r, Theme.errorColor.g,
+                                      Theme.errorColor.b, padlockIcon.glow))
+                    : Theme.primaryColor
+                enabled: !!padlockIcon.sec && padlockIcon.active
+                onTapped: {
+                    if (certOverlayActive) {
+                        showChrome()
+                    } else {
+                        certOverlayLoader.active = true
+                    }
                 }
             }
 
@@ -214,9 +223,7 @@ Column {
                 securityAnimation.start()
             }
 
-            onDangerChanged: {
-                warn()
-            }
+            onDangerChanged: warn()
 
             Connections {
                 target: webView
