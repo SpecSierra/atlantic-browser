@@ -25,9 +25,11 @@ Page {
 
     readonly property bool active: status == PageStatus.Active
     property bool tabPageActive
-    readonly property size thumbnailSize: Qt.size(width - Theme.horizontalPageMargin * 2,
-                                                  Math.max(height / 2.5, width / 1.66)
-                                                  - (Theme.iconSizeSmall + Theme.paddingMedium * 2))
+    // Capture at portrait aspect ratio to match the 2-column SFOS-style tab cards.
+    readonly property real _thumbCaptureWidth: width - Theme.horizontalPageMargin * 2
+    readonly property size thumbnailSize: Qt.size(
+        _thumbCaptureWidth,
+        _thumbCaptureWidth * 1.5 - (Theme.iconSizeSmall + Theme.paddingMedium * 2))
     property Item debug
     property Component tabPageComponent
     property string pendingOpenUrl: ""

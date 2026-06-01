@@ -21,15 +21,22 @@ SilicaGridView {
     property var remorsePopup
     property int horizontalMargin: Theme.horizontalPageMargin
     readonly property bool largeScreen: Screen.sizeCategory > Screen.Medium
-    readonly property real thumbnailHeight: largeScreen
-                                            ? Screen.width / 3
-                                            : !portrait ? parent.height / 2.5 : parent.width / 1.66
+
+    // SFOS home-screen style: always 2 columns in portrait on a normal phone,
+    // 3 columns on a large screen (tablet).
     readonly property real columns: largeScreen
-                                        ? portrait ? 2 : 3
-                                        : parent.width < 2 * parent.height
-                                          ? parent.width <= height ? 1 : 2 : 3
+                                        ? portrait ? 3 : 4
+                                        : 2
+
+    // Portrait-oriented thumbnails — taller than wide, showing a good slice of
+    // the page (≈ phone-screen aspect ratio scaled to the card width).
     readonly property real thumbnailWidth: (parent.width - horizontalMargin * 2
                                             - (Theme.paddingLarge * (columns - 1))) / columns
+    readonly property real thumbnailHeight: largeScreen
+                                            ? thumbnailWidth * 1.1
+                                            : portrait
+                                              ? thumbnailWidth * 1.5
+                                              : parent.height / 2.5
 
     signal hide
     signal enterNewTabUrl

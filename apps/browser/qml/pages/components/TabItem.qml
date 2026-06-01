@@ -34,7 +34,7 @@ BackgroundItem {
         maskSource: Rectangle {
             width: root.width
             height: root.height
-            radius: 12 * Theme.pixelRatio
+            radius: Theme.paddingMedium
             visible: false
         }
     }
@@ -57,19 +57,16 @@ BackgroundItem {
 
             Rectangle {
                 anchors.fill: parent
-                color: Theme.colorScheme === Theme.LightOnDark ? "black" : "white"
+                // Use ambience overlay colour as the card background so the
+                // tab switcher feels native to the current SFOS ambience.
+                color: Theme.overlayBackgroundColor ? Theme.overlayBackgroundColor
+                       : Theme.colorScheme === Theme.LightOnDark ? "#1c1c1c" : "#f2f2f2"
 
                 ColorOverlay {
                     anchors.fill: parent
                     source: parent
-                    color: Theme.primaryColor
-                    opacity: Theme.colorScheme === Theme.LightOnDark ? Theme.opacityFaint : 0.01
-                }
-                ColorOverlay {
-                    anchors.fill: parent
-                    source: parent
                     color: root.highlightColor
-                    opacity: activeTab ? 0.1 : 0.0
+                    opacity: activeTab ? 0.12 : 0.0
                 }
             }
 

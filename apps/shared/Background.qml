@@ -24,8 +24,11 @@ Item {
         height: glassTextureImage.height
 
         Rectangle {
-            color: Theme.overlayBackgroundColor ? Theme.overlayBackgroundColor : "black"
-            opacity: 0.948 // TODO: constants?
+            // Follow ambience: use overlayBackgroundColor when available,
+            // otherwise fall back to a theme-aware dark/light tone.
+            color: Theme.overlayBackgroundColor ? Theme.overlayBackgroundColor
+                   : Theme.colorScheme === Theme.LightOnDark ? "#1a1a1a" : "#f0f0f0"
+            opacity: 0.93
             anchors.fill: parent
         }
 

@@ -35,8 +35,10 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-
-        color: Theme.colorScheme == Theme.LightOnDark ? "black" : "white"
+        // Follow ambience rather than hard-coding black/white.
+        color: Theme.overlayBackgroundColor ? Theme.overlayBackgroundColor
+               : Theme.colorScheme === Theme.LightOnDark ? "#1a1a1a" : "#f0f0f0"
+        opacity: 0.96
     }
 
 

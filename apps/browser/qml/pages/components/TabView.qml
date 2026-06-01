@@ -91,9 +91,13 @@ SilicaControl {
                 anchors.fill: parent
 
                 z: -100
-                color: tabView.palette.colorScheme === Theme.LightOnDark
-                        ? Theme.darkPrimaryColor
-                        : Theme.lightPrimaryColor
+                // Use ambience overlay colour so the tab-bar header blends with
+                // the rest of the chrome rather than being a raw dark/light block.
+                color: Theme.overlayBackgroundColor ? Theme.overlayBackgroundColor
+                       : tabView.palette.colorScheme === Theme.LightOnDark
+                           ? Theme.darkPrimaryColor
+                           : Theme.lightPrimaryColor
+                opacity: 0.97
             }
         }
         _headerBackgroundVisible: false
