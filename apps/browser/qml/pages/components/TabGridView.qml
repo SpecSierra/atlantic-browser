@@ -16,6 +16,7 @@ SilicaGridView {
     id: tabGridView
 
     property bool portrait
+    property bool privateMode
     property bool closingAllTabs
 
     property var remorsePopup
@@ -74,6 +75,36 @@ SilicaGridView {
     currentIndex: model.activeTabIndex
     cellWidth: thumbnailWidth + Theme.paddingLarge
     cellHeight: thumbnailHeight + Theme.paddingLarge
+
+    PullDownMenu {
+        MenuItem {
+            text: tabGridView.privateMode
+                  ? qsTrId("sailfish_browser-la-new_private_tab")
+                  : qsTrId("sailfish_browser-la-new_tab")
+            enabled: !tabGridView.closingAllTabs
+            onClicked: {
+                webView.privateMode = tabGridView.privateMode
+                tabGridView.enterNewTabUrl()
+            }
+        }
+
+        MenuItem {
+            text: tabGridView.privateMode
+                  ? qsTrId("sailfish_browser-la-new_tab")
+                  : qsTrId("sailfish_browser-la-new_private_tab")
+            enabled: !tabGridView.closingAllTabs
+            onClicked: {
+                webView.privateMode = !tabGridView.privateMode
+                tabGridView.enterNewTabUrl()
+            }
+        }
+
+        MenuItem {
+            text: qsTrId("sailfish_browser-me-close_all")
+            enabled: tabGridView.count > 0 && !tabGridView.closingAllTabs
+            onClicked: tabGridView.closeAllTabs()
+        }
+    }
 
     delegate: TabItem {
         id: tabItem
