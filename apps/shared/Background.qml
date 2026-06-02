@@ -49,6 +49,7 @@ Item {
         id: wallpaperEffect
 
         anchors.fill: parent
+        opacity: 0.85
 
         // glass texture size
         property size glassTextureSizeInv: Qt.size(1.0 / (glassTextureImage.sourceSize.width),

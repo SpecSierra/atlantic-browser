@@ -24,6 +24,8 @@ Page {
         search: searchText
     }
 
+    Rectangle { anchors.fill: parent; z: -1; color: "black" }
+
     SilicaListView {
         id: listView
 

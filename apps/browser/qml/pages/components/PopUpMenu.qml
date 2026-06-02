@@ -89,16 +89,11 @@ SilicaControl {
             Flickable {
                 id: menuFlickable
 
-                x: popUpMenu.width - width - popUpMenu.horizontalMargin
-                y: popUpMenu.height
-                        - height
-                        - popUpMenu.verticalMargin
-                        + (menuItem.percentageClosed * (height - menuItem.menuTop + popUpMenu.verticalMargin))
+                x: 0
+                y: menuItem.percentageClosed * popUpMenu.height
 
-                width: Math.max(Theme.paddingLarge * widthRatio,
-                                footerLoader.item ? footerLoader.item.implicitWidth : 0)
-                height: Math.min(popUpMenu.height - (2 * popUpMenu.verticalMargin),
-                                 headerItem.height + contentLoader.height + footerLoader.height)
+                width: popUpMenu.width
+                height: popUpMenu.height
 
                 contentHeight: menuItem.topPadding + headerItem.height + contentLoader.height + footerLoader.height
 
@@ -251,12 +246,12 @@ SilicaControl {
                                                                            0, 0, 1, 0,
                                                                            0, menuItem.menuTop / menuFlickable.height, 0, 1)
 
-                x: menuFlickable.x
+                x: 0
                 y: menuFlickable.y + menuItem.menuTop - Math.min(0, menuFlickable.contentY)
                 width: menuFlickable.width
                 height: menuFlickable.height - menuItem.menuTop
 
-                radius: popUpMenu.cornerRadius
+                radius: 0
                 sourceItem: menuShaderSource
                 fillMode: Background.Background.Stretch
 

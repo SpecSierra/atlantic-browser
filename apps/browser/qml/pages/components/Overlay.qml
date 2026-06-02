@@ -313,27 +313,27 @@ Shared.Background {
                             width: selToolbar.width / 3
                             height: parent.height
                             icon.source: "image://theme/icon-m-clipboard"
+                            text: "Copy"
                             onClicked: {
                                 if (selToolbar.ci) {
                                     selToolbar.ci.copyToClipboard()
                                     selToolbar.ci.clearSelection()
                                 }
                             }
-                            Label { anchors.horizontalCenter: parent.horizontalCenter; y: parent.icon.y + parent.icon.height - Theme.paddingSmall; text: "Copy"; font.pixelSize: Theme.fontSizeTiny }
                         }
                         IconButton {
                             width: selToolbar.width / 3
                             height: parent.height
                             icon.source: "image://theme/icon-m-select-all"
+                            text: "Select All"
                             onClicked: { if (selToolbar.ci) selToolbar.ci.selectAll() }
-                            Label { anchors.horizontalCenter: parent.horizontalCenter; y: parent.icon.y + parent.icon.height - Theme.paddingSmall; text: "Select All"; font.pixelSize: Theme.fontSizeTiny }
                         }
                         IconButton {
                             width: selToolbar.width / 3
                             height: parent.height
                             icon.source: "image://theme/icon-m-input-remove"
+                            text: "Clear"
                             onClicked: { if (selToolbar.ci) selToolbar.ci.clearSelection() }
-                            Label { anchors.horizontalCenter: parent.horizontalCenter; y: parent.icon.y + parent.icon.height - Theme.paddingSmall; text: "Clear"; font.pixelSize: Theme.fontSizeTiny }
                         }
                     }
                 }

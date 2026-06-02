@@ -345,15 +345,6 @@ Column {
 
             Behavior on opacity { FadeAnimation {} }
 
-            // Spin the icon while a page is loading
-            RotationAnimator {
-                target: stopButton.icon
-                running: webView.loading
-                from: 0; to: 360
-                duration: 1200
-                loops: Animation.Infinite
-            }
-
             onTapped: {
                 webView.stop()
                 toolBarRow.showChrome()

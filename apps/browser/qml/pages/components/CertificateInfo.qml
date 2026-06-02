@@ -45,6 +45,7 @@ SilicaFlickable {
         width: parent.width
         spacing: Theme.paddingMedium
         topPadding: Theme.paddingLarge
+        bottomPadding: Theme.paddingLarge
 
         Image {
             source: _secure ? "image://theme/icon-m-device-lock" : "image://theme/icon-m-warning"
