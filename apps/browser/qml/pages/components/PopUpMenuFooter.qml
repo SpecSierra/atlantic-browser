@@ -81,20 +81,6 @@ Rectangle {
             }
         }
 
-        Shared.IconButton {
-            height: parent.height
-            width: Theme.itemSizeLarge
-            icon.source: webView.loading ? "image://theme/icon-m-reset" : "image://theme/icon-m-refresh"
-            icon.opacity: enabled ? 1.0 : Theme.opacityLow
-            enabled: webView.contentItem
-            onTapped: {
-                if (webView.loading) {
-                    webView.stop()
-                } else {
-                    webView.reload()
-                }
-                overlay.animator.showChrome()
-            }
-        }
+
     }
 }

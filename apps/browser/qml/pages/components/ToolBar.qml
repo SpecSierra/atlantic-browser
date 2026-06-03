@@ -339,14 +339,17 @@ Column {
 
             height: parent.height
             expandedWidth: toolBarRow.iconWidth
-            icon.source: "image://theme/icon-m-reset"
+            icon.source: webView.loading ? "image://theme/icon-m-close" : "image://theme/icon-m-reset"
             active: webView.contentItem && !findInPageActive
-            opacity: webView.loading ? 1.0 : 0.0
 
             Behavior on opacity { FadeAnimation {} }
 
             onTapped: {
-                webView.stop()
+                if (webView.loading) {
+                    webView.stop()
+                } else {
+                    webView.reload()
+                }
                 toolBarRow.showChrome()
             }
         }
