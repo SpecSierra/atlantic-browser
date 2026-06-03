@@ -11,6 +11,7 @@
 
 import QtQuick 2.2
 import Sailfish.Silica 1.0
+import Sailfish.Silica.Background 1.0 as SilicaBackground
 import "." as Browser
 
 Item {
@@ -45,42 +46,17 @@ Item {
         }
     }
 
-    ShaderEffect {
-        id: wallpaperEffect
+    ShaderEffectSource {
+        id: glassSource
+        sourceItem: glassTextureItem
+        hideSource: true
+    }
 
+    SilicaBackground.Background {
         anchors.fill: parent
         opacity: 0.85
 
-        // glass texture size
-        property size glassTextureSizeInv: Qt.size(1.0 / (glassTextureImage.sourceSize.width),
-                                                   -1.0 / (glassTextureImage.sourceSize.height))
-
-        property variant glassTexture: ShaderEffectSource {
-            hideSource: true
-            sourceItem: glassTextureItem
-            wrapMode: ShaderEffectSource.Repeat
-        }
-
-        blending: false
-
-        vertexShader: "
-           uniform highp mat4 qt_Matrix;
-           attribute highp vec4 qt_Vertex;
-
-           void main() {
-              gl_Position = qt_Matrix * qt_Vertex;
-           }
-        "
-
-        fragmentShader: "
-           uniform sampler2D glassTexture;
-           uniform highp vec2 glassTextureSizeInv;
-           uniform lowp float qt_Opacity;
-
-           void main() {
-              lowp vec4 tx = texture2D(glassTexture, gl_FragCoord.xy * glassTextureSizeInv);
-              gl_FragColor = tx;
-           }
-        "
+        sourceItem: glassSource
+        fillMode: SilicaBackground.Background.Tile
     }
 }

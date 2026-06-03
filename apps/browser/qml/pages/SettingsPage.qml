@@ -21,8 +21,6 @@ import "components"
 Page {
     id: page
 
-    Rectangle { anchors.fill: parent; z: -100; color: "black" }
-
     // WPE: color scheme constants (outside QtObject — QML forbids uppercase property names)
     readonly property int _prefersLightMode: 0
     readonly property int _prefersDarkMode: 1

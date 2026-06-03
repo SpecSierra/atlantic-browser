@@ -100,7 +100,7 @@ SilicaGridView {
             x: -tabGridView.horizontalMargin
             width: tabGridView.width + tabGridView.horizontalMargin
             height: tabGridView.height
-            color: "black"
+            color: "transparent"
         },
         MouseArea {
             z: -1

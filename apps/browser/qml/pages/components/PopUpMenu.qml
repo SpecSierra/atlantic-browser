@@ -221,62 +221,29 @@ SilicaControl {
                 ]
             }
 
-            // To round the corners the menu is being rendered to a ShaderEffectSource which is
-            // used as the source item for a Background item which composites the menu with the
-            // rest of the UI with rounded corners. Using the ShaderEffectSource also means
-            // overlapping items in the menu won't blend together when the menu fades in and out.
             ShaderEffectSource {
                 id: menuShaderSource
 
+                x: menuFlickable.x
+                y: menuFlickable.y
                 width: menuFlickable.width
                 height: menuFlickable.height
 
                 sourceItem: menuFlickable
                 hideSource: true
-                visible: false
             }
 
             Background.Background {
                 id: menuShaderItem
 
-                readonly property matrix4x4 menuSourceMatrix: Qt.matrix4x4(1, 0, 0, 0,
-                                                                           0, height / menuFlickable.height, 0, 0,
-                                                                           0, 0, 1, 0,
-                                                                           0, menuItem.menuTop / menuFlickable.height, 0, 1)
-
-                x: menuFlickable.x
-                y: menuFlickable.y + menuItem.menuTop - Math.min(0, menuFlickable.contentY)
-                width: menuFlickable.width
-                height: menuFlickable.height - menuItem.menuTop
+                x: menuShaderSource.x
+                y: menuShaderSource.y
+                width: menuShaderSource.width
+                height: menuShaderSource.height
 
                 radius: 0
                 sourceItem: menuShaderSource
                 fillMode: Background.Background.Stretch
-
-                material: Background.Material {
-                    vertexShader: "
-                        attribute highp vec4 position;
-                        attribute highp vec2 normalizedPosition;
-
-                        uniform highp mat4 positionMatrix;
-
-                        uniform highp mat4 menuSourceMatrix;
-
-                        varying highp vec2 sourceCoord;
-
-                        void backgroundMain() {
-                            gl_Position = positionMatrix * position;
-                            sourceCoord = (menuSourceMatrix * vec4(normalizedPosition, 0, 1)).xy;
-                        }"
-                    fragmentShader: "
-                        uniform lowp sampler2D sourceTexture;
-
-                        varying highp vec2 sourceCoord;
-
-                        void backgroundMain() {
-                            gl_FragColor = texture2D(sourceTexture, sourceCoord);
-                        }"
-                }
             }
 
             InverseMouseArea {
