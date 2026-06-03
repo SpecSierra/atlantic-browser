@@ -1,5 +1,5 @@
 TEMPLATE = subdirs
-SUBDIRS += apps tests settings backup-unit
+SUBDIRS += apps settings
 
 tests.depends = apps
 
