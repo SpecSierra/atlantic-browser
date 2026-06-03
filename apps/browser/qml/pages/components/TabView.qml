@@ -99,13 +99,13 @@ SilicaControl {
                                 Theme.highlightColor.b,
                                 0.52)),
                     1.55)
-                opacity: 0.85
+                opacity: 0.92
 
                 Image {
                     anchors.fill: parent
                     source: "image://theme/graphic-shader-texture"
                     fillMode: Image.Tile
-                    opacity: 0.65
+                    opacity: 0.15
                 }
             }
         }

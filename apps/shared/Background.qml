@@ -40,13 +40,13 @@ Item {
                             Theme.highlightColor.b,
                             0.52)),
                 1.55)
-            opacity: 0.85
+            opacity: 0.92
             anchors.fill: parent
         }
 
         Image {
             id: glassTextureImage
-            opacity: 0.65
+            opacity: 0.25
             source: "image://theme/graphic-shader-texture"
         }
     }
