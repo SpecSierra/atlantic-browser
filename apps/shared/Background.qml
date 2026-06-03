@@ -46,7 +46,7 @@ Item {
 
         Image {
             id: glassTextureImage
-            opacity: 0.25
+            opacity: 0.65
             source: "image://theme/graphic-shader-texture"
         }
     }
