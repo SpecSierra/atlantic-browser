@@ -9,6 +9,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Sailfish.Silica.private 1.0 as Private
+import Sailfish.Silica.Background 1.0 as SilicaBackground
 import Sailfish.Browser 1.0
 import "." as Browser
 
@@ -30,7 +31,12 @@ SilicaFlickable {
         contentY = originY
     }
 
-    Rectangle { anchors.fill: parent; z: -1; color: Qt.darker(Qt.tint(Theme.colorScheme === Theme.LightOnDark ? "#1c1c1c" : "#f2f2f2", Qt.rgba(Theme.highlightColor.r, Theme.highlightColor.g, Theme.highlightColor.b, 0.52)), 1.55) }
+    SilicaBackground.Background {
+        anchors.fill: parent
+        z: -2
+    }
+
+    Rectangle { anchors.fill: parent; z: -1; opacity: 0.85; color: Qt.darker(Qt.tint(Theme.colorScheme === Theme.LightOnDark ? "#1c1c1c" : "#f2f2f2", Qt.rgba(Theme.highlightColor.r, Theme.highlightColor.g, Theme.highlightColor.b, 0.52)), 1.55) }
 
     VerticalScrollDecorator {}
 

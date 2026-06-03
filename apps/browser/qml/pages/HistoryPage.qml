@@ -11,10 +11,16 @@
 import QtQuick 2.0
 import Sailfish.Silica 1.0
 import Sailfish.Browser 1.0
+import Sailfish.Silica.Background 1.0 as SilicaBackground
 import "components"
 
 Page {
     id: root
+
+    SilicaBackground.Background {
+        anchors.fill: parent
+        z: -1
+    }
 
     property QtObject model
     property var remorse

@@ -158,7 +158,7 @@ SilicaControl {
                             anchors.fill: parent
                             source: "image://theme/graphic-shader-texture"
                             fillMode: Image.Tile
-                            opacity: 0.15
+                            opacity: 0.35
                         }
                     },
                     Item {

@@ -16,10 +16,16 @@ import Nemo.Configuration 1.0
 import com.jolla.settings.system 1.0
 import Nemo.Configuration 1.0
 import Sailfish.Pickers 1.0
+import Sailfish.Silica.Background 1.0 as SilicaBackground
 import "components"
 
 Page {
     id: page
+
+    SilicaBackground.Background {
+        anchors.fill: parent
+        z: -1
+    }
 
     // WPE: color scheme constants (outside QtObject — QML forbids uppercase property names)
     readonly property int _prefersLightMode: 0
