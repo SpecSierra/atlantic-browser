@@ -26,7 +26,7 @@ Rectangle {
                            Theme.highlightColor.b,
                            0.52)),
                1.55)
-    opacity: 0.92
+    opacity: 0.95
 
     Row {
         id: content

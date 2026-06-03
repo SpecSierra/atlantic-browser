@@ -147,7 +147,7 @@ SilicaControl {
                                         Theme.highlightColor.b,
                                         0.72)),
                             1.25)
-                         opacity: 0.92
+                         opacity: 0.95
                     },
                     Item {
                         id: decoratorParent
