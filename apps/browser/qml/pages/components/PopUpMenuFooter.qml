@@ -26,6 +26,7 @@ Rectangle {
                            Theme.highlightColor.b,
                            0.52)),
                1.55)
+    opacity: 0.85
 
     Image {
         anchors.fill: parent
