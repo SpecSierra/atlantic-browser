@@ -145,6 +145,8 @@ Column {
             height: parent.height
             expandedWidth: toolBarRow.iconWidth
             icon {
+                width: Theme.iconSizeMedium
+                height: Theme.iconSizeMedium
                 source: {
                     if (webView.canGoBack) {
                         return "image://theme/icon-m-back"
