@@ -227,11 +227,39 @@ QString pulseDbusAddress()
 
 QDBusConnection mainVolumeConnection()
 {
-    // com.Meego.MainVolume2 is registered on the SESSION bus on SFOS.
-    // Previous implementation tried the PulseAudio peer bus (via org.pulseaudio.Server
-    // address lookup), which fails on SFOS 5.x where module-dbus-protocol may not be
-    // loaded. Using QDBusConnection::sessionBus() directly is the correct approach.
-    return QDBusConnection::sessionBus();
+    // com.Meego.MainVolume2 is served by PulseAudio's module-dbus-protocol on
+    // the PulseAudio peer-to-peer D-Bus socket, NOT on the session bus.
+    // Verified on SFOS 5.1 (Xperia 10 II): the session bus owns no
+    // com.Meego.MainVolume2 name (GetAll always fails → the volume slider
+    // never reached the page), while the peer socket — address from
+    // org.PulseAudio.ServerLookup1, normally
+    // unix:path=$XDG_RUNTIME_DIR/pulse/dbus-socket — answers GetAll with
+    // CurrentStep/StepCount.  Reuse one cached named peer connection; drop it
+    // if PulseAudio restarted and the socket went away.
+    QDBusConnection existing(QString::fromLatin1(kMainVolumeConnectionName));
+    if (existing.isConnected()) {
+        return existing;
+    }
+    QDBusConnection::disconnectFromPeer(QString::fromLatin1(kMainVolumeConnectionName));
+
+    const QString address = pulseDbusAddress();
+    if (address.isEmpty()) {
+        // No peer socket available; fall back to the session bus (calls will
+        // fail gracefully and the poll retries on the next tick).
+        return QDBusConnection::sessionBus();
+    }
+    return QDBusConnection::connectToPeer(address, QString::fromLatin1(kMainVolumeConnectionName));
+}
+
+QDBusMessage createMainVolumeCall(const QDBusConnection& connection, const QString& method)
+{
+    // Peer-to-peer connections must use an empty destination service.
+    const bool isPeer = connection.name() == QLatin1String(kMainVolumeConnectionName);
+    return QDBusMessage::createMethodCall(
+        isPeer ? QString() : QString::fromLatin1(kMainVolumeService),
+        QString::fromLatin1(kMainVolumePath),
+        QString::fromLatin1(kPropertiesInterface),
+        method);
 }
 
 MainVolumeState queryMainVolumeState()
@@ -241,11 +269,7 @@ MainVolumeState queryMainVolumeState()
         return {};
     }
 
-    QDBusMessage request = QDBusMessage::createMethodCall(
-        QString::fromLatin1(kMainVolumeService),
-        QString::fromLatin1(kMainVolumePath),
-        QString::fromLatin1(kPropertiesInterface),
-        QStringLiteral("GetAll"));
+    QDBusMessage request = createMainVolumeCall(connection, QStringLiteral("GetAll"));
     request << QString::fromLatin1(kMainVolumeInterface);
 
     const QDBusMessage reply = connection.call(request);
@@ -288,11 +312,7 @@ bool setMainVolumeNormalized(qreal volume)
         return false;
     }
 
-    QDBusMessage request = QDBusMessage::createMethodCall(
-        QString::fromLatin1(kMainVolumeService),
-        QString::fromLatin1(kMainVolumePath),
-        QString::fromLatin1(kPropertiesInterface),
-        QStringLiteral("Set"));
+    QDBusMessage request = createMainVolumeCall(connection, QStringLiteral("Set"));
     const uint targetStepValue = static_cast<uint>(targetStep);
     request << QString::fromLatin1(kMainVolumeInterface)
             << QStringLiteral("CurrentStep")
