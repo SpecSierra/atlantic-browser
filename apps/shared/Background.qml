@@ -17,9 +17,14 @@ import "." as Browser
 Item {
     id: wallpaper
 
+    SilicaBackground.Background {
+        anchors.fill: parent
+    }
+
     Item {
         id: glassTextureItem
 
+        visible: false
         width: glassTextureImage.width
         height: glassTextureImage.height
 
@@ -46,11 +51,41 @@ Item {
         }
     }
 
-    SilicaBackground.Background {
+    ShaderEffect {
+        id: wallpaperEffect
+
         anchors.fill: parent
         opacity: 0.85
 
-        sourceItem: glassTextureItem
-        fillMode: SilicaBackground.Background.Tile
+        property size glassTextureSizeInv: Qt.size(1.0 / (glassTextureImage.sourceSize.width),
+                                                   -1.0 / (glassTextureImage.sourceSize.height))
+
+        property variant glassTexture: ShaderEffectSource {
+            hideSource: true
+            sourceItem: glassTextureItem
+            wrapMode: ShaderEffectSource.Repeat
+        }
+
+        blending: true
+
+        vertexShader: "
+           uniform highp mat4 qt_Matrix;
+           attribute highp vec4 qt_Vertex;
+
+           void main() {
+              gl_Position = qt_Matrix * qt_Vertex;
+           }
+        "
+
+        fragmentShader: "
+           uniform sampler2D glassTexture;
+           uniform highp vec2 glassTextureSizeInv;
+           uniform lowp float qt_Opacity;
+
+           void main() {
+              lowp vec4 tx = texture2D(glassTexture, gl_FragCoord.xy * glassTextureSizeInv);
+              gl_FragColor = tx * qt_Opacity;
+           }
+        "
     }
 }
