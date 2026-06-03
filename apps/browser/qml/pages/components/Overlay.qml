@@ -309,31 +309,67 @@ Shared.Background {
                         height: Theme.itemSizeSmall
                         spacing: 0
 
-                        IconButton {
+                        Item {
                             width: selToolbar.width / 3
                             height: parent.height
-                            icon.source: "image://theme/icon-m-clipboard"
-                            text: "Copy"
-                            onClicked: {
-                                if (selToolbar.ci) {
-                                    selToolbar.ci.copyToClipboard()
-                                    selToolbar.ci.clearSelection()
+                            Column {
+                                anchors.centerIn: parent
+                                spacing: Theme.paddingSmall / 2
+                                IconButton {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    icon.source: "image://theme/icon-m-clipboard"
+                                    onClicked: {
+                                        if (selToolbar.ci) {
+                                            selToolbar.ci.copyToClipboard()
+                                            selToolbar.ci.clearSelection()
+                                        }
+                                    }
+                                }
+                                Label {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: "Copy"
+                                    font.pixelSize: Theme.fontSizeExtraSmall
+                                    color: Theme.highlightColor
                                 }
                             }
                         }
-                        IconButton {
+                        Item {
                             width: selToolbar.width / 3
                             height: parent.height
-                            icon.source: "image://theme/icon-m-select-all"
-                            text: "Select All"
-                            onClicked: { if (selToolbar.ci) selToolbar.ci.selectAll() }
+                            Column {
+                                anchors.centerIn: parent
+                                spacing: Theme.paddingSmall / 2
+                                IconButton {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    icon.source: "image://theme/icon-m-select-all"
+                                    onClicked: { if (selToolbar.ci) selToolbar.ci.selectAll() }
+                                }
+                                Label {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: "Select All"
+                                    font.pixelSize: Theme.fontSizeExtraSmall
+                                    color: Theme.highlightColor
+                                }
+                            }
                         }
-                        IconButton {
+                        Item {
                             width: selToolbar.width / 3
                             height: parent.height
-                            icon.source: "image://theme/icon-m-input-remove"
-                            text: "Clear"
-                            onClicked: { if (selToolbar.ci) selToolbar.ci.clearSelection() }
+                            Column {
+                                anchors.centerIn: parent
+                                spacing: Theme.paddingSmall / 2
+                                IconButton {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    icon.source: "image://theme/icon-m-input-remove"
+                                    onClicked: { if (selToolbar.ci) selToolbar.ci.clearSelection() }
+                                }
+                                Label {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: "Clear"
+                                    font.pixelSize: Theme.fontSizeExtraSmall
+                                    color: Theme.highlightColor
+                                }
+                            }
                         }
                     }
                 }
