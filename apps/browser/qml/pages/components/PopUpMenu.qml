@@ -92,7 +92,8 @@ SilicaControl {
                 x: 0
                 y: menuItem.percentageClosed * popUpMenu.height
 
-                width: popUpMenu.width
+                width: Math.max(Theme.paddingLarge * widthRatio,
+                                footerLoader.item ? footerLoader.item.implicitWidth : 0)
                 height: popUpMenu.height
 
                 contentHeight: menuItem.topPadding + headerItem.height + contentLoader.height + footerLoader.height
