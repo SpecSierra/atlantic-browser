@@ -74,12 +74,7 @@ SilicaControl {
 
             property real percentageClosed
             readonly property real menuTop: Math.max(0, headerItem.y - menuFlickable.contentY)
-            readonly property real topPadding: Math.max(0,
-                                                        footerLoader.y - headerItem.height
-                                                        - (Screen.sizeCategory > Screen.Medium
-                                                           ? contentLoader.height
-                                                           : Math.min(contentLoader.height,
-                                                                      Theme.paddingLarge * popUpMenu.heightRatio)))
+            readonly property real topPadding: Theme.paddingLarge
 
             width: popUpMenu.width
             height: popUpMenu.height
