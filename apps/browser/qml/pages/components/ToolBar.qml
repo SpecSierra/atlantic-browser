@@ -339,7 +339,7 @@ Column {
 
             height: parent.height
             expandedWidth: toolBarRow.iconWidth
-            icon.source: webView.loading ? "image://theme/icon-m-close" : "image://theme/icon-m-reset"
+            icon.source: webView.loading ? "image://theme/icon-m-reset" : "image://theme/icon-m-refresh"
             active: webView.contentItem && !findInPageActive
 
             Behavior on opacity { FadeAnimation {} }

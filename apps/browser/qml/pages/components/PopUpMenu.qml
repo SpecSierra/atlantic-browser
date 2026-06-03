@@ -239,6 +239,11 @@ SilicaControl {
             Background.Background {
                 id: menuShaderItem
 
+                readonly property matrix4x4 menuSourceMatrix: Qt.matrix4x4(1, 0, 0, 0,
+                                                                           0, height / menuFlickable.height, 0, 0,
+                                                                           0, 0, 1, 0,
+                                                                           0, menuItem.menuTop / menuFlickable.height, 0, 1)
+
                 x: 0
                 y: menuFlickable.y + menuItem.menuTop - Math.min(0, menuFlickable.contentY)
                 width: menuFlickable.width
@@ -247,6 +252,31 @@ SilicaControl {
                 radius: 0
                 sourceItem: menuShaderSource
                 fillMode: Background.Background.Stretch
+
+                material: Background.Material {
+                    vertexShader: "
+                        attribute highp vec4 position;
+                        attribute highp vec2 normalizedPosition;
+
+                        uniform highp mat4 positionMatrix;
+
+                        uniform highp mat4 menuSourceMatrix;
+
+                        varying highp vec2 sourceCoord;
+
+                        void backgroundMain() {
+                            gl_Position = positionMatrix * position;
+                            sourceCoord = (menuSourceMatrix * vec4(normalizedPosition, 0, 1)).xy;
+                        }"
+                    fragmentShader: "
+                        uniform lowp sampler2D sourceTexture;
+
+                        varying highp vec2 sourceCoord;
+
+                        void backgroundMain() {
+                            gl_FragColor = texture2D(sourceTexture, sourceCoord);
+                        }"
+                }
             }
 
             InverseMouseArea {
