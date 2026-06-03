@@ -150,6 +150,8 @@ Column {
                         return "image://theme/icon-m-back"
                     } else if (webView.contentItem && webView.contentItem.parentId > 0) {
                         return "image://theme/icon-m-back-tab"
+                    } else if (webView.contentItem) {
+                        return "image://theme/icon-m-home"
                     }
                     return ""
                 }
@@ -163,12 +165,15 @@ Column {
                 }
             }
 
-            active: (webView.canGoBack || (webView.contentItem && webView.contentItem.parentId > 0)) && !findInPageActive
+            active: (webView.canGoBack || (webView.contentItem && webView.contentItem.parentId > 0)
+                     || webView.contentItem) && !findInPageActive
             onTapped: {
                 if (webView.canGoBack) {
                     webView.goBack()
-                } else {
+                } else if (webView.contentItem && webView.contentItem.parentId > 0) {
                     webView.tabModel.closeActiveTab()
+                } else {
+                    toolBarRow.loadPage(WebUtils.homePage)
                 }
             }
         }
