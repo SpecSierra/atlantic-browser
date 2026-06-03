@@ -89,7 +89,7 @@ SilicaControl {
             Flickable {
                 id: menuFlickable
 
-                x: 0
+                x: popUpMenu.width - width
                 y: menuItem.percentageClosed * popUpMenu.height
 
                 width: Math.max(Theme.paddingLarge * widthRatio,
@@ -244,7 +244,7 @@ SilicaControl {
                                                                            0, 0, 1, 0,
                                                                            0, menuItem.menuTop / menuFlickable.height, 0, 1)
 
-                x: 0
+                x: menuFlickable.x
                 y: menuFlickable.y + menuItem.menuTop - Math.min(0, menuFlickable.contentY)
                 width: menuFlickable.width
                 height: menuFlickable.height - menuItem.menuTop

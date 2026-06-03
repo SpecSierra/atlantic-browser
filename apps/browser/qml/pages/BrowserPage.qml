@@ -379,10 +379,6 @@ Page {
 
         footer: Component {
             Browser.PopUpMenuFooter {
-                height: Math.max(implicitHeight,
-                                 (isPortrait ? overlay.toolBar.scaledPortraitHeight
-                                             : overlay.toolBar.scaledLandscapeHeight)
-                                 - popupMenu.verticalMargin)
             }
         }
 
