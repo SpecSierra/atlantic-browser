@@ -1858,6 +1858,29 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                 // which would stall the WebProcess main thread and compete for CPU.
                 webkit_settings_set_media_playback_requires_user_gesture(settings, TRUE);
 
+                // FIX (hybris/Adreno blank page): keep DOM rendering in the
+                // WebProcess. The engine is built with
+                // ENABLE_GPU_PROCESS_DOM_RENDERING_BY_DEFAULT
+                // (webkit-gpu-process-by-default-wpe.patch), but on this device the
+                // GPU process cannot export composited frames — there is no GBM /
+                // DRM render node (/dev/dri/renderD128 absent), only the libhybris
+                // EGL fallback — so DOM-in-GPU rendering yields a blank content area
+                // while the chrome still draws. Force the GPU-process DOM rendering
+                // preference off so frames flow through the working WPEBackend-fdo
+                // path. Set ATLANTIC_FORCE_GPU_DOM_RENDERING=1 to keep it on.
+                if (!envVarEnabled(qgetenv("ATLANTIC_FORCE_GPU_DOM_RENDERING"))) {
+                    if (WebKitFeatureList* allFeatures = webkit_settings_get_all_features()) {
+                        for (gsize i = 0; i < webkit_feature_list_get_length(allFeatures); ++i) {
+                            WebKitFeature* feature = webkit_feature_list_get(allFeatures, i);
+                            if (g_strcmp0(webkit_feature_get_identifier(feature), "UseGPUProcessForDOMRenderingEnabled") == 0) {
+                                webkit_settings_set_feature_enabled(settings, feature, FALSE);
+                                qInfo("[Atlantic] GPU-process DOM rendering disabled (hybris frame-export workaround)");
+                            }
+                        }
+                        webkit_feature_list_unref(allFeatures);
+                    }
+                }
+
                 // Site isolation (experimental, opt-in via ATLANTIC_ENABLE_SITE_ISOLATION).
                 // Puts cross-origin iframes / cross-site frames in separate WebProcesses;
                 // each WebProcess is bwrap-confined, so this composes with the sandbox for
