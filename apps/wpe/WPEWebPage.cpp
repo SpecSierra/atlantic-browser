@@ -1857,6 +1857,27 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                 // in the background on page load (e.g. podcast cards on RadioFrance),
                 // which would stall the WebProcess main thread and compete for CPU.
                 webkit_settings_set_media_playback_requires_user_gesture(settings, TRUE);
+
+                // Site isolation (experimental, opt-in via ATLANTIC_ENABLE_SITE_ISOLATION).
+                // Puts cross-origin iframes / cross-site frames in separate WebProcesses;
+                // each WebProcess is bwrap-confined, so this composes with the sandbox for
+                // genuine cross-site isolation. The upstream feature is marked "unstable"
+                // and multiplies the WebProcess count (heavy on a 3.5 GB device), so it is
+                // OFF unless explicitly enabled. SiteIsolationSharedProcessEnabled bounds
+                // the process count by sharing one process across cross-site frames.
+                if (envVarEnabled(qgetenv("ATLANTIC_ENABLE_SITE_ISOLATION"))) {
+                    if (WebKitFeatureList* features = webkit_settings_get_experimental_features()) {
+                        for (gsize i = 0; i < webkit_feature_list_get_length(features); ++i) {
+                            WebKitFeature* feature = webkit_feature_list_get(features, i);
+                            const char* id = webkit_feature_get_identifier(feature);
+                            if (g_strcmp0(id, "SiteIsolationEnabled") == 0
+                                || g_strcmp0(id, "SiteIsolationSharedProcessEnabled") == 0)
+                                webkit_settings_set_feature_enabled(settings, feature, TRUE);
+                        }
+                        webkit_feature_list_unref(features);
+                    }
+                    qInfo("[Atlantic] site isolation enabled (experimental, opt-in)");
+                }
             }
             g_signal_connect(wv, "decide-policy", G_CALLBACK(onDecidePolicy), nullptr);
             if (WebKitNetworkSession* session = webkit_web_view_get_network_session(wv)) {
