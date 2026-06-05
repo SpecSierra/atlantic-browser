@@ -18,7 +18,41 @@ Item {
     id: wallpaper
 
     SilicaBackground.Background {
+        id: bgSource
         anchors.fill: parent
+    }
+
+    ShaderEffectSource {
+        id: capturedWallpaper
+        anchors.fill: parent
+        sourceItem: bgSource
+        live: false
+        hideSource: false
+    }
+
+    GlassBlur {
+        id: blurFilter
+        repetitions: 2
+        deviation: 5
+        size { width: 256; height: 256 }
+    }
+
+    FilteredImage {
+        id: blurredWallpaper
+        anchors.fill: parent
+        sourceItem: capturedWallpaper
+        filtering: true
+        filters: blurFilter
+    }
+
+    SilicaBackground.Background {
+        anchors.fill: parent
+        sourceItem: blurredWallpaper
+        material: SilicaBackground.Materials.blur
+        property color color: Qt.rgba(Theme.highlightColor.r,
+                                       Theme.highlightColor.g,
+                                       Theme.highlightColor.b,
+                                       0.25)
     }
 
     Item {
@@ -29,9 +63,6 @@ Item {
         height: glassTextureImage.height
 
         Rectangle {
-            // Ambience-derived chrome colour: blend the ambience accent into
-            // a dark or light base so the bar is NEVER black but always
-            // reflects the current ambience.
             color: Qt.darker(
                 Qt.tint(
                     Theme.colorScheme === Theme.LightOnDark ? "#1c1c1c" : "#f2f2f2",
