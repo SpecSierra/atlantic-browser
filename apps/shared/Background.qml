@@ -10,41 +10,67 @@
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import QtQuick 2.2
+import QtGraphicalEffects 1.0
 import Sailfish.Silica 1.0
-import Sailfish.Silica.Background 1.0 as SilicaBackground
+import Sailfish.Ambience 1.0
 import "." as Browser
 
 Item {
     id: wallpaper
 
-    SilicaBackground.Background {
+    property string wpUrl: {
+        var s = String(Ambience.source).replace("file://", "");
+        var p = s.lastIndexOf("/");
+        if (p < 0) return "file:///usr/share/ambience/fire/images/ambience_fire.jpg";
+        var dir = s.substring(0, p);
+        var name = s.substring(p + 1).replace(".ambience", "");
+        return "file://" + dir + "/images/ambience_" + name + ".jpg";
+    }
+
+    Image {
+        id: wpImage
+        x: 0
+        anchors.bottom: parent.bottom
+        width: parent.width
+        height: sourceSize.height > 0
+                ? sourceSize.height * (parent.width / sourceSize.width)
+                : parent.height
+        source: wallpaper.wpUrl
+    }
+
+    FastBlur {
+        id: wpBlur
         anchors.fill: parent
+        source: wpImage
+        radius: 24
+    }
 
-        layer.enabled: true
-        layer.effect: ShaderEffect {
-            property size texSizeInv: Qt.size(1.0 / width, 1.0 / height)
-            property real radius: 6.0
+    ShaderEffect {
+        id: blurOverlay
+        anchors.fill: parent
+        property var blur: wpBlur
+        blending: true
+        opacity: 0.55
 
-            fragmentShader: "
-                uniform lowp sampler2D source;
-                uniform highp vec2 texSizeInv;
-                uniform highp float radius;
-                varying highp vec2 qt_TexCoord0;
-                uniform lowp float qt_Opacity;
-                void main() {
-                    lowp vec4 sum = vec4(0.0);
-                    float r = radius;
-                    for (float x = -r; x <= r; x += 1.0) {
-                        for (float y = -r; y <= r; y += 1.0) {
-                            sum += texture2D(source, qt_TexCoord0 + vec2(x * texSizeInv.x, y * texSizeInv.y));
-                        }
-                    }
-                    float cnt = (r * 2.0 + 1.0) * (r * 2.0 + 1.0);
-                    lowp vec4 c = texture2D(source, qt_TexCoord0);
-                    gl_FragColor = mix(sum / cnt, c, 0.3) * qt_Opacity;
-                }
-            "
-        }
+        vertexShader: "
+            uniform highp mat4 qt_Matrix;
+            attribute highp vec4 qt_Vertex;
+            attribute highp vec2 qt_MultiTexCoord0;
+            varying highp vec2 qt_TexCoord0;
+            void main() {
+                qt_TexCoord0 = qt_MultiTexCoord0;
+                gl_Position = qt_Matrix * qt_Vertex;
+            }
+        "
+
+        fragmentShader: "
+            uniform sampler2D blur;
+            varying highp vec2 qt_TexCoord0;
+            uniform lowp float qt_Opacity;
+            void main() {
+                gl_FragColor = texture2D(blur, qt_TexCoord0) * qt_Opacity;
+            }
+        "
     }
 
     Item {
