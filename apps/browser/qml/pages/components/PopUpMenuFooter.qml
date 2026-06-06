@@ -9,24 +9,19 @@
 import QtQuick 2.2
 import Sailfish.Silica 1.0
 import "../../shared" as Shared
+import "." as Components
 
-Rectangle {
+Components.FrostedBox {
     id: root
 
     readonly property real overlayOpacity: 0.15
 
+    radius: 0
+    tintAlpha: 0.6
+
     height: Theme.itemSizeMedium - Theme.paddingMedium
     implicitWidth: content.width
     implicitHeight: Theme.iconSizeMedium
-    color: Qt.darker(
-               Qt.tint(
-                   Theme.colorScheme === Theme.LightOnDark ? "#1c1c1c" : "#f2f2f2",
-                   Qt.rgba(Theme.highlightColor.r,
-                           Theme.highlightColor.g,
-                           Theme.highlightColor.b,
-                           0.52)),
-               1.55)
-    opacity: 0.95
 
     Row {
         id: content

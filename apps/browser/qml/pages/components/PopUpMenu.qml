@@ -7,9 +7,12 @@
  */
 
 import QtQuick 2.2
+import QtGraphicalEffects 1.0
 import Sailfish.Silica 1.0
 import Sailfish.Silica.Background 1.0 as Background
 import Sailfish.Silica.private 1.0 as Private
+import Sailfish.Ambience 1.0
+import "." as Components
 
 SilicaControl {
     id: popUpMenu
@@ -64,6 +67,63 @@ SilicaControl {
         duration: 200
         easing.type: Easing.InOutQuad
         property: "percentageClosed"
+    }
+
+    // Blurred ambience wallpaper, in the menu's own coordinate space, for the
+    // FrostedBox glass to sample by region (FBO-immune, unlike gl_FragCoord).
+    property string _wpUrl: {
+        var s = String(Ambience.source).replace("file://", "")
+        var p = s.lastIndexOf("/")
+        if (p < 0) return "file:///usr/share/ambience/fire/images/ambience_fire.jpg"
+        var dir = s.substring(0, p)
+        var name = s.substring(p + 1).replace(".ambience", "")
+        return "file://" + dir + "/images/ambience_" + name + ".jpg"
+    }
+
+    // The raw wallpaper must be captured but never drawn (hideSource is unreliable
+    // here), so keep it inside a zero-size clipped container; the capture SES below
+    // has no layout size so it doesn't draw either — only its textureSize matters.
+    Item {
+        width: 0
+        height: 0
+        clip: true
+        Image {
+            id: menuWp
+            width: popUpMenu.width
+            height: popUpMenu.height
+            source: popUpMenu._wpUrl
+            fillMode: Image.PreserveAspectCrop
+            asynchronous: false
+            cache: true
+            layer.enabled: true
+            layer.textureSize: Qt.size(Math.max(1, popUpMenu.width), Math.max(1, popUpMenu.height))
+        }
+    }
+
+    ShaderEffectSource {
+        id: menuWpCapture
+        sourceItem: menuWp
+        textureSize: Qt.size(Math.max(1, popUpMenu.width), Math.max(1, popUpMenu.height))
+        hideSource: true
+        live: popUpMenu.active
+    }
+
+    FastBlur {
+        id: menuBlur1
+        width: popUpMenu.width
+        height: popUpMenu.height
+        source: menuWpCapture
+        radius: 64
+        visible: false
+    }
+
+    FastBlur {
+        id: menuBlur
+        width: popUpMenu.width
+        height: popUpMenu.height
+        source: menuBlur1
+        radius: 64
+        visible: false
     }
 
     Component {
@@ -131,23 +191,17 @@ SilicaControl {
                 }
 
                 children: [
-                    Rectangle {
+                    Components.FrostedBox {
                         id: background
 
+                        blurSource: menuBlur
+                        alignParent: popUpMenu
+                        radius: 0
+                        tintAlpha: 0.6
                         y: Math.max(0, headerItem.y - menuFlickable.contentY)
                         z: -1
                         width: footerLoader.width
                         height: footerLoader.y - y
-
-                        color: Qt.darker(
-                            Qt.tint(
-                                popUpMenu.palette.colorScheme === Theme.LightOnDark ? "#1c1c1c" : "#f2f2f2",
-                                Qt.rgba(Theme.highlightColor.r,
-                                        Theme.highlightColor.g,
-                                        Theme.highlightColor.b,
-                                        0.72)),
-                            1.25)
-                         opacity: 0.95
                     },
                     Item {
                         id: decoratorParent
@@ -168,12 +222,14 @@ SilicaControl {
                                     : 0
                         }
                     },
-                    Rectangle {
+                    Components.FrostedBox {
+                        blurSource: menuBlur
+                        alignParent: popUpMenu
+                        radius: 0
+                        tintAlpha: 0.6
                         y: Math.max(0, headerItem.y - menuFlickable.contentY)
                         width: headerItem.width
                         height: headerItem.height + Theme.paddingMedium
-
-                        color: background.color
 
                         Rectangle {
                             x: (headerItem.width - width) / 2
@@ -204,6 +260,10 @@ SilicaControl {
 
                         onInitializeItem: {
                             item.width = Qt.binding(function() { return menuFlickable.width })
+                            if (item.hasOwnProperty("blurSource")) {
+                                item.blurSource = menuBlur
+                                item.alignParent = popUpMenu
+                            }
                         }
                     }
                 ]
