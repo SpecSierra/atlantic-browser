@@ -268,7 +268,10 @@ SilicaControl {
 
                         onInitializeItem: {
                             item.width = Qt.binding(function() { return menuFlickable.width })
-                            if (item.hasOwnProperty("blurSource")) {
+                            // Wire the footer's frosted glass (PopUpMenuFooter is a
+                            // FrostedBox). hasOwnProperty misses QML-declared props,
+                            // so test the property value instead.
+                            if (item.blurSource !== undefined) {
                                 item.blurSource = menuBlur
                                 item.alignParent = popUpMenu
                                 item.sampleDY = Qt.binding(function() { return popUpMenu.blurOffsetY })

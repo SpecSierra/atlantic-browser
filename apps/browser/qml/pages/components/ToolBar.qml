@@ -310,7 +310,9 @@ Column {
 
                 truncationMode: TruncationMode.Fade
 
-                opacity: showFindButtons ? 0.0 : 1.0
+                // Hide the address while the popup menu is open — it would otherwise
+                // show at the bottom, under/beside the menu.
+                opacity: (showFindButtons || secondaryToolsActive) ? 0.0 : 1.0
                 Behavior on opacity { FadeAnimation {} }
             }
 
