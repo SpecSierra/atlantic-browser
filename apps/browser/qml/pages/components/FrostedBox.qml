@@ -22,6 +22,10 @@ Item {
     property real radius: Theme.paddingMedium
     property real tintAlpha: 0.5
     property bool pressed: false
+    // Extra offset (px) applied to the sampled region, to line the blur up with a
+    // differently-cropped backdrop (e.g. the popup menu vs the start page).
+    property real sampleDX: 0
+    property real sampleDY: 0
 
     default property alias content: contentArea.data
 
@@ -46,10 +50,10 @@ Item {
             sourceRect: {
                 // Reference the layout drivers so the binding re-evaluates when the
                 // box (or the page) is laid out / rotated, then map to align space.
-                var driver = box.x + box.y + box.width + box.height
+                var driver = box.x + box.y + box.width + box.height + box.sampleDX + box.sampleDY
                         + (box.alignParent ? box.alignParent.width + box.alignParent.height : 0)
                 var p = box.alignParent ? box.mapToItem(box.alignParent, 0, 0) : Qt.point(0, 0)
-                return Qt.rect(p.x, p.y, box.width, box.height)
+                return Qt.rect(p.x + box.sampleDX, p.y + box.sampleDY, box.width, box.height)
             }
         }
 

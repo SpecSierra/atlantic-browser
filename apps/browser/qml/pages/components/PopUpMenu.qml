@@ -20,6 +20,12 @@ SilicaControl {
     property var menuItem
     property var footer
     property alias active: menuLoader.active
+    // Vertical nudge for the frosted-glass sampling, so the menu blur lines up with
+    // the (toolbar-height-shorter) start page behind it. Set by the host page.
+    property real blurOffsetY: 0
+    // Height the wallpaper is cropped to, so the menu's blur matches the backdrop
+    // behind it (the start page scales the wallpaper to its own, shorter, height).
+    property real wallpaperHeight: height
     property int horizontalMargin: Math.max(Theme.paddingMedium, _biggestCorner * 0.5)
     property int verticalMargin: horizontalMargin
     readonly property int cornerRadius: 12
@@ -90,20 +96,20 @@ SilicaControl {
         Image {
             id: menuWp
             width: popUpMenu.width
-            height: popUpMenu.height
+            height: popUpMenu.wallpaperHeight
             source: popUpMenu._wpUrl
             fillMode: Image.PreserveAspectCrop
             asynchronous: false
             cache: true
             layer.enabled: true
-            layer.textureSize: Qt.size(Math.max(1, popUpMenu.width), Math.max(1, popUpMenu.height))
+            layer.textureSize: Qt.size(Math.max(1, popUpMenu.width), Math.max(1, popUpMenu.wallpaperHeight))
         }
     }
 
     ShaderEffectSource {
         id: menuWpCapture
         sourceItem: menuWp
-        textureSize: Qt.size(Math.max(1, popUpMenu.width), Math.max(1, popUpMenu.height))
+        textureSize: Qt.size(Math.max(1, popUpMenu.width), Math.max(1, popUpMenu.wallpaperHeight))
         hideSource: true
         live: popUpMenu.active
     }
@@ -111,7 +117,7 @@ SilicaControl {
     FastBlur {
         id: menuBlur1
         width: popUpMenu.width
-        height: popUpMenu.height
+        height: popUpMenu.wallpaperHeight
         source: menuWpCapture
         radius: 64
         visible: false
@@ -120,7 +126,7 @@ SilicaControl {
     FastBlur {
         id: menuBlur
         width: popUpMenu.width
-        height: popUpMenu.height
+        height: popUpMenu.wallpaperHeight
         source: menuBlur1
         radius: 64
         visible: false
@@ -196,6 +202,7 @@ SilicaControl {
 
                         blurSource: menuBlur
                         alignParent: popUpMenu
+                        sampleDY: popUpMenu.blurOffsetY
                         radius: 0
                         tintAlpha: 0.6
                         y: Math.max(0, headerItem.y - menuFlickable.contentY)
@@ -225,6 +232,7 @@ SilicaControl {
                     Components.FrostedBox {
                         blurSource: menuBlur
                         alignParent: popUpMenu
+                        sampleDY: popUpMenu.blurOffsetY
                         radius: 0
                         tintAlpha: 0.6
                         y: Math.max(0, headerItem.y - menuFlickable.contentY)
@@ -263,6 +271,7 @@ SilicaControl {
                             if (item.hasOwnProperty("blurSource")) {
                                 item.blurSource = menuBlur
                                 item.alignParent = popUpMenu
+                                item.sampleDY = Qt.binding(function() { return popUpMenu.blurOffsetY })
                             }
                         }
                     }
