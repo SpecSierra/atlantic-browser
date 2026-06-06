@@ -142,10 +142,15 @@ Column {
         Shared.ExpandingButton {
             id: backIcon
 
+            readonly property bool isHome: !webView.canGoBack
+                                           && !(webView.contentItem && webView.contentItem.parentId > 0)
+                                           && !!webView.contentItem
+
             height: parent.height
             expandedWidth: toolBarRow.iconWidth
             icon {
-                width: Theme.iconSizeMedium
+                // Native home glyph is a wide house; render it a bit narrower.
+                width: backIcon.isHome ? Math.round(Theme.iconSizeMedium * 0.9) : Theme.iconSizeMedium
                 height: Theme.iconSizeMedium
                 source: {
                     if (webView.canGoBack) {

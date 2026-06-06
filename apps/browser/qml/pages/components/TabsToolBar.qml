@@ -33,23 +33,8 @@ Item {
     width: parent.width
     height: tabPage.isPortrait ? scaledPortraitHeight : scaledLandscapeHeight
 
-    Rectangle {
+    Shared.Background {
         anchors.fill: parent
-        color: Qt.darker(
-            Qt.tint(
-                Theme.colorScheme === Theme.LightOnDark ? "#1c1c1c" : "#f2f2f2",
-                Qt.rgba(Theme.highlightColor.r,
-                        Theme.highlightColor.g,
-                        Theme.highlightColor.b,
-                        0.52)),
-            1.55)
-
-        Image {
-            anchors.fill: parent
-            source: "image://theme/graphic-shader-texture"
-            fillMode: Image.Tile
-            opacity: 0.15
-        }
     }
 
 

@@ -208,7 +208,9 @@ Shared.Background {
 
         width: parent.width
         height: historyContainer.height
-        enabled: !overlayAnimator.atBottom && webView.tabModel.count > 0 && !favoriteGrid.contextMenuActive
+        // count === 0 used to be excluded (nothing behind the overlay); the start
+        // page now sits behind it, so allow drag-to-dismiss back to it.
+        enabled: !overlayAnimator.atBottom && !favoriteGrid.contextMenuActive
 
         drag.target: overlay
         drag.filterChildren: true

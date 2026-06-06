@@ -13,6 +13,7 @@ import QtQuick 2.1
 import Sailfish.Silica 1.0
 import Sailfish.Silica.private 1.0 as Private
 import Sailfish.Browser 1.0
+import "../../shared" as Shared
 SilicaControl {
     id: tabView
 
@@ -87,26 +88,9 @@ SilicaControl {
                 }
             }
 
-            Rectangle {
+            Shared.Background {
                 anchors.fill: parent
-
                 z: -100
-                color: Qt.darker(
-                    Qt.tint(
-                        tabView.palette.colorScheme === Theme.LightOnDark ? "#1c1c1c" : "#f2f2f2",
-                        Qt.rgba(Theme.highlightColor.r,
-                                Theme.highlightColor.g,
-                                Theme.highlightColor.b,
-                                0.52)),
-                    1.55)
-                opacity: 0.95
-
-                Image {
-                    anchors.fill: parent
-                    source: "image://theme/graphic-shader-texture"
-                    fillMode: Image.Tile
-                    opacity: 0.15
-                }
             }
         }
         _headerBackgroundVisible: false

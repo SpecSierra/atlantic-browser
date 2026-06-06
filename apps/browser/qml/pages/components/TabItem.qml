@@ -57,14 +57,10 @@ BackgroundItem {
 
             Rectangle {
                 anchors.fill: parent
-                color: Qt.darker(
-                    Qt.tint(
-                        Theme.colorScheme === Theme.LightOnDark ? "#1c1c1c" : "#f2f2f2",
-                        Qt.rgba(Theme.highlightColor.r,
-                                Theme.highlightColor.g,
-                                Theme.highlightColor.b,
-                                0.52)),
-                    1.55)
+                // Translucent so the tab page's frosted glass background shows
+                // through the title strip (and empty-thumbnail placeholders),
+                // keeping tabs consistent with the rest of the chrome.
+                color: Qt.rgba(0, 0, 0, 0.45)
 
                 Image {
                     anchors.fill: parent
@@ -93,7 +89,11 @@ BackgroundItem {
                     anchors {
                         left: parent.left
                         leftMargin: Theme.paddingMedium
-                        right: close.left
+                        // The close button has a wide touch area with its cross
+                        // shifted right, so close.left is far from the visible
+                        // cross. Anchor to the button centre (≈ the cross's left
+                        // edge) so the title only fades just before the cross.
+                        right: close.horizontalCenter
                         rightMargin: Theme.paddingSmall
                         verticalCenter: parent.verticalCenter
                     }

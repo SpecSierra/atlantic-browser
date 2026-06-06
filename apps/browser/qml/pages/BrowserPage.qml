@@ -275,13 +275,63 @@ Page {
                                                  : Qt.rect(0, 0, 0, 0)
     }
 
+    Browser.StartPage {
+        id: startPage
+
+        width: browserPage.width
+        height: Math.ceil(overlay.y)
+        clip: true
+
+        visible: !!webView.tabModel && webView.tabModel.count === 0 && !overlay.toolBar.findInPageActive
+        // Stay opaque (no fade) so the empty white web view never flashes through
+        // during the transition; only interactive while the overlay is collapsed.
+        enabled: visible && overlay.animator.atBottom
+
+        bookmarkModel: overlay.bookmarkModel
+        historyModel: historyModel
+        overlayOpen: !overlay.animator.atBottom
+
+        // Open the address-bar entry immediately (no slide-up) so it doesn't feel
+        // disconnected from the start-page search bar.
+        onOpenSearch: overlay.enterNewTabUrl(PageStackAction.Immediate)
+        onLoadUrl: overlay.loadPage(url, newTab)
+    }
+
+    // Dismiss the open overlay by tapping the area above it. The contentDimmer's
+    // own MouseArea can't do this anymore: the dimmer is transparent (and thus
+    // not visible / not hit-testable) while the overlay is at top.
+    MouseArea {
+        id: overlayDismissArea
+
+        property bool inEmptyPrivateMode: webView.privateMode && webView.privateTabModel.count === 0
+                                          && webView.persistentTabModel.count > 0
+
+        width: browserPage.width
+        height: Math.ceil(overlay.y)
+        enabled: overlay.animator.atTop
+        onClicked: {
+            if (inEmptyPrivateMode) {
+                webView.privateMode = false
+                //% "Leaving private mode"
+                Notices.show(qsTrId("sailfish_browser-la-leaving_private_mode"), Notice.Short, Notice.Top)
+            }
+            overlay.dismiss(true)
+        }
+    }
+
     Browser.DimmerEffect {
         id: contentDimmer
 
         width: browserPage.width
         height: Math.ceil(overlay.y)
 
-        dimmerOpacity: overlay.animator.atBottom
+        // Keep the page (or plain black, when no tab is loaded) visible behind the
+        // chrome instead of a flat dim: no dimmer when the overlay is fully open
+        // (URL entry) or when only the connection-info panel is up.
+        dimmerOpacity: (overlay.animator.atBottom
+                        || overlay.animator.atTop
+                        || overlay.toolBar.certOverlayActive
+                        || webView.tabModel.count === 0)
                        ? 0.0
                        : 0.9 - (overlay.y / (webView.fullscreenHeight - overlay.toolBar.rowHeight)) * 0.9
 
@@ -290,7 +340,8 @@ Page {
                                               && webView.persistentTabModel.count > 0
 
             anchors.fill: parent
-            enabled: overlay.animator.atTop && (webView.tabModel.count > 0 || inEmptyPrivateMode)
+            // Allow dismiss with no tabs too: the start page is behind the overlay.
+            enabled: overlay.animator.atTop
             onClicked: {
                 if (inEmptyPrivateMode) {
                     webView.privateMode = false
