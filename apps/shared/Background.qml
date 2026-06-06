@@ -18,41 +18,33 @@ Item {
     id: wallpaper
 
     SilicaBackground.Background {
-        id: bgSource
         anchors.fill: parent
-    }
 
-    ShaderEffectSource {
-        id: capturedWallpaper
-        anchors.fill: parent
-        sourceItem: bgSource
-        live: false
-        hideSource: false
-    }
+        layer.enabled: true
+        layer.effect: ShaderEffect {
+            property size texSizeInv: Qt.size(1.0 / width, 1.0 / height)
+            property real radius: 6.0
 
-    GlassBlur {
-        id: blurFilter
-        repetitions: 2
-        deviation: 5
-        size { width: 256; height: 256 }
-    }
-
-    FilteredImage {
-        id: blurredWallpaper
-        anchors.fill: parent
-        sourceItem: capturedWallpaper
-        filtering: true
-        filters: blurFilter
-    }
-
-    SilicaBackground.Background {
-        anchors.fill: parent
-        sourceItem: blurredWallpaper
-        material: SilicaBackground.Materials.blur
-        property color color: Qt.rgba(Theme.highlightColor.r,
-                                       Theme.highlightColor.g,
-                                       Theme.highlightColor.b,
-                                       0.25)
+            fragmentShader: "
+                uniform lowp sampler2D source;
+                uniform highp vec2 texSizeInv;
+                uniform highp float radius;
+                varying highp vec2 qt_TexCoord0;
+                uniform lowp float qt_Opacity;
+                void main() {
+                    lowp vec4 sum = vec4(0.0);
+                    float r = radius;
+                    for (float x = -r; x <= r; x += 1.0) {
+                        for (float y = -r; y <= r; y += 1.0) {
+                            sum += texture2D(source, qt_TexCoord0 + vec2(x * texSizeInv.x, y * texSizeInv.y));
+                        }
+                    }
+                    float cnt = (r * 2.0 + 1.0) * (r * 2.0 + 1.0);
+                    lowp vec4 c = texture2D(source, qt_TexCoord0);
+                    gl_FragColor = mix(sum / cnt, c, 0.3) * qt_Opacity;
+                }
+            "
+        }
     }
 
     Item {
