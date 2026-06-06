@@ -135,6 +135,9 @@ SilicaControl {
                     Shared.Background {
                         id: background
 
+                        // Rendered through the menu's ShaderEffectSource capture,
+                        // which flips the wallpaper sampling — compensate.
+                        sampleFlipped: true
                         y: Math.max(0, headerItem.y - menuFlickable.contentY)
                         z: -1
                         width: footerLoader.width
@@ -160,6 +163,7 @@ SilicaControl {
                         }
                     },
                     Shared.Background {
+                        sampleFlipped: true
                         y: Math.max(0, headerItem.y - menuFlickable.contentY)
                         width: headerItem.width
                         height: headerItem.height + Theme.paddingMedium

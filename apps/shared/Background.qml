@@ -23,6 +23,11 @@ Item {
     // the blurred texture stays high-res enough not to look pixelated.
     property int blurDownscale: 4
 
+    // Flip the wallpaper sampling vertically — needed when this Background is drawn
+    // through an extra FBO capture (popup menu), which would otherwise show it
+    // upside down.
+    property bool sampleFlipped: false
+
     property string wpUrl: {
         var s = String(Ambience.source).replace("file://", "");
         var p = s.lastIndexOf("/");
@@ -97,6 +102,11 @@ Item {
         }
         property size screenSize: Qt.size(Screen.width, Screen.height)
 
+        // Set true when this Background is rendered through an extra FBO capture
+        // (e.g. the popup menu's ShaderEffectSource), which vertically flips
+        // gl_FragCoord sampling and would otherwise show the wallpaper upside down.
+        property real flipped: wallpaper.sampleFlipped ? 1.0 : 0.0
+
         // Dark tint applied over the blurred wallpaper (rgb mixed by alpha).
         property color tint: Qt.rgba(0.0, 0.0, 0.0, 0.62)
 
@@ -112,10 +122,12 @@ Item {
             uniform sampler2D wpTexture;
             uniform highp vec2 screenSize;
             uniform lowp vec4 tint;
+            uniform lowp float flipped;
             uniform lowp float qt_Opacity;
             void main() {
+                highp float fy = gl_FragCoord.y / screenSize.y;
                 highp vec2 wpCoord = vec2(gl_FragCoord.x / screenSize.x,
-                                          1.0 - gl_FragCoord.y / screenSize.y);
+                                          mix(1.0 - fy, fy, flipped));
                 lowp vec4 c = texture2D(wpTexture, wpCoord);
                 c.rgb = mix(c.rgb, tint.rgb, tint.a);
                 c.a = 1.0;

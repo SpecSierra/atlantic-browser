@@ -13,6 +13,9 @@ import "../../shared" as Shared
 Shared.Background {
     id: root
 
+    // Rendered through the popup menu's ShaderEffectSource capture (flips sampling).
+    sampleFlipped: true
+
     readonly property real overlayOpacity: 0.15
 
     height: Theme.itemSizeMedium - Theme.paddingMedium
