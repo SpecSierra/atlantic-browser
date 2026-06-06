@@ -423,6 +423,11 @@ private:
     QStringList m_fileChooserNameFilters;
     bool m_fileChooserSelectMultiple = false;
     bool m_crashed = false;
+    // Guards the one-shot WebProcess auto-reload (see web-process-terminated
+    // handler). Set when an auto-reload is issued; cleared on a successful load
+    // so a later, unrelated crash can recover once too. Prevents a reload loop
+    // when the page deterministically crashes the WebProcess.
+    bool m_autoRecovered = false;
 };
 
 QML_DECLARE_TYPE(WPEWebPage)

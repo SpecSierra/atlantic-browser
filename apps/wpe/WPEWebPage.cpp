@@ -1921,19 +1921,33 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             WebKitUserContentManager* ucm = webkit_web_view_get_user_content_manager(wv);
             ensureContentBlocker(ucm);
 
-            // Tab-level crash isolation: catch WebProcess crashes before they
-            // propagate up and kill the UI. Returning TRUE tells WebKit we
-            // handled the crash ourselves so it doesn't attempt any default
-            // teardown that could affect the whole app.
+            // Tab-level crash isolation: catch WebProcess termination before it
+            // propagates up and kills the UI, surface the crash state to QML,
+            // and self-heal transient deaths with a single auto-reload.
+            //
+            // NOTE: the signal is "web-process-terminated" (a VOID__ENUM
+            // notification carrying a WebKitWebProcessTerminationReason). The
+            // old "web-process-crashed" name was deprecated/removed in WebKit
+            // 2.20; connecting to it on 2.52 silently failed at runtime
+            // (GLib-GObject-CRITICAL: signal invalid), so crash detection and
+            // recovery never actually ran.
             g_signal_connect(
-                wv, "web-process-crashed",
-                G_CALLBACK(+[](WebKitWebView*, gpointer userData) -> gboolean {
+                wv, "web-process-terminated",
+                G_CALLBACK(+[](WebKitWebView* view, WebKitWebProcessTerminationReason reason, gpointer userData) {
                     WPEWebPage* page = static_cast<WPEWebPage*>(userData);
+                    qWarning("[Atlantic] WebProcess terminated (reason=%d) — recovering", int(reason));
                     if (!page->m_crashed) {
                         page->m_crashed = true;
                         Q_EMIT page->crashedChanged();
                     }
-                    return TRUE;
+                    // One-shot auto-reload: heal a transient crash without user
+                    // action. If it crashes again before a successful load
+                    // clears m_autoRecovered, leave the crash UI up rather than
+                    // looping a reload that keeps dying.
+                    if (!page->m_autoRecovered) {
+                        page->m_autoRecovered = true;
+                        webkit_web_view_reload(view);
+                    }
                 }),
                 this);
             // Connect BEFORE registering (per documentation, to avoid race conditions)
@@ -2787,6 +2801,9 @@ void WPEWebPage::onLoadingChanged(WPEQtViewLoadRequest *loadRequest)
     case WPEQtView::LoadSucceededStatus:
         m_domContentLoaded = true;
         m_loaded = true;
+        // A page loaded cleanly: re-arm the one-shot crash auto-reload so a
+        // later, unrelated WebProcess death can also self-heal once.
+        m_autoRecovered = false;
         updateSecurityInfo();
         emit domContentLoadedChanged();
         emit loadedChanged();
