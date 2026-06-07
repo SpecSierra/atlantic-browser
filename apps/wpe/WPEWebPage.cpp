@@ -1375,7 +1375,13 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
                 if (el.tagName.toLowerCase() === 'video') {
                     videoActive = true;
                     audioActive = true;
-                } else if (!el.muted && el.volume > 0) {
+                } else if (!el.muted) {
+                    // A playing, non-muted <audio> counts as audio-active even at
+                    // volume 0, so the native-volume poll keeps running and the
+                    // slider can bring it back up. Gating this on volume > 0 let a
+                    // slide-to-zero stop the poll and freeze the element silent
+                    // (volume-up could never recover it). Video is already handled
+                    // above regardless of volume.
                     audioActive = true;
                 }
             }
