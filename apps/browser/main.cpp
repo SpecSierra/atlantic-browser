@@ -404,6 +404,17 @@ static GpuCapabilityProbeResult probeGpuCapability()
     if (!result.probeSucceeded) {
         reasons << QStringLiteral("probe-incomplete");
     }
+    // Multi-threaded Skia GPU painting makes a shared GL context current on each
+    // worker thread, which requires EGL_KHR_surfaceless_context (eglMakeCurrent
+    // with EGL_NO_SURFACE). EGL stacks without it — notably the libhybris Adreno
+    // on Sailfish — instead drive each worker through a pbuffer/WPE fallback
+    // context, and the driver then corrupts shared textures under concurrency
+    // (garbled scrollbar/glyphs, dropped tiles on scroll). Treat the missing
+    // extension as a hard conservative trigger so we run a single GPU painting
+    // thread here; surfaceless-capable stacks (Mali, desktop) keep multi-thread.
+    if (!result.hasEglSurfacelessContext) {
+        reasons << QStringLiteral("no-egl-surfaceless-context");
+    }
 
     QStringList advisoryReasons;
     if (result.glesMajor < 0) {
@@ -443,8 +454,29 @@ static void configureGpuModeFromCapabilities()
     }
 
     const QByteArray effectiveConservative = qgetenv("ATLANTIC_GPU_CONSERVATIVE");
+    const bool conservativeEffective = effectiveConservative == "1";
+
+    // Select the number of Skia GPU painting threads from GPU capability, unless
+    // the user pinned WEBKIT_SKIA_GPU_PAINTING_THREADS explicitly. Conservative
+    // (no EGL surfaceless context, or probe failed) → 1 thread: correct and fast,
+    // and it avoids the concurrent-shared-context texture corruption seen on the
+    // libhybris Adreno. Capable stacks (surfaceless present: Mali, desktop) get
+    // multi-threaded painting. NOTE: runtime-common.sh must NOT pre-set this var,
+    // or the explicit-override check below would always win and pin the value.
+    static constexpr int kCapableGpuPaintingThreads = 3;
+    const bool presetThreads = qEnvironmentVariableIsSet("WEBKIT_SKIA_GPU_PAINTING_THREADS");
+    QByteArray gpuPaintingThreads;
+    if (presetThreads) {
+        gpuPaintingThreads = qgetenv("WEBKIT_SKIA_GPU_PAINTING_THREADS");
+    } else {
+        gpuPaintingThreads = conservativeEffective
+            ? QByteArrayLiteral("1")
+            : QByteArray::number(kCapableGpuPaintingThreads);
+        qputenv("WEBKIT_SKIA_GPU_PAINTING_THREADS", gpuPaintingThreads);
+    }
+
     fprintf(stderr,
-            "[ATLANTIC] GPU caps: egl=%s/%s glVendor=%s renderer=%s gles=%s ext{egl_create_ctx=%d,egl_surfaceless=%d,gl_external_image=%d,gl_bgra8888=%d} conservative_auto=%s conservative_effective=%s source=%s reason=%s\n",
+            "[ATLANTIC] GPU caps: egl=%s/%s glVendor=%s renderer=%s gles=%s ext{egl_create_ctx=%d,egl_surfaceless=%d,gl_external_image=%d,gl_bgra8888=%d} conservative_auto=%s conservative_effective=%s source=%s gpu_painting_threads=%s(%s) reason=%s\n",
             qPrintable(diagnosticValue(probe.eglVendor)),
             qPrintable(diagnosticValue(probe.eglVersion)),
             qPrintable(diagnosticValue(probe.glVendor)),
@@ -457,6 +489,8 @@ static void configureGpuModeFromCapabilities()
             conservativeAuto.constData(),
             effectiveConservative.isEmpty() ? "unknown" : effectiveConservative.constData(),
             hasPresetConservative ? "preset" : "auto",
+            gpuPaintingThreads.isEmpty() ? "unset" : gpuPaintingThreads.constData(),
+            presetThreads ? "preset" : "auto",
             qPrintable(probe.reason));
 }
 

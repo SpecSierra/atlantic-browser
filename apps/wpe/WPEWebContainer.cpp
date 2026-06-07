@@ -102,9 +102,17 @@ static void configureNetworkProcessMemoryPressure()
     // 256 MB is already generous for mobile workloads.
     WebKitMemoryPressureSettings *s = webkit_memory_pressure_settings_new();
     webkit_memory_pressure_settings_set_memory_limit(s, 256);        // 256 MB hard ceiling
-    webkit_memory_pressure_settings_set_conservative_threshold(s, 0.5);  // 128 MB → start evicting
+    // Set thresholds high→low. Each setter validates against the CURRENT stored
+    // values (WebKit defaults: conservative=0.33, strict=0.5, kill=unset):
+    //   set_strict       requires  value > conservative_current  &&  value < kill_current(if set)
+    //   set_kill         requires  value > strict_current
+    //   set_conservative requires  value < strict_current
+    // Setting conservative=0.5 FIRST tripped `g_return_if_fail(value < strictThresholdFraction)`
+    // because the default strict was still 0.5 (0.5 < 0.5 is false), so the whole
+    // settings object was left misconfigured. strict→kill→conservative satisfies all.
     webkit_memory_pressure_settings_set_strict_threshold(s, 0.75);       // 192 MB → aggressive eviction
     webkit_memory_pressure_settings_set_kill_threshold(s, 1.0);          // 256 MB → kill and restart
+    webkit_memory_pressure_settings_set_conservative_threshold(s, 0.5);  // 128 MB → start evicting
     webkit_memory_pressure_settings_set_poll_interval(s, 30.0);          // poll every 30 s
     webkit_network_session_set_memory_pressure_settings(s);
     webkit_memory_pressure_settings_free(s);
