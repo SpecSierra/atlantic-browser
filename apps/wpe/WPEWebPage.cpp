@@ -55,8 +55,10 @@ const char kPulseLookupService[] = "org.pulseaudio.Server";
 const char kPulseLookupPath[] = "/org/pulseaudio/server_lookup1";
 const char kPulseLookupInterface[] = "org.PulseAudio.ServerLookup1";
 const char kPropertiesInterface[] = "org.freedesktop.DBus.Properties";
+const char kMainVolumeService[] = "com.Meego.MainVolume2";
 const char kMainVolumePath[] = "/com/meego/mainvolume2";
 const char kMainVolumeInterface[] = "com.Meego.MainVolume2";
+const char kMainVolumeConnectionName[] = "atlantic-mainvolume";
 
 struct MainVolumeState {
     int currentStep = -1;
@@ -189,14 +191,12 @@ void ensureContentBlocker(WebKitUserContentManager* manager)
         context.release());
 }
 
-QString wellKnownPulseSocket()
+QVariant unwrapDbusVariant(const QVariant &value)
 {
-    const QByteArray runtimeDir = qgetenv("XDG_RUNTIME_DIR").trimmed();
-    if (runtimeDir.isEmpty()) {
-        return {};
+    if (value.canConvert<QDBusVariant>()) {
+        return qvariant_cast<QDBusVariant>(value).variant();
     }
-    return QStringLiteral("unix:path=%1/pulse/dbus-socket")
-        .arg(QString::fromLocal8Bit(runtimeDir));
+    return value;
 }
 
 QString pulseDbusAddress()
@@ -214,112 +214,84 @@ QString pulseDbusAddress()
     request << QString::fromLatin1(kPulseLookupInterface) << QStringLiteral("Address");
 
     const QDBusMessage reply = QDBusConnection::sessionBus().call(request);
-    if (reply.type() == QDBusMessage::ReplyMessage && !reply.arguments().isEmpty()) {
-        const QVariant value = reply.arguments().constFirst();
-        const QString address = value.canConvert<QDBusVariant>()
-            ? qvariant_cast<QDBusVariant>(value).variant().toString()
-            : value.toString();
-        if (!address.isEmpty()) {
-            return address;
-        }
+    if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
+        return {};
     }
 
-    // org.pulseaudio.Server is not always registered on the session bus (seen
-    // on SFOS 5.1.0.5 / Xperia 10 II), but the peer socket still lives at the
-    // well-known path under XDG_RUNTIME_DIR. Fall back to it.
-    return wellKnownPulseSocket();
+    const QVariant value = reply.arguments().constFirst();
+    if (value.canConvert<QDBusVariant>()) {
+        return qvariant_cast<QDBusVariant>(value).variant().toString();
+    }
+    return value.toString();
 }
 
-// com.Meego.MainVolume2 is served by PulseAudio's module-dbus-protocol on the
-// PulseAudio peer-to-peer D-Bus socket, NOT on the session bus. The peer socket
-// answers org.freedesktop.DBus.Properties GetAll/Set with StepCount/CurrentStep.
-//
-// We use GDBus (GIO) rather than QtDBus for this peer connection: Qt 5.6.3's
-// QDBusConnection::connectToPeer() does not complete the auth handshake against
-// PulseAudio's socket (every GetAll failed → the volume slider never reached
-// the page), whereas a GDBus peer connection — G_DBUS_CONNECTION_FLAGS_-
-// AUTHENTICATION_CLIENT, no "Hello" — works, matching `dbus-send --peer`.
-// GIO is already linked here for the WebKit GLib API.
-//
-// One cached connection is reused; it is dropped and reopened if PulseAudio
-// restarted and the socket went away.
-GDBusConnection* mainVolumePeerConnection()
+QDBusConnection mainVolumeConnection()
 {
-    static GDBusConnection* cached = nullptr;
-    if (cached) {
-        if (!g_dbus_connection_is_closed(cached)) {
-            return cached;
-        }
-        g_object_unref(cached);
-        cached = nullptr;
+    // com.Meego.MainVolume2 is served by PulseAudio's module-dbus-protocol on
+    // the PulseAudio peer-to-peer D-Bus socket, NOT on the session bus.
+    // Verified on SFOS 5.1 (Xperia 10 II): the session bus owns no
+    // com.Meego.MainVolume2 name (GetAll always fails → the volume slider
+    // never reached the page), while the peer socket — address from
+    // org.PulseAudio.ServerLookup1, normally
+    // unix:path=$XDG_RUNTIME_DIR/pulse/dbus-socket — answers GetAll with
+    // CurrentStep/StepCount.  Reuse one cached named peer connection; drop it
+    // if PulseAudio restarted and the socket went away.
+    QDBusConnection existing(QString::fromLatin1(kMainVolumeConnectionName));
+    if (existing.isConnected()) {
+        return existing;
     }
+    QDBusConnection::disconnectFromPeer(QString::fromLatin1(kMainVolumeConnectionName));
 
     const QString address = pulseDbusAddress();
     if (address.isEmpty()) {
-        return nullptr;
+        // No peer socket available; fall back to the session bus (calls will
+        // fail gracefully and the poll retries on the next tick).
+        return QDBusConnection::sessionBus();
     }
+    return QDBusConnection::connectToPeer(address, QString::fromLatin1(kMainVolumeConnectionName));
+}
 
-    GError* error = nullptr;
-    cached = g_dbus_connection_new_for_address_sync(
-        address.toUtf8().constData(),
-        G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT,
-        nullptr, nullptr, &error);
-    if (!cached) {
-        qWarning() << "[WPE-VOLUME] peer connect failed:"
-                   << (error ? error->message : "unknown");
-        g_clear_error(&error);
-        return nullptr;
-    }
-    return cached;
+QDBusMessage createMainVolumeCall(const QDBusConnection& connection, const QString& method)
+{
+    // Peer-to-peer connections must use an empty destination service.
+    const bool isPeer = connection.name() == QLatin1String(kMainVolumeConnectionName);
+    return QDBusMessage::createMethodCall(
+        isPeer ? QString() : QString::fromLatin1(kMainVolumeService),
+        QString::fromLatin1(kMainVolumePath),
+        QString::fromLatin1(kPropertiesInterface),
+        method);
 }
 
 MainVolumeState queryMainVolumeState()
 {
-    GDBusConnection* connection = mainVolumePeerConnection();
-    if (!connection) {
+    const QDBusConnection connection = mainVolumeConnection();
+    if (!connection.isConnected()) {
         return {};
     }
 
-    GError* error = nullptr;
-    GVariant* reply = g_dbus_connection_call_sync(
-        connection,
-        nullptr, // peer connection: no destination bus name
-        kMainVolumePath,
-        kPropertiesInterface,
-        "GetAll",
-        g_variant_new("(s)", kMainVolumeInterface),
-        G_VARIANT_TYPE("(a{sv})"),
-        G_DBUS_CALL_FLAGS_NONE,
-        3000,
-        nullptr,
-        &error);
-    if (!reply) {
-        g_clear_error(&error);
+    QDBusMessage request = createMainVolumeCall(connection, QStringLiteral("GetAll"));
+    request << QString::fromLatin1(kMainVolumeInterface);
+
+    const QDBusMessage reply = connection.call(request);
+    if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
         return {};
     }
 
-    GVariant* properties = g_variant_get_child_value(reply, 0);
-    GVariant* stepCountVar = g_variant_lookup_value(properties, "StepCount", G_VARIANT_TYPE_UINT32);
-    GVariant* currentStepVar = g_variant_lookup_value(properties, "CurrentStep", G_VARIANT_TYPE_UINT32);
+    const QVariantMap properties = reply.arguments().constFirst().toMap();
+    if (!properties.contains(QStringLiteral("StepCount")) || !properties.contains(QStringLiteral("CurrentStep"))) {
+        return {};
+    }
+
+    const int stepCount = unwrapDbusVariant(properties.value(QStringLiteral("StepCount"))).toInt();
+    if (stepCount <= 0) {
+        return {};
+    }
 
     MainVolumeState state;
-    if (stepCountVar && currentStepVar) {
-        const int stepCount = static_cast<int>(g_variant_get_uint32(stepCountVar));
-        const int currentStep = static_cast<int>(g_variant_get_uint32(currentStepVar));
-        if (stepCount > 0) {
-            state.maximumStep = stepCount - 1;
-            state.currentStep = qBound(0, currentStep, state.maximumStep);
-        }
-    }
-
-    if (stepCountVar) {
-        g_variant_unref(stepCountVar);
-    }
-    if (currentStepVar) {
-        g_variant_unref(currentStepVar);
-    }
-    g_variant_unref(properties);
-    g_variant_unref(reply);
+    state.maximumStep = stepCount - 1;
+    state.currentStep = qBound(0,
+                               unwrapDbusVariant(properties.value(QStringLiteral("CurrentStep"))).toInt(),
+                               state.maximumStep);
     return state;
 }
 
@@ -335,33 +307,19 @@ bool setMainVolumeNormalized(qreal volume)
         return true;
     }
 
-    GDBusConnection* connection = mainVolumePeerConnection();
-    if (!connection) {
+    const QDBusConnection connection = mainVolumeConnection();
+    if (!connection.isConnected()) {
         return false;
     }
 
-    GError* error = nullptr;
-    GVariant* reply = g_dbus_connection_call_sync(
-        connection,
-        nullptr,
-        kMainVolumePath,
-        kPropertiesInterface,
-        "Set",
-        g_variant_new("(ssv)",
-                      kMainVolumeInterface,
-                      "CurrentStep",
-                      g_variant_new_uint32(static_cast<guint32>(targetStep))),
-        nullptr,
-        G_DBUS_CALL_FLAGS_NONE,
-        3000,
-        nullptr,
-        &error);
-    const bool ok = reply != nullptr;
-    if (reply) {
-        g_variant_unref(reply);
-    }
-    g_clear_error(&error);
-    return ok;
+    QDBusMessage request = createMainVolumeCall(connection, QStringLiteral("Set"));
+    const uint targetStepValue = static_cast<uint>(targetStep);
+    request << QString::fromLatin1(kMainVolumeInterface)
+            << QStringLiteral("CurrentStep")
+            << QVariant::fromValue(QDBusVariant(targetStepValue));
+
+    const QDBusMessage reply = connection.call(request);
+    return reply.type() == QDBusMessage::ReplyMessage;
 }
 
 bool setMainVolumeState(qreal volume, bool muted)
@@ -1375,13 +1333,7 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
                 if (el.tagName.toLowerCase() === 'video') {
                     videoActive = true;
                     audioActive = true;
-                } else if (!el.muted) {
-                    // A playing, non-muted <audio> counts as audio-active even at
-                    // volume 0, so the native-volume poll keeps running and the
-                    // slider can bring it back up. Gating this on volume > 0 let a
-                    // slide-to-zero stop the poll and freeze the element silent
-                    // (volume-up could never recover it). Video is already handled
-                    // above regardless of volume.
+                } else if (!el.muted && el.volume > 0) {
                     audioActive = true;
                 }
             }
@@ -1823,7 +1775,7 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     connect(&m_volumePollTimer, &QTimer::timeout, this, [this]() {
         const MainVolumeState state = queryMainVolumeState();
         if (!state.valid()) {
-            qDebug() << "[WPE-VOLUME] poll: MainVolumeState invalid (peer socket unavailable?)";
+            qDebug() << "[WPE-VOLUME] poll: MainVolumeState invalid (session bus unavailable?)";
             return;
         }
         if (state.currentStep == m_lastKnownVolumeStep) {
