@@ -191,12 +191,17 @@ WebContainer {
             }
         }
 
-        Rectangle {
+        Image {
             id: startHandle
-            width: Theme.iconSizeExtraSmall
+            // Native Silica selection handle: teardrop with its tip at the
+            // top-right, so the right edge / top sits on the selection start
+            // (x below subtracts width) and the body hangs down-left, clear of
+            // the selected text. Colorized to the ambience highlight colour.
+            width: Theme.iconSizeMedium
             height: Theme.iconSizeMedium
-            radius: width / 2
-            color: Theme.highlightColor
+            sourceSize.width: Theme.iconSizeMedium
+            sourceSize.height: Theme.iconSizeMedium
+            source: "image://theme/icon-m-textselection-start?" + Theme.highlightColor
             visible: selHandles.visible && selHandles.ci && selHandles.ci.selectionStartX >= 0
             x: selHandles.ci ? selHandles.ci.selectionStartX * selHandles.dsf - width : 0
             y: selHandles.ci ? selHandles.ci.selectionStartY * selHandles.dsf : 0
@@ -216,12 +221,17 @@ WebContainer {
             }
         }
 
-        Rectangle {
+        Image {
             id: endHandle
-            width: Theme.iconSizeExtraSmall
+            // Native Silica selection handle: teardrop with its tip at the
+            // top-left, so the left edge / top sits on the selection end and the
+            // body hangs down-right, clear of the selected text. Colorized to
+            // the ambience highlight colour.
+            width: Theme.iconSizeMedium
             height: Theme.iconSizeMedium
-            radius: width / 2
-            color: Theme.highlightColor
+            sourceSize.width: Theme.iconSizeMedium
+            sourceSize.height: Theme.iconSizeMedium
+            source: "image://theme/icon-m-textselection-end?" + Theme.highlightColor
             visible: selHandles.visible && selHandles.ci && selHandles.ci.selectionEndX >= 0
             x: selHandles.ci ? selHandles.ci.selectionEndX * selHandles.dsf : 0
             y: selHandles.ci ? selHandles.ci.selectionEndY * selHandles.dsf : 0
