@@ -1014,6 +1014,52 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
         nullptr, nullptr);
     webkit_user_content_manager_add_script(ucm, perfScript);
     webkit_user_script_unref(perfScript);
+
+    // Always-smooth scrolling. JS-heavy pages — notably WordPress + Divi /
+    // WPBakery (jolla.com) — attach NON-passive touch/wheel listeners at the
+    // document level (sticky headers, parallax, scroll effects). On a touch
+    // device that forces synchronous main-thread touch handling and disables
+    // WebKit's compositor kinetic scroll, so a flick scrolls once with no
+    // inertia and the user must re-gesture repeatedly ("stuck" scrolling).
+    // Force document-level touchstart/touchmove/wheel/mousewheel listeners to be
+    // passive so the page can't preventDefault() the scroll. This mirrors
+    // Chrome's "passive by default for document-level touch listeners"
+    // intervention, and is scoped to document-level targets (window/document/
+    // html/body) so element-level sliders, carousels and <canvas> handlers that
+    // legitimately need preventDefault keep working. Must inject at
+    // DOCUMENT_START so the override is installed before the page's own scripts
+    // bind their listeners. Set ATLANTIC_DISABLE_PASSIVE_SCROLL=1 to disable.
+    if (!envVarEnabled(qgetenv("ATLANTIC_DISABLE_PASSIVE_SCROLL"))) {
+        static const gchar* passiveScrollJs = R"JS(
+(function() {
+    try {
+        var proto = EventTarget.prototype;
+        if (proto.__wpePassivePatched) return;
+        proto.__wpePassivePatched = true;
+        var BLOCKERS = { touchstart: 1, touchmove: 1, wheel: 1, mousewheel: 1 };
+        var orig = proto.addEventListener;
+        proto.addEventListener = function(type, listener, options) {
+            if (BLOCKERS[type] &&
+                (this === window || this === document ||
+                 this === document.documentElement || this === document.body)) {
+                if (options === undefined || options === null || typeof options === 'boolean')
+                    options = { capture: options === true, passive: true };
+                else if (typeof options === 'object' && options.passive === undefined)
+                    options = Object.assign({}, options, { passive: true });
+            }
+            return orig.call(this, type, listener, options);
+        };
+    } catch (e) {}
+})();
+)JS";
+        WebKitUserScript* passiveScript = webkit_user_script_new(
+            passiveScrollJs,
+            WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+            WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+            nullptr, nullptr);
+        webkit_user_content_manager_add_script(ucm, passiveScript);
+        webkit_user_script_unref(passiveScript);
+    }
 }
 
 static void onImageLongPressBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
