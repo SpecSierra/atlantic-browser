@@ -999,6 +999,44 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
     webkit_user_content_manager_add_script(ucm, perfScript);
     webkit_user_script_unref(perfScript);
 
+    static const gchar* ytIconFixCssJs = R"JS(
+(function() {
+    if (document.getElementById('__wpe_yt_icon_fix')) return;
+    var s = document.createElement('style');
+    s.id = '__wpe_yt_icon_fix';
+    s.textContent = ''
+        + '.ytp-button-prev, .ytp-chapter-button-prev,'
+        + 'button[aria-label*="Previous"] {'
+        +   '-webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\'%3E%3Cpath d=\'M6 6h2v12H6zm3.5 6l8.5 6V6z\'/%3E%3C/svg%3E") !important;'
+        +   '-webkit-mask-size: contain !important;'
+        +   '-webkit-mask-position: center !important;'
+        +   '-webkit-mask-repeat: no-repeat !important;'
+        + '}'
+        + '.ytp-button-next, .ytp-chapter-button-next,'
+        + 'button[aria-label*="Next"] {'
+        +   '-webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\'%3E%3Cpath d=\'M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z\'/%3E%3C/svg%3E") !important;'
+        +   '-webkit-mask-size: contain !important;'
+        +   '-webkit-mask-position: center !important;'
+        +   '-webkit-mask-repeat: no-repeat !important;'
+        + '}'
+        + '.ytp-fullscreen-button, .ytp-size-button,'
+        + 'button[aria-label*="Full screen"] {'
+        +   '-webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\'%3E%3Cpath d=\'M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z\'/%3E%3C/svg%3E") !important;'
+        +   '-webkit-mask-size: contain !important;'
+        +   '-webkit-mask-position: center !important;'
+        +   '-webkit-mask-repeat: no-repeat !important;'
+        + '}';
+    (document.head || document.documentElement).appendChild(s);
+})();
+)JS";
+    WebKitUserScript* ytIconFixScript = webkit_user_script_new(
+        ytIconFixCssJs,
+        WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_END,
+        nullptr, nullptr);
+    webkit_user_content_manager_add_script(ucm, ytIconFixScript);
+    webkit_user_script_unref(ytIconFixScript);
+
     // Always-smooth scrolling. JS-heavy pages — notably WordPress + Divi /
     // WPBakery (jolla.com) — attach NON-passive touch/wheel listeners at the
     // document level (sticky headers, parallax, scroll effects). On a touch
