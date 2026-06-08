@@ -54,6 +54,8 @@ void requestActivePageRenderRecovery(QQuickView *view, const char *reason)
         return;
     }
 
+    static bool s_reloadingQml = false;
+
     const QList<WPEWebPage *> pages = view->findChildren<WPEWebPage *>();
     int resumedPageCount = 0;
     for (WPEWebPage *page : pages) {
@@ -67,6 +69,17 @@ void requestActivePageRenderRecovery(QQuickView *view, const char *reason)
 
     if (resumedPageCount > 0) {
         view->update();
+    } else if (pages.isEmpty() && !s_reloadingQml) {
+        fprintf(stderr, "[ATLANTIC-RUNTIME] Render recovery (%s): no pages remain; reloading QML source\n",
+                reason ? reason : "unknown");
+        s_reloadingQml = true;
+        if (!view->source().isEmpty()) {
+            const QUrl currentSource = view->source();
+            view->setSource(QUrl());
+            view->engine()->clearComponentCache();
+            view->setSource(currentSource);
+        }
+        s_reloadingQml = false;
     }
 
     fprintf(stderr, "[ATLANTIC-RUNTIME] Render recovery (%s): resumed %d active page(s) out of %d\n",

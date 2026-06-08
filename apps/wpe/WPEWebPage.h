@@ -405,6 +405,9 @@ private:
     QTimer m_framePump;
     QTimer m_mediaInactiveDebounceTimer;
     QTimer m_deferredFullscreenLeaveTimer;
+    QTimer m_chromeGestureDebounceTimer;
+    bool m_pendingChrome = true;
+    bool m_chromeGestureArmed = false;
     bool m_pendingFullscreenEntry = false;
     QTimer m_pendingFullscreenEntryGuard;
     QTimer m_fullscreenEnteredGuard;      // 3s guard after entering: blocks spurious false reports

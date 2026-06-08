@@ -1791,6 +1791,15 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
 
     connect(this, &WPEQtView::loadingChanged,
             this, &WPEWebPage::onLoadingChanged);
+    m_chromeGestureDebounceTimer.setSingleShot(true);
+    m_chromeGestureDebounceTimer.setInterval(150);
+    connect(&m_chromeGestureDebounceTimer, &QTimer::timeout, this, [this]() {
+        if (m_chromeGestureArmed && m_chrome != m_pendingChrome) {
+            setChrome(m_pendingChrome);
+        }
+        m_chromeGestureArmed = false;
+    });
+
     connect(this, &WPEQtView::scrollPositionChanged,
             this, [this](qreal scrollY, qreal scrollHeight, qreal innerHeight) {
         bool atTop = scrollY <= 0;
@@ -1803,15 +1812,24 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             m_atYEnd = atBottom;
             emit atYEndChanged();
         }
-        // Chrome gesture: hide toolbar when scrolling down, show when scrolling up
         if (m_chromeGestureEnabled && !m_fixedToolbar && !m_forcedChrome) {
             qreal delta = scrollY - m_lastScrollY;
+            bool targetChrome;
             if (atTop) {
-                setChrome(true);
+                targetChrome = true;
             } else if (delta > m_chromeGestureThreshold) {
-                setChrome(false);
+                targetChrome = false;
             } else if (delta < -m_chromeGestureThreshold) {
-                setChrome(true);
+                targetChrome = true;
+            } else {
+                m_lastScrollY = scrollY;
+                return;
+            }
+
+            if (targetChrome != m_pendingChrome || !m_chromeGestureArmed) {
+                m_pendingChrome = targetChrome;
+                m_chromeGestureArmed = true;
+                m_chromeGestureDebounceTimer.start();
             }
         }
         m_lastScrollY = scrollY;
