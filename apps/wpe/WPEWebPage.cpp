@@ -9,6 +9,7 @@
 #include "WPEWebPage.h"
 #include "WPERuntimePaths.h"
 #include "downloadmanager.h"
+#include "AdBlockEngine.h"
 
 #include <QBuffer>
 #include <QClipboard>
@@ -599,53 +600,36 @@ void onNetworkSessionDownloadStarted(WebKitNetworkSession*, WebKitDownload* down
 
 gboolean onDecidePolicy(WebKitWebView* webView, WebKitPolicyDecision* decision, WebKitPolicyDecisionType type, gpointer)
 {
-    static const std::array<const char*, 20> blockedHostSuffixes = {{
-        "doubleclick.net",
-        "googlesyndication.com",
-        "googleadservices.com",
-        "googletagservices.com",
-        "googletagmanager.com",
-        "google-analytics.com",
-        "adservice.google.com",
-        "adnxs.com",
-        "taboola.com",
-        "outbrain.com",
-        "criteo.com",
-        "rubiconproject.com",
-        "openx.net",
-        "pubmatic.com",
-        "advertising.com",
-        "amazon-adsystem.com",
-        "scorecardresearch.com",
-        "quantserve.com",
-        "moatads.com",
-        "connect.facebook.net"
-    }};
-
     if (type == WEBKIT_POLICY_DECISION_TYPE_RESPONSE) {
-        WebKitResponsePolicyDecision* responseDecision = WEBKIT_RESPONSE_POLICY_DECISION(decision);
-        if (!responseDecision || webkit_response_policy_decision_is_main_frame_main_resource(responseDecision))
+        WebKitResponsePolicyDecision* responseDecision =
+            WEBKIT_RESPONSE_POLICY_DECISION(decision);
+        if (!responseDecision ||
+            webkit_response_policy_decision_is_main_frame_main_resource(responseDecision))
             return FALSE;
 
-        WebKitURIRequest* request = webkit_response_policy_decision_get_request(responseDecision);
+        WebKitURIRequest* request =
+            webkit_response_policy_decision_get_request(responseDecision);
         const gchar* uri = request ? webkit_uri_request_get_uri(request) : nullptr;
-        if (!uri || !*uri)
-            return FALSE;
+        if (!uri || !*uri) return FALSE;
 
-        const QUrl parsedUrl(QString::fromUtf8(uri));
-        const QString host = parsedUrl.host().toLower();
-        if (host.isEmpty())
-            return FALSE;
+        QString sourceUrl;
+        const gchar* activeUri = webkit_web_view_get_uri(webView);
+        if (activeUri && *activeUri)
+            sourceUrl = QString::fromUtf8(activeUri);
+        else
+            sourceUrl = QString::fromUtf8(uri);
 
-        for (const char* suffixRaw : blockedHostSuffixes) {
-            const QString suffix = QString::fromLatin1(suffixRaw);
-            if (host == suffix || host.endsWith(QStringLiteral(".") + suffix)) {
-                fprintf(stderr, "[WPE-ADBLOCK] blocked %s\n", uri);
-                webkit_policy_decision_ignore(decision);
-                return TRUE;
+        const char* rtype = "other";
+
+        QString redirectUrl;
+        if (AdBlockEngine::instance().shouldBlock(
+                sourceUrl, QString::fromUtf8(uri), rtype, true, &redirectUrl)) {
+            if (!redirectUrl.isEmpty()) {
+                webkit_web_view_load_uri(webView, redirectUrl.toUtf8().constData());
             }
+            webkit_policy_decision_ignore(decision);
+            return TRUE;
         }
-
         return FALSE;
     }
 
@@ -1955,6 +1939,38 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                 }
             }
             g_signal_connect(wv, "decide-policy", G_CALLBACK(onDecidePolicy), nullptr);
+            g_signal_connect(wv, "resource-load-started",
+                G_CALLBACK(+[](WebKitWebView* webView, WebKitResourceLoad* load, gpointer) {
+                    WebKitURIResponse* resp = webkit_resource_load_get_response(load);
+                    if (!resp) return;
+                    const char* rtype = "other";
+                    QString sourceUrl;
+                    const gchar* activeUri = webkit_web_view_get_uri(webView);
+                    if (activeUri && *activeUri)
+                        sourceUrl = QString::fromUtf8(activeUri);
+                    else
+                        sourceUrl = QString::fromUtf8(webkit_uri_response_get_uri(resp));
+
+                    if (AdBlockEngine::instance().shouldBlock(
+                            sourceUrl, QString::fromUtf8(webkit_uri_response_get_uri(resp)),
+                            rtype, true)) {
+                        webkit_resource_load_set_cancelled(load, TRUE);
+                    }
+                }), nullptr);
+            {
+                static bool engineInitialized = false;
+                if (!engineInitialized) {
+                    engineInitialized = true;
+                    QString cachePath = QStringLiteral("/usr/share/atlantic-browser/engine.dat");
+                    if (!QFileInfo::exists(cachePath)) {
+                        cachePath = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation)
+                                    + QStringLiteral("/atlantic-browser/engine.dat");
+                    }
+                    if (!AdBlockEngine::instance().loadFromCache(cachePath)) {
+                        qWarning() << "[ADBLOCK] engine not available — falling back to content blocker only";
+                    }
+                }
+            }
             if (WebKitNetworkSession* session = webkit_web_view_get_network_session(wv)) {
                 if (!g_object_get_data(G_OBJECT(session), "atlantic-download-hooked")) {
                     g_signal_connect(session, "download-started", G_CALLBACK(onNetworkSessionDownloadStarted), nullptr);
@@ -2848,12 +2864,15 @@ void WPEWebPage::onLoadingChanged(WPEQtViewLoadRequest *loadRequest)
     case WPEQtView::LoadSucceededStatus:
         m_domContentLoaded = true;
         m_loaded = true;
-        // A page loaded cleanly: re-arm the one-shot crash auto-reload so a
-        // later, unrelated WebProcess death can also self-heal once.
         m_autoRecovered = false;
         updateSecurityInfo();
         emit domContentLoadedChanged();
         emit loadedChanged();
+        if (AdBlockEngine::instance().isLoaded()) {
+            QTimer::singleShot(300, this, [this]() {
+                AdBlockEngine::instance().applyCosmetics(this);
+            });
+        }
         break;
 
     case WPEQtView::LoadStoppedStatus:

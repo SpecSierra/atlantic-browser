@@ -14,13 +14,16 @@ INCLUDEPATH += $${SFOS_SYSROOT}/usr/include/gio-unix-2.0
 LIBS += -L$${WPE_SFOS_PREFIX}/lib/qt5/qml/org/wpewebkit/qtwpe -lqtwpe
 LIBS += -L$${WPE_SFOS_PREFIX}/lib -lWPEWebKit-2.0
 LIBS += -L$${SFOS_SYSROOT}/usr/lib64 -lgio-2.0 -lgobject-2.0 -lglib-2.0
+LIBS += -latlantic_adblock
 
 HEADERS += \
+    $$PWD/AdBlockEngine.h \
     $$PWD/WPEWebPage.h \
     $$PWD/WPEWebContainer.h \
     $$PWD/WPEWebPageCreator.h
 
 SOURCES += \
+    $$PWD/AdBlockEngine.cpp \
     $$PWD/WPEWebPage.cpp \
     $$PWD/WPEWebContainer.cpp \
     $$PWD/WPEWebPageCreator.cpp
