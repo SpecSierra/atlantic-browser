@@ -11,10 +11,10 @@ import Sailfish.Silica 1.0
 import "../../shared" as Shared
 import "." as Components
 
-    property var adBlockConf: null
-
 Components.FrostedBox {
     id: root
+
+    property var adBlockConf: null
 
     readonly property real overlayOpacity: 0.15
 
