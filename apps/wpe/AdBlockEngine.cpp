@@ -14,6 +14,8 @@
 #include <QStandardPaths>
 #include <QTimer>
 
+bool AdBlockEngine::s_enabled = true;
+
 AdBlockEngine& AdBlockEngine::instance()
 {
     static AdBlockEngine inst;
@@ -48,7 +50,7 @@ bool AdBlockEngine::shouldBlock(const QString& sourceUrl, const QString& request
                                  const char* resourceType, bool isThirdParty,
                                  QString* redirectUrl)
 {
-    if (!m_engine) return false;
+    if (!m_engine || !s_enabled) return false;
 
     QByteArray src = sourceUrl.toUtf8();
     QByteArray req = requestUrl.toUtf8();
@@ -72,7 +74,7 @@ bool AdBlockEngine::shouldBlock(const QString& sourceUrl, const QString& request
 
 void AdBlockEngine::applyCosmetics(WPEWebPage* page)
 {
-    if (!m_engine || !page) return;
+    if (!m_engine || !s_enabled || !page) return;
 
     QByteArray urlUtf8 = page->url().toString().toUtf8();
     CosmeticResult cr = atlantic_adblock_get_cosmetic(m_engine, urlUtf8.constData());
@@ -109,4 +111,14 @@ void AdBlockEngine::applyCosmetics(WPEWebPage* page)
     for (const QString& s : scripts) {
         page->runJavaScript(s);
     }
+}
+
+bool AdBlockEngine::isEnabled()
+{
+    return s_enabled;
+}
+
+void AdBlockEngine::setEnabled(bool enabled)
+{
+    s_enabled = enabled;
 }

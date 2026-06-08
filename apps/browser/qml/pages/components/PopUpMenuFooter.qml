@@ -11,6 +11,8 @@ import Sailfish.Silica 1.0
 import "../../shared" as Shared
 import "." as Components
 
+    property var adBlockConf: null
+
 Components.FrostedBox {
     id: root
 
@@ -66,6 +68,19 @@ Components.FrostedBox {
                     overlay.toolBar.removeActivePageFromBookmarks()
                 } else {
                     overlay.toolBar.bookmarkActivePage()
+                }
+            }
+        }
+
+        Shared.IconButton {
+            height: parent.height
+            width: Theme.itemSizeLarge
+            icon.source: "image://theme/icon-m-permission"
+            icon.opacity: (root.adBlockConf && root.adBlockConf.value) ? 1.0 : Theme.opacityLow
+            enabled: webView.contentItem
+            onTapped: {
+                if (root.adBlockConf) {
+                    root.adBlockConf.value = !root.adBlockConf.value
                 }
             }
         }

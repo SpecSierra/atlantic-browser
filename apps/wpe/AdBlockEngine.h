@@ -39,10 +39,15 @@ public:
 
     void applyCosmetics(WPEWebPage* page);
 
+    static bool isEnabled();
+    static void setEnabled(bool enabled);
+
 private:
     AdBlockEngine() = default;
     ~AdBlockEngine();
     AdBlockEngine(const AdBlockEngine&) = delete;
 
     AtlanticAdblockEngine* m_engine = nullptr;
+
+    static bool s_enabled;
 };

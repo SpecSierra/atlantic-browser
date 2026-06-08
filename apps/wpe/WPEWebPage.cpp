@@ -3683,3 +3683,14 @@ void WPEWebPage::cancelFileChooser()
     fprintf(stderr, "[WPE-FILE] cancelFileChooser requested from QML\n");
     clearFileChooserRequest(true);
 }
+
+bool WPEWebPage::adBlockEnabled() const
+{
+    return AdBlockEngine::isEnabled();
+}
+
+void WPEWebPage::setAdBlockEnabled(bool enabled)
+{
+    AdBlockEngine::setEnabled(enabled);
+    emit adBlockEnabledChanged();
+}

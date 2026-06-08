@@ -142,6 +142,8 @@ class WPEWebPage : public WPEQtView
     Q_PROPERTY(qreal pinchCenterX READ pinchCenterX NOTIFY pinchCenterChanged)
     Q_PROPERTY(qreal pinchCenterY READ pinchCenterY NOTIFY pinchCenterChanged)
 
+    Q_PROPERTY(bool adBlockEnabled READ adBlockEnabled WRITE setAdBlockEnabled NOTIFY adBlockEnabledChanged FINAL)
+
 public:
     explicit WPEWebPage(QQuickItem *parent = nullptr);
     ~WPEWebPage() override;
@@ -255,6 +257,9 @@ public:
 
     bool crashed() const { return m_crashed; }
 
+    bool adBlockEnabled() const;
+    void setAdBlockEnabled(bool enabled);
+
     bool textSelectionActive() const;
     QObject* textSelectionController();
     QString selectedText() const;
@@ -314,6 +319,7 @@ signals:
     void visualScaleChanged();
     void pinchCenterChanged();
     void crashedChanged();
+    void adBlockEnabledChanged();
 
 protected:
     QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;

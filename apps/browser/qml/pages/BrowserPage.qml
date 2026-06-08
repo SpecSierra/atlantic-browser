@@ -17,6 +17,7 @@ import Sailfish.Pickers 1.0
 import Sailfish.Silica.private 1.0 as Private
 import Sailfish.Browser 1.0
 import Sailfish.Policy 1.0
+import Nemo.Configuration 1.0
 import "components" as Browser
 import "../shared" as Shared
 
@@ -43,6 +44,18 @@ Page {
     property alias title: webView.title
     property alias webView: webView
     property alias inputRegion: inputRegion
+    property alias adBlockConf: adBlockConf
+
+    ConfigurationValue {
+        id: adBlockConf
+        key: "/apps/atlantic-browser/settings/adblock_enabled"
+        defaultValue: true
+        onValueChanged: {
+            if (webView.contentItem) {
+                webView.contentItem.adBlockEnabled = value
+            }
+        }
+    }
 
     function load(url, title) {
         overlay.dismiss(true)
@@ -433,10 +446,17 @@ Page {
 
         footer: Component {
             Browser.PopUpMenuFooter {
+                adBlockConf: browserPage.adBlockConf
             }
         }
 
         onClosed: overlay.dismiss(true)
+    }
+
+    Binding {
+        target: webView.contentItem
+        property: "adBlockEnabled"
+        value: adBlockConf.value
     }
 
     CoverActionList {
