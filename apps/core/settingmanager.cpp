@@ -6,6 +6,7 @@
 #include "settingmanager.h"
 #include "dbmanager.h"
 #include "faviconmanager.h"
+#include "../wpe/AdBlockEngine.h"
 
 #include <MDConfItem>
 #include <QVariant>
@@ -97,4 +98,14 @@ void SettingManager::setSearchEngine()
 void SettingManager::handleObserve(const QString &, const QVariant &)
 {
     // WPE: no Gecko observer messages
+}
+
+bool SettingManager::isAdBlockEnabled() const
+{
+    return AdBlockEngine::isEnabled();
+}
+
+void SettingManager::setAdBlockEnabled(bool enabled)
+{
+    AdBlockEngine::setEnabled(enabled);
 }

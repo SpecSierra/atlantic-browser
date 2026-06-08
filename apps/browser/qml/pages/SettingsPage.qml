@@ -194,15 +194,16 @@ Page {
             }
 
             TextSwitch {
-                //% "Ad block"
-                text: qsTrId("settings_browser-la-adblock")
-                //% "Block advertisements and trackers"
-                description: qsTrId("settings_browser-la-adblock_description")
+                text: "Ad block"
+                description: "Block advertisements and trackers"
                 checked: adBlockConf.value
                 automaticCheck: false
                 leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
                 _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
-                onClicked: adBlockConf.value = !adBlockConf.value
+                onClicked: {
+                    adBlockConf.value = !adBlockConf.value
+                    settingManager.setAdBlockEnabled(!adBlockConf.value)
+                }
             }
 
             TextSwitch {

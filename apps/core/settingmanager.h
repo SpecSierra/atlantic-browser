@@ -42,6 +42,9 @@ public:
     Q_INVOKABLE void calculateCacheSize(QJSValue callback);
     Q_INVOKABLE void calculateSiteDataSize(QJSValue callback);
 
+    Q_INVOKABLE void setAdBlockEnabled(bool enabled);
+    Q_INVOKABLE bool isAdBlockEnabled() const;
+
 signals:
     void toolbarSmallChanged();
     void toolbarLargeChanged();
