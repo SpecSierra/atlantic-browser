@@ -44,10 +44,9 @@ Page {
     property alias title: webView.title
     property alias webView: webView
     property alias inputRegion: inputRegion
-    property alias adBlockConf: adBlockConfiguration
 
     ConfigurationValue {
-        id: adBlockConfiguration
+        id: adBlockEngine
         key: "/apps/atlantic-browser/settings/adblock_enabled"
         defaultValue: true
         onValueChanged: {
@@ -441,8 +440,13 @@ Page {
         menuItem: Component {
             Browser.PopUpMenuItem {
                 iconWidth: Theme.iconSizeMedium + Theme.paddingLarge
-                adBlockConf: browserPage.adBlockConf
             }
+        }
+
+        footer: Component {
+            Browser.PopUpMenuFooter {
+            }
+        }
         }
 
         footer: Component {

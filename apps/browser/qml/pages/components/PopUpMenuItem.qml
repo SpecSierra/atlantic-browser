@@ -15,7 +15,6 @@ Item {
 
     property int horizontalOffset
     property int iconWidth
-    property var adBlockConf: null
     readonly property int verticalPadding: 3 * Theme.paddingSmall
 
     height: content.height + verticalPadding * 2
@@ -91,26 +90,6 @@ Item {
                 }
             }
 
-        }
-
-        Column {
-            width: parent.width
-
-            OverlayListItem {
-                height: Theme.itemSizeSmall
-                iconWidth: root.iconWidth
-                horizontalOffset: root.horizontalOffset
-                iconSource: "image://theme/icon-m-device-lock"
-                checkable: true
-                checked: root.adBlockConf ? root.adBlockConf.value : false
-                //% "Ad block"
-                text: qsTrId("sailfish_browser-la-adblock_toggle")
-                onClicked: {
-                    if (root.adBlockConf) {
-                        root.adBlockConf.value = !root.adBlockConf.value
-                    }
-                }
-            }
         }
 
         Column {

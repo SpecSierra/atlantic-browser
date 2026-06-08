@@ -45,6 +45,7 @@ Page {
     ConfigurationValue { id: jsEnabledConf; key: "/apps/atlantic-browser/settings/javascript_enabled"; defaultValue: true }
     ConfigurationValue { id: useDownloadDirConf; key: "/apps/atlantic-browser/settings/use_download_dir"; defaultValue: false }
     ConfigurationValue { id: downloadDirConf; key: "/apps/atlantic-browser/settings/download_dir"; defaultValue: "" }
+    ConfigurationValue { id: adBlockConf; key: "/apps/atlantic-browser/settings/adblock_enabled"; defaultValue: true }
 
     readonly property int _textSwitchIconCenter: Math.round((Theme.iconSizeMedium - Theme.itemSizeExtraSmall) / 2.0)
 
@@ -190,6 +191,18 @@ Page {
                 _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
 
                 onClicked: autoStartPrivateBrowser.value = !autoStartPrivateBrowser.value
+            }
+
+            TextSwitch {
+                //% "Ad block"
+                text: qsTrId("settings_browser-la-adblock")
+                //% "Block advertisements and trackers"
+                description: qsTrId("settings_browser-la-adblock_description")
+                checked: adBlockConf.value
+                automaticCheck: false
+                leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
+                _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
+                onClicked: adBlockConf.value = !adBlockConf.value
             }
 
             TextSwitch {
