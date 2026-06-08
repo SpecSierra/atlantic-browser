@@ -44,10 +44,10 @@ Page {
     property alias title: webView.title
     property alias webView: webView
     property alias inputRegion: inputRegion
-    property alias adBlockConf: adBlockConf
+    property alias adBlockConf: adBlockConfiguration
 
     ConfigurationValue {
-        id: adBlockConf
+        id: adBlockConfiguration
         key: "/apps/atlantic-browser/settings/adblock_enabled"
         defaultValue: true
         onValueChanged: {
@@ -451,12 +451,6 @@ Page {
         }
 
         onClosed: overlay.dismiss(true)
-    }
-
-    Binding {
-        target: webView.contentItem
-        property: "adBlockEnabled"
-        value: adBlockConf.value
     }
 
     CoverActionList {
