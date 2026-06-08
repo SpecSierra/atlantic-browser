@@ -441,12 +441,12 @@ Page {
         menuItem: Component {
             Browser.PopUpMenuItem {
                 iconWidth: Theme.iconSizeMedium + Theme.paddingLarge
+                adBlockConf: browserPage.adBlockConf
             }
         }
 
         footer: Component {
             Browser.PopUpMenuFooter {
-                adBlockConf: browserPage.adBlockConf
             }
         }
 
