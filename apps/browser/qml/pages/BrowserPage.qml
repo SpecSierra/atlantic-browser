@@ -447,12 +447,6 @@ Page {
             Browser.PopUpMenuFooter {
             }
         }
-        }
-
-        footer: Component {
-            Browser.PopUpMenuFooter {
-            }
-        }
 
         onClosed: overlay.dismiss(true)
     }
