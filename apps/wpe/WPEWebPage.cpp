@@ -1939,24 +1939,6 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                 }
             }
             g_signal_connect(wv, "decide-policy", G_CALLBACK(onDecidePolicy), nullptr);
-            g_signal_connect(wv, "resource-load-started",
-                G_CALLBACK(+[](WebKitWebView* webView, WebKitResourceLoad* load, gpointer) {
-                    WebKitURIResponse* resp = webkit_resource_load_get_response(load);
-                    if (!resp) return;
-                    const char* rtype = "other";
-                    QString sourceUrl;
-                    const gchar* activeUri = webkit_web_view_get_uri(webView);
-                    if (activeUri && *activeUri)
-                        sourceUrl = QString::fromUtf8(activeUri);
-                    else
-                        sourceUrl = QString::fromUtf8(webkit_uri_response_get_uri(resp));
-
-                    if (AdBlockEngine::instance().shouldBlock(
-                            sourceUrl, QString::fromUtf8(webkit_uri_response_get_uri(resp)),
-                            rtype, true)) {
-                        webkit_resource_load_set_cancelled(load, TRUE);
-                    }
-                }), nullptr);
             {
                 static bool engineInitialized = false;
                 if (!engineInitialized) {
