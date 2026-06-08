@@ -62,6 +62,10 @@ bool AdBlockEngine::shouldBlock(const QString& sourceUrl, const QString& request
         *redirectUrl = QString::fromUtf8(r.redirect);
         blocked = true;
     }
+    if (blocked) {
+        qDebug() << "[WPE-ADBLOCK] blocked" << requestUrl
+                 << "type=" << resourceType;
+    }
     atlantic_adblock_free_match_result(r);
     return blocked;
 }
