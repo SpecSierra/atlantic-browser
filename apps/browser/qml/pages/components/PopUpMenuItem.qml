@@ -100,8 +100,9 @@ Item {
                 height: Theme.itemSizeSmall
                 iconWidth: root.iconWidth
                 horizontalOffset: root.horizontalOffset
-                iconSource: "image://theme/icon-m-browser-permissions"
-                enabled: root.adBlockConf != null && webView.contentItem
+                iconSource: "image://theme/icon-m-device-lock"
+                checkable: true
+                checked: root.adBlockConf ? root.adBlockConf.value : false
                 //% "Ad block"
                 text: qsTrId("sailfish_browser-la-adblock_toggle")
                 onClicked: {
