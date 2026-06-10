@@ -7,6 +7,7 @@
 #include "WPEWebContainer.h"
 #include "WPEWebPage.h"
 #include "WPERuntimePaths.h"
+#include "AdBlockEngine.h"
 #include "WPEQtViewLoadRequest.h"
 #include "declarativehistorymodel.h"
 #include "declarativetabmodel.h"
@@ -126,6 +127,20 @@ void WPEWebContainer::configureSandboxPaths()
 
     WebKitWebContext *ctx = webkit_web_context_get_default();
     webkit_web_context_set_cache_model(ctx, WEBKIT_CACHE_MODEL_WEB_BROWSER);
+
+    // Register the network ad-block WebProcess extension. The Brave/Rust engine
+    // only sees every subresource from inside the WebProcess (UI-process
+    // decide-policy misses most), so blocking lives there. Connecting the signal
+    // (rather than calling the setters once) re-applies on every WebProcess
+    // launch, including respawns after a crash. The initial enabled state is
+    // passed as user-data; live toggles arrive via a per-page user message.
+    g_signal_connect(ctx, "initialize-web-process-extensions",
+        G_CALLBACK(+[](WebKitWebContext *c, gpointer) {
+            webkit_web_context_set_web_process_extensions_directory(
+                c, WPERuntimePaths::kWebExtensionsDir);
+            webkit_web_context_set_web_process_extensions_initialization_user_data(
+                c, g_variant_new_boolean(AdBlockEngine::isEnabled()));
+        }), nullptr);
 
     // WebProcess memory pressure: WTF Linux defaults already match target thresholds for a 4 GB device:
     //   baseThreshold = min(3 GB, ramSize()) = 3 GB

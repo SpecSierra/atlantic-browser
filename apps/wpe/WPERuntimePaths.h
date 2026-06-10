@@ -11,6 +11,7 @@ static constexpr const char* kBrowserRuntimeLibrary = "/usr/lib64/libsailfishbro
 static constexpr const char* kBrowserStartupLog = "/home/defaultuser/wpe-sfos-artifacts/browser-startup.log";
 static constexpr const char* kAtlanticShareDir = "/usr/share/atlantic-browser";
 static constexpr const char* kAtlanticContentBlockerPath = "/usr/share/atlantic-browser/content-blocker.json";
+static constexpr const char* kWebExtensionsDir = "/usr/lib64/atlantic-browser/web-extensions";
 static constexpr const char* kQtShareDir = "/usr/share/qt5";
 static constexpr const char* kQtLibDir = "/usr/lib64/qt5";
 static constexpr const char* kRuntimeDir = "/run/user/100000";

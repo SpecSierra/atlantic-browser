@@ -4002,6 +4002,16 @@ void WPEWebPage::setAdBlockEnabled(bool enabled)
         return;
     AdBlockEngine::setEnabled(enabled);
 
+    // Tell the WebProcess ad-block extension (which does the network blocking)
+    // about the new state, so it takes effect on live pages without a reload.
+    // New WebProcesses pick up the state via the extension's init user-data.
+    if (WebKitWebView *wv = webView()) {
+        webkit_web_view_send_message_to_page(
+            wv, webkit_user_message_new("atlantic-adblock-set-enabled",
+                                        g_variant_new_boolean(enabled)),
+            nullptr, nullptr, nullptr);
+    }
+
     // The AdBlockEngine flag only gates frame-level policy and cosmetic
     // injection; the bulk of the blocking is the compiled WebKit content
     // filter installed on every tab's user content manager. Toggling used to
