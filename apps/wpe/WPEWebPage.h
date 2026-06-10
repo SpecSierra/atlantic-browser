@@ -6,8 +6,7 @@
  * You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-#ifndef WPEWEBPAGE_H
-#define WPEWEBPAGE_H
+#pragma once
 
 #include <QHash>
 #include <QSharedPointer>
@@ -436,5 +435,3 @@ private:
 };
 
 QML_DECLARE_TYPE(WPEWebPage)
-
-#endif // WPEWEBPAGE_H

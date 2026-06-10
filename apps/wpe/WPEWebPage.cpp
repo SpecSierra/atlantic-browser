@@ -747,7 +747,7 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
         try {
             window.webkit.messageHandlers.selectionBridge.postMessage(selectionPayload());
         } catch (ex) {
-            console.error('[WPE-SEL-JS] postMessage error: ' + ex);
+            console.error('[WPE-SELECT-JS] postMessage error: ' + ex);
         }
     }
 
@@ -2106,7 +2106,7 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             g_signal_connect(ucm, "script-message-received::selectBridge",
                              G_CALLBACK(onSelectBridgeMessage), this);
             gboolean regOk = webkit_user_content_manager_register_script_message_handler(ucm, "selectBridge", nullptr);
-            fprintf(stderr, "[WPE-SELECT] register_script_message_handler returned %d, ucm=%p\n", (int)regOk, ucm);
+            qDebug("[WPE-SELECT] register_script_message_handler returned %d, ucm=%p", (int)regOk, ucm);
 
             // Inject JS: intercept <select> taps via multiple event types
             static const gchar* selectBridgeJs = R"JS(
@@ -3004,9 +3004,9 @@ bool WPEWebPage::handleFileChooserRequest(WebKitFileChooserRequest *request)
             requestedMimeTypes.append(QString::fromUtf8(mimeTypes[i]));
         }
     }
-    fprintf(stderr, "[WPE-FILE] open request=%p selectMultiple=%d mimeTypes=%s\n",
-            static_cast<void*>(request), selectMultiple ? 1 : 0,
-            requestedMimeTypes.join(QStringLiteral(",")).toUtf8().constData());
+    qDebug("[WPE-FILE] open request=%p selectMultiple=%d mimeTypes=%s",
+           static_cast<void*>(request), selectMultiple ? 1 : 0,
+           requestedMimeTypes.join(QStringLiteral(",")).toUtf8().constData());
     if (m_fileChooserSelectMultiple != selectMultiple) {
         m_fileChooserSelectMultiple = selectMultiple;
         emit fileChooserSelectMultipleChanged();
@@ -3028,8 +3028,8 @@ bool WPEWebPage::handleFileChooserRequest(WebKitFileChooserRequest *request)
 
 void WPEWebPage::clearFileChooserRequest(bool cancelRequest)
 {
-    fprintf(stderr, "[WPE-FILE] clear request=%p cancel=%d active=%d\n",
-            static_cast<void*>(m_fileChooserRequest), cancelRequest ? 1 : 0, m_fileChooserActive ? 1 : 0);
+    qDebug("[WPE-FILE] clear request=%p cancel=%d active=%d",
+           static_cast<void*>(m_fileChooserRequest), cancelRequest ? 1 : 0, m_fileChooserActive ? 1 : 0);
     if (m_fileChooserRequest) {
         if (cancelRequest) {
             webkit_file_chooser_request_cancel(m_fileChooserRequest);
@@ -3462,7 +3462,7 @@ void WPEWebPage::onFrameSwapped()
 
 static void onFindCountedMatches(WebKitFindController *, guint matchCount, gpointer userData)
 {
-    fprintf(stderr, "[WPE-FIND] countedMatches: %u\n", matchCount);
+    qDebug("[WPE-FIND] countedMatches: %u", matchCount);
     auto *page = static_cast<WPEWebPage*>(userData);
     bool hasResult = matchCount > 0;
     if (hasResult != page->findInPageHasResult()) {
@@ -3472,7 +3472,7 @@ static void onFindCountedMatches(WebKitFindController *, guint matchCount, gpoin
 
 static void onFindFoundText(WebKitFindController *, guint matchCount, gpointer userData)
 {
-    fprintf(stderr, "[WPE-FIND] foundText: %u\n", matchCount);
+    qDebug("[WPE-FIND] foundText: %u", matchCount);
     auto *page = static_cast<WPEWebPage*>(userData);
     if (!page->findInPageHasResult()) {
         page->setFindInPageHasResult(true);
@@ -3481,7 +3481,7 @@ static void onFindFoundText(WebKitFindController *, guint matchCount, gpointer u
 
 static void onFindFailedToFindText(WebKitFindController *, gpointer userData)
 {
-    fprintf(stderr, "[WPE-FIND] failedToFindText\n");
+    qDebug("[WPE-FIND] failedToFindText");
     auto *page = static_cast<WPEWebPage*>(userData);
     if (page->findInPageHasResult()) {
         page->setFindInPageHasResult(false);
@@ -3490,7 +3490,7 @@ static void onFindFailedToFindText(WebKitFindController *, gpointer userData)
 
 void WPEWebPage::setFindInPageHasResult(bool has)
 {
-    fprintf(stderr, "[WPE-FIND] setFindInPageHasResult: %d -> %d\n", m_findInPageHasResult, has);
+    qDebug("[WPE-FIND] setFindInPageHasResult: %d -> %d", m_findInPageHasResult, has);
     if (m_findInPageHasResult != has) {
         m_findInPageHasResult = has;
         emit findInPageHasResultChanged();
@@ -3500,12 +3500,12 @@ void WPEWebPage::setFindInPageHasResult(bool has)
 void WPEWebPage::findText(const QString &text, bool backwards)
 {
     WebKitWebView *wv = webView();
-    fprintf(stderr, "[WPE-FIND] findText called: text='%s' backwards=%d webView=%p\n",
-            text.toUtf8().constData(), backwards, (void*)wv);
+    qDebug("[WPE-FIND] findText called: text='%s' backwards=%d webView=%p",
+           text.toUtf8().constData(), backwards, (void*)wv);
     if (!wv) return;
 
     WebKitFindController *fc = webkit_web_view_get_find_controller(wv);
-    fprintf(stderr, "[WPE-FIND] findController=%p\n", (void*)fc);
+    qDebug("[WPE-FIND] findController=%p", (void*)fc);
     if (!fc) return;
 
     if (!m_findInitialized) {
@@ -3550,7 +3550,7 @@ void WPEWebPage::updateSecurityInfo()
     auto *sec = static_cast<WPESecurityInfo*>(m_security);
     WebKitWebView *wv = webView();
     if (!wv) {
-        fprintf(stderr, "[WPE-SEC] no webView\n");
+        qWarning("[WPE-SEC] no webView");
         sec->reset();
         emit securityChanged();
         return;
@@ -3560,7 +3560,7 @@ void WPEWebPage::updateSecurityInfo()
     GTlsCertificateFlags flags = (GTlsCertificateFlags)0;
     gboolean hasTls = webkit_web_view_get_tls_info(wv, &cert, &flags);
 
-    fprintf(stderr, "[WPE-SEC] hasTls=%d cert=%p flags=%u\n", hasTls, (void*)cert, (unsigned)flags);
+    qDebug("[WPE-SEC] hasTls=%d cert=%p flags=%u", hasTls, (void*)cert, (unsigned)flags);
 
     if (!hasTls || !cert) {
         sec->reset();
@@ -3670,9 +3670,9 @@ void WPEWebPage::updateSecurityInfo()
     // truthful generic label rather than fabricating a specific TLS version.
     QString cipher = hasErrors ? QStringLiteral("TLS (certificate errors)") : QStringLiteral("Encrypted (TLS)");
 
-    fprintf(stderr, "[WPE-SEC] valid=true errors=%d subject='%s' issuer='%s' notBefore='%s' notAfter='%s'\n",
-            hasErrors, subject.toUtf8().constData(), issuer.toUtf8().constData(),
-            notBefore.toUtf8().constData(), notAfter.toUtf8().constData());
+    qDebug("[WPE-SEC] valid=true errors=%d subject='%s' issuer='%s' notBefore='%s' notAfter='%s'",
+           hasErrors, subject.toUtf8().constData(), issuer.toUtf8().constData(),
+           notBefore.toUtf8().constData(), notAfter.toUtf8().constData());
 
     sec->update(true, hasErrors, subject, issuer, cipher,
                 notBefore, notAfter, pem, issuerOrg, issuerCN, subjectOrg, errorDesc);
@@ -3730,12 +3730,12 @@ void WPEWebPage::closeSelectMenu()
 void WPEWebPage::chooseFiles(const QStringList &filePaths)
 {
     if (!m_fileChooserRequest) {
-        fprintf(stderr, "[WPE-FILE] chooseFiles ignored (no active request)\n");
+        qWarning("[WPE-FILE] chooseFiles ignored (no active request)");
         return;
     }
 
-    fprintf(stderr, "[WPE-FILE] chooseFiles incoming=%s\n",
-            filePaths.join(QStringLiteral(" | ")).toUtf8().constData());
+    qDebug("[WPE-FILE] chooseFiles incoming=%s",
+           filePaths.join(QStringLiteral(" | ")).toUtf8().constData());
 
     QStringList normalizedPaths;
     QStringList existingPaths;
@@ -3757,8 +3757,8 @@ void WPEWebPage::chooseFiles(const QStringList &filePaths)
             if (fileInfo.exists() && fileInfo.isFile()) {
                 existingPaths.append(fileInfo.absoluteFilePath());
             }
-            fprintf(stderr, "[WPE-FILE] candidate localPath=%s exists=%d isFile=%d\n",
-                    localPath.toUtf8().constData(), fileInfo.exists() ? 1 : 0, fileInfo.isFile() ? 1 : 0);
+            qDebug("[WPE-FILE] candidate localPath=%s exists=%d isFile=%d",
+                   localPath.toUtf8().constData(), fileInfo.exists() ? 1 : 0, fileInfo.isFile() ? 1 : 0);
         }
     }
 
@@ -3770,12 +3770,12 @@ void WPEWebPage::chooseFiles(const QStringList &filePaths)
     }
 
     if (chosenPaths.isEmpty()) {
-        fprintf(stderr, "[WPE-FILE] no usable paths; cancelling chooser\n");
+        qWarning("[WPE-FILE] no usable paths; cancelling chooser");
         clearFileChooserRequest(true);
         return;
     }
 
-    fprintf(stderr, "[WPE-FILE] chosen=%s\n", chosenPaths.join(QStringLiteral(" | ")).toUtf8().constData());
+    qDebug("[WPE-FILE] chosen=%s", chosenPaths.join(QStringLiteral(" | ")).toUtf8().constData());
 
     QVector<QByteArray> utf8Paths;
     utf8Paths.reserve(chosenPaths.size());
@@ -3793,17 +3793,17 @@ void WPEWebPage::chooseFiles(const QStringList &filePaths)
         for (guint i = 0; selected[i]; ++i) {
             selectedDebug.append(QString::fromUtf8(selected[i]));
         }
-        fprintf(stderr, "[WPE-FILE] selected-files now=%s\n",
-                selectedDebug.join(QStringLiteral(" | ")).toUtf8().constData());
+        qDebug("[WPE-FILE] selected-files now=%s",
+               selectedDebug.join(QStringLiteral(" | ")).toUtf8().constData());
     } else {
-        fprintf(stderr, "[WPE-FILE] selected-files now=<none>\n");
+        qDebug("[WPE-FILE] selected-files now=<none>");
     }
     clearFileChooserRequest(false);
 }
 
 void WPEWebPage::cancelFileChooser()
 {
-    fprintf(stderr, "[WPE-FILE] cancelFileChooser requested from QML\n");
+    qDebug("[WPE-FILE] cancelFileChooser requested from QML");
     clearFileChooserRequest(true);
 }
 
