@@ -632,6 +632,17 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
     webkit_user_content_manager_add_script(ucm, perfScript);
     webkit_user_script_unref(perfScript);
 
+    // YouTube player icons (.ytp-svg-fill inline SVG) compute to black on WPE
+    // and vanish on the dark player; force them white. See kYouTubeIconFix.
+    const gchar* ytIconFixJs = WPEUserScripts::kYouTubeIconFix;
+    WebKitUserScript* ytIconFixScript = webkit_user_script_new(
+        ytIconFixJs,
+        WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_END,
+        nullptr, nullptr);
+    webkit_user_content_manager_add_script(ucm, ytIconFixScript);
+    webkit_user_script_unref(ytIconFixScript);
+
     // Generic CSS-mask icon healer. Replaces the old YouTube-specific CSS
     // override (hardcoded English aria-label selectors + hand-drawn glyphs,
     // injected into EVERY site), which needed a manual patch for each newly

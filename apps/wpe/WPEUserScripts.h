@@ -269,6 +269,25 @@ static const char* const kPerfCss = R"JS(
 })();
 )JS";
 
+// YouTube player control icons are inline <svg><path class="ytp-svg-fill">, not
+// CSS masks. On WPE 2.52 their computed fill is the SVG default black (YouTube's
+// intended white never applies — its fill rule resolves to an unset custom
+// property), so the controls are invisible on the dark player. Force the fill
+// white. Diagnosed on-device via the remote inspector: computed fill goes
+// rgb(0,0,0) -> rgb(255,255,255) the moment this rule is present. One stable
+// class, language-agnostic, robust across redesigns — unlike the old per-icon
+// aria-label/hand-drawn-SVG override. (The generic mask healer below does not
+// help here: YouTube uses inline SVG, not url() masks.)
+static const char* const kYouTubeIconFix = R"JS(
+(function() {
+    if (document.getElementById('__wpe_yt_icon_fix')) return;
+    var s = document.createElement('style');
+    s.id = '__wpe_yt_icon_fix';
+    s.textContent = '.ytp-svg-fill{fill:#fff !important;}';
+    (document.head || document.documentElement).appendChild(s);
+})();
+)JS";
+
 static const char* const kIconHeal = R"JS(
 (function() {
     if (window.__wpeIconHealInstalled) return;
