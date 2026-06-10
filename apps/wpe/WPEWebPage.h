@@ -414,6 +414,7 @@ private:
     QElapsedTimer m_lastNativeFullscreenEnter;
     QTimer m_volumePollTimer;
     int m_lastKnownVolumeStep = -1;
+    void pollMainVolume();
     QElapsedTimer m_perfFrameLogWindow;
     int m_perfFramesInWindow = 0;
     qreal m_lastInteractionX = -1.0;

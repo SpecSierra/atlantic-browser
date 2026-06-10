@@ -1351,12 +1351,6 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
             applyDesiredMediaState(media[i]);
     }
 
-    function deferApplyDesiredMediaStateToNode(node) {
-        setTimeout(function() {
-            applyDesiredMediaStateToNode(node);
-        }, 0);
-    }
-
     window.__wpeApplyDesiredMediaStateToMedia = applyDesiredMediaStateToNode;
 
     function mediaStatePayload() {
@@ -1424,13 +1418,28 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
         };
     }
 
+    // While media is active, re-post the state every 2 s so the native side
+    // notices silent stops (a playing element removed from the DOM pauses
+    // without firing any media event). Replaces the old document-wide
+    // MutationObserver, which re-scanned the DOM and posted an IPC message on
+    // every mutation batch — a constant tax on mutation-heavy SPAs.
+    var activeKeepalive = null;
     function postMediaState() {
+        var payload = null;
         try {
-            window.webkit.messageHandlers.mediaBridge.postMessage(mediaStatePayload());
+            payload = mediaStatePayload();
+            window.webkit.messageHandlers.mediaBridge.postMessage(payload);
         } catch (ex) {
             console.error('[WPE-MEDIA-JS] postMessage error: ' + ex);
         }
         lastTriggerEvent = null;
+        var active = !!(payload && (payload.audioActive || payload.videoActive));
+        if (active && !activeKeepalive) {
+            activeKeepalive = setInterval(postMediaState, 2000);
+        } else if (!active && activeKeepalive) {
+            clearInterval(activeKeepalive);
+            activeKeepalive = null;
+        }
     }
 
     window.__wpePostMediaState = postMediaState;
@@ -1449,6 +1458,12 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
     ];
 
     function onMediaEvent(event) {
+        // Media events don't bubble but ARE seen here in the capture phase,
+        // for any media element — including ones added to the DOM after load.
+        // Applying the desired volume/mute at the moment an element does
+        // something audible replaces the old MutationObserver scan.
+        if (event && isMediaElement(event.target))
+            applyDesiredMediaState(event.target);
         scheduleMediaState(event);
     }
 
@@ -1483,22 +1498,14 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
         }
     }
 
-    var observerTarget = document.documentElement || document;
-    if (observerTarget && typeof MutationObserver === 'function') {
-        var mediaObserver = new MutationObserver(function(mutations) {
-            for (var i = 0; i < mutations.length; i++) {
-                var mutation = mutations[i];
-                if (!mutation.addedNodes)
-                    continue;
-
-                for (var j = 0; j < mutation.addedNodes.length; j++)
-                    deferApplyDesiredMediaStateToNode(mutation.addedNodes[j]);
-            }
-            scheduleMediaState();
-        });
-        mediaObserver.observe(observerTarget, { childList: true, subtree: true });
-    }
-
+    // NOTE: no MutationObserver here on purpose. The previous implementation
+    // observed {childList, subtree} on the whole document in every frame and,
+    // per mutation batch, queued one setTimeout per added node (each running
+    // querySelectorAll) plus a full document scan + mediaBridge IPC post. On
+    // mutation-heavy pages (React/Vue SPAs, infinite feeds) that ran thousands
+    // of times during load and continuously afterwards. New media elements are
+    // instead caught by the capture-phase media event listeners above the
+    // moment they load/play, and silent removals by the active keepalive.
     updateExplicitFullscreenState();
     document.addEventListener('DOMContentLoaded', postMediaState, true);
     applyDesiredMediaStateToNode(document);
@@ -1828,26 +1835,7 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     // Volume poll timer: reads com.Meego.MainVolume2 on the session bus every 500ms
     // and applies the step as el.volume when the slider changes.
     m_volumePollTimer.setInterval(500);
-    connect(&m_volumePollTimer, &QTimer::timeout, this, [this]() {
-        const MainVolumeState state = queryMainVolumeState();
-        if (!state.valid()) {
-            qDebug() << "[WPE-VOLUME] poll: MainVolumeState invalid (peer socket unavailable?)";
-            return;
-        }
-        if (state.currentStep == m_lastKnownVolumeStep) {
-            return; // no change
-        }
-        m_lastKnownVolumeStep = state.currentStep;
-        const qreal volume = (state.maximumStep > 0)
-            ? qreal(state.currentStep) / qreal(state.maximumStep)
-            : 1.0;
-        qDebug() << "[WPE-VOLUME] poll: step=" << state.currentStep
-                 << "/" << state.maximumStep << "→ el.volume=" << volume;
-        // Apply to page: set __wpeDesiredMediaVolume and trigger applyDesiredMediaState.
-        // We do NOT set m_pageInitiatedVolumeChange so updateObservedMediaState won't
-        // write back to the hardware slider (avoids round-trip).
-        applyMediaVolumeToPage(this, volume, false);
-    });
+    connect(&m_volumePollTimer, &QTimer::timeout, this, &WPEWebPage::pollMainVolume);
 
     // Honest mobile UA: Sailfish OS, WebKit engine, Atlantic browser
     setUserAgent(QStringLiteral(
@@ -2294,6 +2282,28 @@ qreal WPEWebPage::selectionDisplayScale() const
     return scale > 0.0 ? scale : 1.0;
 }
 
+void WPEWebPage::pollMainVolume()
+{
+    const MainVolumeState state = queryMainVolumeState();
+    if (!state.valid()) {
+        qDebug() << "[WPE-VOLUME] poll: MainVolumeState invalid (peer socket unavailable?)";
+        return;
+    }
+    if (state.currentStep == m_lastKnownVolumeStep) {
+        return; // no change
+    }
+    m_lastKnownVolumeStep = state.currentStep;
+    const qreal volume = (state.maximumStep > 0)
+        ? qreal(state.currentStep) / qreal(state.maximumStep)
+        : 1.0;
+    qDebug() << "[WPE-VOLUME] poll: step=" << state.currentStep
+             << "/" << state.maximumStep << "→ el.volume=" << volume;
+    // Apply to page: set __wpeDesiredMediaVolume and trigger applyDesiredMediaState.
+    // We do NOT set m_pageInitiatedVolumeChange so updateObservedMediaState won't
+    // write back to the hardware slider (avoids round-trip).
+    applyMediaVolumeToPage(this, volume, false);
+}
+
 void WPEWebPage::setMediaPlaybackState(bool audioActive, bool videoActive)
 {
     if (m_mediaInactiveDebounceTimer.isActive())
@@ -2318,6 +2328,10 @@ void WPEWebPage::setMediaPlaybackState(bool audioActive, bool videoActive)
             m_lastKnownVolumeStep = -1; // force immediate apply on first poll
             m_volumePollTimer.start();
             qDebug() << "[WPE-VOLUME] started poll timer";
+            // Sync the system volume onto the page right away instead of
+            // letting the media play at el.volume=1.0 (or a stale value) for
+            // the first 500 ms poll interval.
+            pollMainVolume();
         }
     } else {
         if (m_volumePollTimer.isActive()) {
