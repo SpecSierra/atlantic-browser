@@ -90,6 +90,27 @@ Item {
                 }
             }
 
+            OverlayListItem {
+                height: Theme.itemSizeSmall
+                enabled: webView.contentItem
+                opacity: enabled ? 1.0 : 0.5
+                iconWidth: root.iconWidth
+                horizontalOffset: root.horizontalOffset
+                iconSource: "image://theme/icon-m-computer"
+                checkable: true
+                checked: webView.contentItem ? webView.contentItem.desktopMode : false
+                //: Label for the toggle that reloads the page as its desktop variant
+                //% "Desktop site"
+                text: qsTrId("settings_browser-la-desktop_site")
+
+                onClicked: {
+                    // setDesktopMode() swaps the UA (atlanticUserAgent) and
+                    // reloads so the server sends the matching page variant.
+                    webView.contentItem.desktopMode = !webView.contentItem.desktopMode
+                    overlay.animator.showChrome()
+                }
+            }
+
         }
 
         Column {

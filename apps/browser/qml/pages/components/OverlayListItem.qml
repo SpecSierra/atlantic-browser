@@ -68,6 +68,9 @@ BackgroundItem {
         }
 
         visible: checkable
+        // State is owned by the caller's `checked` binding; an automatic
+        // local toggle would sever that binding on first tap.
+        automaticCheck: false
         onClicked: root.clicked(mouse)
     }
 }
