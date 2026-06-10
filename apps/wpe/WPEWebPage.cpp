@@ -3849,7 +3849,10 @@ void WPEWebPage::updateSecurityInfo()
         errorDesc = errors.join(QStringLiteral(", "));
     }
 
-    QString cipher = hasErrors ? QStringLiteral("TLS (certificate errors)") : QStringLiteral("TLS 1.2/1.3");
+    // WPE's public API (webkit_web_view_get_tls_info) exposes only the certificate
+    // and error flags, not the negotiated cipher/protocol version — so report a
+    // truthful generic label rather than fabricating a specific TLS version.
+    QString cipher = hasErrors ? QStringLiteral("TLS (certificate errors)") : QStringLiteral("Encrypted (TLS)");
 
     fprintf(stderr, "[WPE-SEC] valid=true errors=%d subject='%s' issuer='%s' notBefore='%s' notAfter='%s'\n",
             hasErrors, subject.toUtf8().constData(), issuer.toUtf8().constData(),
