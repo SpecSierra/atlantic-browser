@@ -21,7 +21,6 @@ extern "C" {
     void                   atlantic_adblock_free_match_result(MatchResult);
     CosmeticResult         atlantic_adblock_get_cosmetic(AtlanticAdblockEngine*, const char* url);
     void                   atlantic_adblock_free_cosmetic(CosmeticResult);
-    void                   atlantic_adblock_enable_tag(AtlanticAdblockEngine*, const char*);
 }
 
 class WPEWebPage;

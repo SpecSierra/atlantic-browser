@@ -303,12 +303,10 @@ signals:
     void findInPageHasResultChanged();
 
     void recvAsyncMessage(const QString &message, const QVariant &data);
-    void recvSyncMessage(const QString &message, const QVariant &data);
     void fileGrabWritten(const QString &fileName);
     void thumbnailResult(const QString &data);
     void afterRendering();
 
-    void showSelectMenu(const QStringList &items, int selectedIndex);
     void selectMenuActiveChanged();
     void selectMenuOptionsChanged();
     void selectMenuSelectedIndexChanged();
@@ -386,9 +384,6 @@ private:
     qreal m_selectionStartY = 0.0;
     qreal m_selectionEndX = 0.0;
     qreal m_selectionEndY = 0.0;
-
-    QSharedPointer<QQuickItemGrabResult> m_grabResult;
-    QSharedPointer<QQuickItemGrabResult> m_thumbnailResult;
 
     bool m_findInPageHasResult = false;
     bool m_findInitialized = false;

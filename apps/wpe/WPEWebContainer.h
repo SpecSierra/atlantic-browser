@@ -95,9 +95,7 @@ public:
     Q_INVOKABLE int activateTab(int tabId, const QString &url = QString());
     Q_INVOKABLE void closeTab(int tabId);
     Q_INVOKABLE void releaseActiveTabOwnership();
-    Q_INVOKABLE void dumpPages() const;
     Q_INVOKABLE void updateContentOrientation(Qt::ScreenOrientation orientation);
-    Q_INVOKABLE void updatePageFocus(bool focus);
     Q_INVOKABLE void applyContentOrientation(Qt::ScreenOrientation orientation);
 
     // QQmlParserStatus
@@ -155,7 +153,6 @@ private Q_SLOTS:
     void onTabClosed(int tabId);
     void onPageUrlChanged();
     void onPageTitleChanged();
-    void onPageLoadingChanged();
     void onPageLoadProgressChanged();
     void onPagePaintedChanged();
 

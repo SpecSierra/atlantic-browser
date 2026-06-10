@@ -541,10 +541,6 @@ void WPEWebContainer::releaseActiveTabOwnership()
     // stub - ownership tracking for D-Bus not needed in WPE
 }
 
-void WPEWebContainer::dumpPages() const
-{
-}
-
 void WPEWebContainer::updateContentOrientation(Qt::ScreenOrientation orientation)
 {
     emit webContentOrientationChanged(orientation);
@@ -553,11 +549,6 @@ void WPEWebContainer::updateContentOrientation(Qt::ScreenOrientation orientation
 void WPEWebContainer::applyContentOrientation(Qt::ScreenOrientation orientation)
 {
     updateContentOrientation(orientation);
-}
-
-void WPEWebContainer::updatePageFocus(bool)
-{
-    // stub
 }
 
 void WPEWebContainer::onActiveTabChanged(int activeTabId)
@@ -727,15 +718,6 @@ void WPEWebContainer::onPageTitleChanged()
     if (m_historyModel && !url.isEmpty() && url != QStringLiteral("about:blank") && !title.isEmpty()) {
         m_historyModel->add(url, title);
     }
-}
-
-void WPEWebContainer::onPageLoadingChanged()
-{
-    WPEWebPage *page = qobject_cast<WPEWebPage *>(sender());
-    if (!page || page != m_contentItem) return;
-    emit loadingChanged();
-    emit canGoBackChanged();
-    emit canGoForwardChanged();
 }
 
 void WPEWebContainer::onPageLoadProgressChanged()
