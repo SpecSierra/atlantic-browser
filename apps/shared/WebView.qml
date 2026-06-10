@@ -483,19 +483,6 @@ WebContainer {
                 }
                 }
             }
-            onRecvSyncMessage: {
-                // sender expects that this handler will update `response` argument
-                switch (message) {
-                case "Content:SelectionCopied": {
-                    if (data.succeeded && _selectionUI) {
-                        _selectionUI.showNotification()
-                        response.message = {"": ""}
-                    }
-                    break
-                }
-                }
-            }
-
             onContextMenuRequested: {
                 if (data.types.indexOf("content-text") !== -1) {
                     // we want to select some content text
