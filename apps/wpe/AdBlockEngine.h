@@ -10,15 +10,15 @@
 #include <QString>
 #include <QByteArray>
 
+// The UI-process AdBlockEngine handles cosmetic filtering only; network
+// blocking lives in the WebProcess adblock extension. Network-match FFI lives
+// there, not here.
 extern "C" {
-    struct MatchResult { bool matched; bool important; char* redirect; char* exception; };
     struct CosmeticResult { const char* hide_selectors; const char* injected_script; const char* generated_css; };
     typedef void AtlanticAdblockEngine;
 
     AtlanticAdblockEngine* atlantic_adblock_create_from_cache(const uint8_t*, size_t);
     void                   atlantic_adblock_destroy(AtlanticAdblockEngine*);
-    MatchResult            atlantic_adblock_match_network(AtlanticAdblockEngine*, const char* src, const char* req, const char* type, int third_party);
-    void                   atlantic_adblock_free_match_result(MatchResult);
     CosmeticResult         atlantic_adblock_get_cosmetic(AtlanticAdblockEngine*, const char* url);
     void                   atlantic_adblock_free_cosmetic(CosmeticResult);
 }
@@ -31,10 +31,6 @@ public:
 
     bool loadFromCache(const QString& path);
     bool isLoaded() const { return m_engine != nullptr; }
-
-    bool shouldBlock(const QString& sourceUrl, const QString& requestUrl,
-                     const char* resourceType, bool isThirdParty,
-                     QString* redirectUrl = nullptr);
 
     void applyCosmetics(WPEWebPage* page);
 

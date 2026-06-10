@@ -46,32 +46,6 @@ bool AdBlockEngine::loadFromCache(const QString& path)
     return true;
 }
 
-bool AdBlockEngine::shouldBlock(const QString& sourceUrl, const QString& requestUrl,
-                                 const char* resourceType, bool isThirdParty,
-                                 QString* redirectUrl)
-{
-    if (!m_engine || !s_enabled) return false;
-
-    QByteArray src = sourceUrl.toUtf8();
-    QByteArray req = requestUrl.toUtf8();
-
-    MatchResult r = atlantic_adblock_match_network(
-        m_engine, src.constData(), req.constData(),
-        resourceType, isThirdParty ? 1 : 0);
-
-    bool blocked = r.matched && r.redirect == nullptr;
-    if (r.redirect && redirectUrl) {
-        *redirectUrl = QString::fromUtf8(r.redirect);
-        blocked = true;
-    }
-    if (blocked) {
-        qDebug() << "[WPE-ADBLOCK] blocked" << requestUrl
-                 << "type=" << resourceType;
-    }
-    atlantic_adblock_free_match_result(r);
-    return blocked;
-}
-
 void AdBlockEngine::applyCosmetics(WPEWebPage* page)
 {
     if (!m_engine || !s_enabled || !page) return;

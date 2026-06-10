@@ -52,7 +52,6 @@ constexpr double kMinimumPinchZoomFactor = 0.5;
 constexpr double kMaximumPinchZoomFactor = 3.0;
 constexpr int kDefaultFramePumpIntervalMs = 2000;
 constexpr int kMediaInactiveDebounceMs = 400;
-const char kContentBlockerIdentifierBase[] = "atlantic-default";
 const char kPulseLookupService[] = "org.pulseaudio.Server";
 const char kPulseLookupPath[] = "/org/pulseaudio/server_lookup1";
 const char kPulseLookupInterface[] = "org.PulseAudio.ServerLookup1";
@@ -70,158 +69,10 @@ struct MainVolumeState {
     }
 };
 
-struct ContentBlockerContext {
-    WebKitUserContentManager* manager = nullptr;
-    WebKitUserContentFilterStore* store = nullptr;
-    GFile* sourceFile = nullptr;
-    QByteArray identifier; // versioned: base + mtime suffix
-
-    ~ContentBlockerContext()
-    {
-        if (manager)
-            g_object_unref(manager);
-        if (store)
-            g_object_unref(store);
-        if (sourceFile)
-            g_object_unref(sourceFile);
-    }
-};
-
-QString contentBlockerStorePath()
-{
-    QString cacheRoot = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation);
-    if (cacheRoot.isEmpty())
-        cacheRoot = QDir::homePath() + QStringLiteral("/.cache");
-    return cacheRoot + QStringLiteral("/atlantic-browser/content-filter-store");
-}
-
-// All user content managers that participate in ad blocking. The compiled
-// content-blocker filter is per-manager (one manager per web view/tab), so
-// toggling the setting must walk every live manager — flipping only the
-// AdBlockEngine flag left the filters installed and the blocker effectively
-// always on.
-QSet<WebKitUserContentManager*>& contentBlockerManagers()
-{
-    static QSet<WebKitUserContentManager*> managers;
-    return managers;
-}
-
-void onContentBlockerManagerDestroyed(gpointer, GObject* manager)
-{
-    contentBlockerManagers().remove(reinterpret_cast<WebKitUserContentManager*>(manager));
-}
-
-void registerContentBlockerManager(WebKitUserContentManager* manager)
-{
-    if (!manager || contentBlockerManagers().contains(manager))
-        return;
-    contentBlockerManagers().insert(manager);
-    g_object_weak_ref(G_OBJECT(manager), onContentBlockerManagerDestroyed, nullptr);
-}
-
-void installContentBlockerFilter(ContentBlockerContext* context, WebKitUserContentFilter* filter, const char* source)
-{
-    if (!context || !context->manager || !filter)
-        return;
-
-    // The load/compile is async: the user may have toggled ad block off while
-    // it was in flight. Don't install a filter that was just turned off.
-    if (!AdBlockEngine::isEnabled()) {
-        qDebug() << "[WPE-BLOCKER] ad block disabled — discarding compiled filter from" << source;
-        webkit_user_content_filter_unref(filter);
-        return;
-    }
-
-    webkit_user_content_manager_add_filter(context->manager, filter);
-    qDebug() << "[WPE-BLOCKER] installed content blocker from" << source
-             << "id=" << webkit_user_content_filter_get_identifier(filter);
-    webkit_user_content_filter_unref(filter);
-}
-
-void onContentBlockerSaved(GObject* sourceObject, GAsyncResult* result, gpointer userData)
-{
-    std::unique_ptr<ContentBlockerContext> context(static_cast<ContentBlockerContext*>(userData));
-    GError* error = nullptr;
-    WebKitUserContentFilter* filter =
-        webkit_user_content_filter_store_save_from_file_finish(
-            WEBKIT_USER_CONTENT_FILTER_STORE(sourceObject), result, &error);
-    if (!filter) {
-        qWarning() << "[WPE-BLOCKER] failed to compile content blocker:"
-                   << (error ? error->message : "unknown error");
-        g_clear_error(&error);
-        return;
-    }
-
-    installContentBlockerFilter(context.get(), filter, "compile");
-}
-
-void onContentBlockerLoaded(GObject* sourceObject, GAsyncResult* result, gpointer userData)
-{
-    std::unique_ptr<ContentBlockerContext> context(static_cast<ContentBlockerContext*>(userData));
-    GError* error = nullptr;
-    WebKitUserContentFilter* filter =
-        webkit_user_content_filter_store_load_finish(
-            WEBKIT_USER_CONTENT_FILTER_STORE(sourceObject), result, &error);
-    if (filter) {
-        installContentBlockerFilter(context.get(), filter, "cache");
-        return;
-    }
-
-    qDebug() << "[WPE-BLOCKER] cached content blocker unavailable, compiling from source:"
-             << (error ? error->message : "missing filter");
-    g_clear_error(&error);
-
-    if (!context->store || !context->sourceFile) {
-        qWarning() << "[WPE-BLOCKER] cannot compile content blocker: missing store or source file";
-        return;
-    }
-
-    webkit_user_content_filter_store_save_from_file(
-        context->store,
-        context->identifier.constData(),
-        context->sourceFile,
-        nullptr,
-        onContentBlockerSaved,
-        context.release());
-}
-
-void ensureContentBlocker(WebKitUserContentManager* manager)
-{
-    if (!manager)
-        return;
-
-    const QString sourcePath = QString::fromUtf8(WPERuntimePaths::kAtlanticContentBlockerPath);
-    if (!QFileInfo::exists(sourcePath)) {
-        qDebug() << "[WPE-BLOCKER] source file missing:" << sourcePath;
-        return;
-    }
-
-    // Build a versioned identifier: base + mtime so the compiled cache is
-    // automatically invalidated whenever the JSON is updated.
-    QFileInfo fi(sourcePath);
-    const qint64 mtime = fi.lastModified().toMSecsSinceEpoch() / 1000;
-    QByteArray identifier = QByteArray(kContentBlockerIdentifierBase)
-                            + '-' + QByteArray::number((qlonglong)mtime);
-
-    const QString storePath = contentBlockerStorePath();
-    if (!QDir().mkpath(storePath)) {
-        qWarning() << "[WPE-BLOCKER] failed to create filter store path:" << storePath;
-        return;
-    }
-
-    auto context = std::make_unique<ContentBlockerContext>();
-    context->manager = WEBKIT_USER_CONTENT_MANAGER(g_object_ref(manager));
-    context->store = webkit_user_content_filter_store_new(storePath.toUtf8().constData());
-    context->sourceFile = g_file_new_for_path(sourcePath.toUtf8().constData());
-    context->identifier = identifier;
-
-    webkit_user_content_filter_store_load(
-        context->store,
-        context->identifier.constData(),
-        nullptr,
-        onContentBlockerLoaded,
-        context.release());
-}
+// Ad/tracker network blocking now lives entirely in the WebProcess adblock
+// extension (atlantic-engine/web-extension), which runs the Brave/Rust engine
+// against every resource request. The old per-tab WebKit content-filter path
+// (WebKitUserContentFilterStore + content-blocker.json) has been removed.
 
 QString wellKnownPulseSocket()
 {
@@ -669,39 +520,9 @@ void onNetworkSessionDownloadStarted(WebKitNetworkSession*, WebKitDownload* down
 
 gboolean onDecidePolicy(WebKitWebView* webView, WebKitPolicyDecision* decision, WebKitPolicyDecisionType type, gpointer)
 {
-    if (type == WEBKIT_POLICY_DECISION_TYPE_RESPONSE) {
-        WebKitResponsePolicyDecision* responseDecision =
-            WEBKIT_RESPONSE_POLICY_DECISION(decision);
-        if (!responseDecision ||
-            webkit_response_policy_decision_is_main_frame_main_resource(responseDecision))
-            return FALSE;
-
-        WebKitURIRequest* request =
-            webkit_response_policy_decision_get_request(responseDecision);
-        const gchar* uri = request ? webkit_uri_request_get_uri(request) : nullptr;
-        if (!uri || !*uri) return FALSE;
-
-        QString sourceUrl;
-        const gchar* activeUri = webkit_web_view_get_uri(webView);
-        if (activeUri && *activeUri)
-            sourceUrl = QString::fromUtf8(activeUri);
-        else
-            sourceUrl = QString::fromUtf8(uri);
-
-        const char* rtype = "other";
-
-        QString redirectUrl;
-        if (AdBlockEngine::instance().shouldBlock(
-                sourceUrl, QString::fromUtf8(uri), rtype, true, &redirectUrl)) {
-            if (!redirectUrl.isEmpty()) {
-                webkit_web_view_load_uri(webView, redirectUrl.toUtf8().constData());
-            }
-            webkit_policy_decision_ignore(decision);
-            return TRUE;
-        }
-        return FALSE;
-    }
-
+    // Network ad/tracker blocking is handled per-request by the WebProcess
+    // adblock extension (Brave/Rust engine), so this callback only routes
+    // new-window navigations into the current view.
     if (type != WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION) {
         return FALSE;
     }
@@ -2251,11 +2072,6 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
 
             // --- HTML <select> via JS bridge ---
             WebKitUserContentManager* ucm = webkit_web_view_get_user_content_manager(wv);
-            // Always register (so a later enable can install the filter on
-            // this tab), but only install when the toggle is on.
-            registerContentBlockerManager(ucm);
-            if (AdBlockEngine::isEnabled())
-                ensureContentBlocker(ucm);
 
             // Tab-level crash isolation: catch WebProcess termination before it
             // propagates up and kills the UI, surface the crash state to QML,
@@ -4002,31 +3818,17 @@ void WPEWebPage::setAdBlockEnabled(bool enabled)
         return;
     AdBlockEngine::setEnabled(enabled);
 
-    // Tell the WebProcess ad-block extension (which does the network blocking)
-    // about the new state, so it takes effect on live pages without a reload.
-    // New WebProcesses pick up the state via the extension's init user-data.
+    // Network blocking lives in the WebProcess adblock extension; tell it the
+    // new state so it takes effect on live pages without a reload. New
+    // WebProcesses pick up the state via the extension's init user-data. The
+    // AdBlockEngine flag still gates cosmetic injection in the UI process.
     if (WebKitWebView *wv = webView()) {
         webkit_web_view_send_message_to_page(
             wv, webkit_user_message_new("atlantic-adblock-set-enabled",
                                         g_variant_new_boolean(enabled)),
             nullptr, nullptr, nullptr);
     }
-
-    // The AdBlockEngine flag only gates frame-level policy and cosmetic
-    // injection; the bulk of the blocking is the compiled WebKit content
-    // filter installed on every tab's user content manager. Toggling used to
-    // stop here, leaving those filters installed — the blocker looked
-    // permanently on. Walk all live managers and install/remove accordingly
-    // (takes effect on the next page load).
-    const auto managers = contentBlockerManagers();
-    for (WebKitUserContentManager* manager : managers) {
-        if (enabled)
-            ensureContentBlocker(manager);
-        else
-            webkit_user_content_manager_remove_all_filters(manager);
-    }
-    qDebug() << "[WPE-BLOCKER] ad block toggled" << (enabled ? "ON" : "OFF")
-             << "across" << managers.size() << "tab(s)";
+    qDebug() << "[WPE-BLOCKER] ad block toggled" << (enabled ? "ON" : "OFF");
 
     emit adBlockEnabledChanged();
 }
