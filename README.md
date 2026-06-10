@@ -1,6 +1,6 @@
 # Atlantic Browser
 
-Atlantic Browser is the maintained Sailfish OS browser port. It uses the Sailfish Silica Qt browser UI backed by a WPE WebKit 2.52.3 Qt5 bridge.
+Atlantic Browser is the maintained Sailfish OS browser port. It uses the Sailfish Silica Qt browser UI backed by a WPE WebKit 2.52.4 Qt5 bridge.
 
 Maintainer: [SpecSierra](https://github.com/SpecSierra)
 
@@ -32,7 +32,7 @@ The browser is split into four layers:
 │  PersistentTabModel, DeclarativeHistoryModel│
 ├────────────────────────────────────────────┤
 │  Engine Layer (external)                    │
-│  WPEQtView ← WPE WebKit 2.52.3             │
+│  WPEQtView ← WPE WebKit 2.52.4             │
 │  libWPEWebKit-2.0, libwpe-1.0              │
 └────────────────────────────────────────────┘
 ```
