@@ -14,7 +14,6 @@ import Sailfish.Silica 1.0
 import Sailfish.Browser 1.0
 import Nemo.Configuration 1.0
 import com.jolla.settings.system 1.0
-import Nemo.Configuration 1.0
 import Sailfish.Pickers 1.0
 import Sailfish.Silica.Background 1.0 as SilicaBackground
 import "components"
@@ -194,8 +193,10 @@ Page {
             }
 
             TextSwitch {
-                text: "Ad block"
-                description: "Block advertisements and trackers"
+                //% "Ad block"
+                text: qsTrId("atlantic-la-ad_block")
+                //% "Block advertisements and trackers"
+                description: qsTrId("atlantic-la-ad_block_description")
                 checked: adBlockConf.value
                 automaticCheck: false
                 leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter

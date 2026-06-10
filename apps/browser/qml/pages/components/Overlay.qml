@@ -313,7 +313,8 @@ Shared.Background {
                                 }
                                 Label {
                                     anchors.horizontalCenter: parent.horizontalCenter
-                                    text: "Copy"
+                                    //% "Copy"
+                                    text: qsTrId("atlantic-la-copy")
                                     font.pixelSize: Theme.fontSizeExtraSmall
                                     color: Theme.highlightColor
                                 }
@@ -332,7 +333,8 @@ Shared.Background {
                                 }
                                 Label {
                                     anchors.horizontalCenter: parent.horizontalCenter
-                                    text: "Select All"
+                                    //% "Select All"
+                                    text: qsTrId("atlantic-la-select_all")
                                     font.pixelSize: Theme.fontSizeExtraSmall
                                     color: Theme.highlightColor
                                 }
@@ -351,7 +353,8 @@ Shared.Background {
                                 }
                                 Label {
                                     anchors.horizontalCenter: parent.horizontalCenter
-                                    text: "Clear"
+                                    //% "Clear"
+                                    text: qsTrId("atlantic-la-clear")
                                     font.pixelSize: Theme.fontSizeExtraSmall
                                     color: Theme.highlightColor
                                 }

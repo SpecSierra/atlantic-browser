@@ -14,7 +14,6 @@ import Sailfish.Silica 1.0
 import Sailfish.Browser 1.0
 import "." as Browser
 import "../../" as Shared
-import QtQuick 2.0
 
 Item {
     id: searchBar
@@ -49,7 +48,8 @@ Item {
             Label {
                 id: textLabel
                 anchors.verticalCenter: parent.verticalCenter
-                text: "Find: \"" + search + "\""
+                //% "Find: \"%1\""
+                text: qsTrId("atlantic-la-find_term").arg(search)
                 color: touchArea.down ? Theme.highlightColor : Theme.primaryColor
             }
 

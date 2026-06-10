@@ -215,7 +215,8 @@ Item {
                             onClicked: root.loadUrl(model.url, true)
                             onPressAndHold: {
                                 var u = model.url
-                                removeRemorse.execute("Removing bookmark",
+                                //% "Removing bookmark"
+                                removeRemorse.execute(qsTrId("atlantic-la-removing_bookmark"),
                                                       function() { if (root.bookmarkModel) root.bookmarkModel.remove(u) })
                             }
                         }
@@ -264,7 +265,8 @@ Item {
                 Label {
                     width: grid.cell
                     horizontalAlignment: Text.AlignHCenter
-                    text: "Add"
+                    //% "Add"
+                    text: qsTrId("atlantic-la-add")
                     color: Theme.secondaryColor
                     font.pixelSize: Theme.fontSizeExtraSmall
                 }

@@ -793,7 +793,8 @@ Page {
             spacing: Theme.paddingLarge
 
             Button {
-                text: "Save image"
+                //% "Save image"
+                text: qsTrId("atlantic-bt-save_image")
                 onClicked: {
                     if (webView.contentItem && browserPage._pendingImageUrl.length > 0)
                         webView.contentItem.downloadUrl(browserPage._pendingImageUrl)
@@ -802,7 +803,8 @@ Page {
             }
 
             Button {
-                text: "Cancel"
+                //% "Cancel"
+                text: qsTrId("atlantic-bt-cancel")
                 onClicked: _imagePanel.open = false
             }
         }
