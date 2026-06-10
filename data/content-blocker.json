@@ -1,0 +1,122 @@
+[
+  {
+    "trigger": {
+      "url-filter": ".*\\.go-mpulse\\.net",
+      "load-type": ["third-party"],
+      "resource-type": ["script"]
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "google-analytics\\.com/(analytics|ga|gtag|collect)",
+      "load-type": ["third-party"],
+      "resource-type": ["script", "raw"]
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "analytics\\.google\\.com",
+      "load-type": ["third-party"],
+      "resource-type": ["script", "raw"]
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "googletagmanager\\.com/(gtm|gtag)\\.js",
+      "load-type": ["third-party"],
+      "resource-type": ["script"]
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "connect\\.facebook\\.net",
+      "load-type": ["third-party"],
+      "resource-type": ["script"]
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "(static|script|hs)\\.hotjar\\.com",
+      "load-type": ["third-party"],
+      "resource-type": ["script"]
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "bat\\.bing\\.com",
+      "load-type": ["third-party"],
+      "resource-type": ["script", "raw"]
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "stats\\.g\\.doubleclick\\.net",
+      "load-type": ["third-party"],
+      "resource-type": ["script", "raw"]
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "amplify\\.outbrain\\.com",
+      "load-type": ["third-party"],
+      "resource-type": ["script"]
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "mc\\.yandex\\.(ru|com)",
+      "load-type": ["third-party"],
+      "resource-type": ["script"]
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "cdn\\.mxpnl\\.com",
+      "load-type": ["third-party"],
+      "resource-type": ["script"]
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "cdn\\.amplitude\\.com",
+      "load-type": ["third-party"],
+      "resource-type": ["script"]
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "analytics\\.twitter\\.com",
+      "load-type": ["third-party"],
+      "resource-type": ["script", "raw"]
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "cdn\\.segment\\.com",
+      "load-type": ["third-party"],
+      "resource-type": ["script"]
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "js\\.intercomcdn\\.com",
+      "load-type": ["third-party"],
+      "resource-type": ["script"]
+    },
+    "action": { "type": "block" }
+  }
+]
