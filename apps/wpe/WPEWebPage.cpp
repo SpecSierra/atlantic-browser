@@ -37,6 +37,7 @@
 #include <QStringList>
 #include <QUrl>
 #include <QVector>
+#include <MDConfItem>
 #include <array>
 #include <memory>
 
@@ -94,10 +95,42 @@ QString contentBlockerStorePath()
     return cacheRoot + QStringLiteral("/atlantic-browser/content-filter-store");
 }
 
+// All user content managers that participate in ad blocking. The compiled
+// content-blocker filter is per-manager (one manager per web view/tab), so
+// toggling the setting must walk every live manager — flipping only the
+// AdBlockEngine flag left the filters installed and the blocker effectively
+// always on.
+QSet<WebKitUserContentManager*>& contentBlockerManagers()
+{
+    static QSet<WebKitUserContentManager*> managers;
+    return managers;
+}
+
+void onContentBlockerManagerDestroyed(gpointer, GObject* manager)
+{
+    contentBlockerManagers().remove(reinterpret_cast<WebKitUserContentManager*>(manager));
+}
+
+void registerContentBlockerManager(WebKitUserContentManager* manager)
+{
+    if (!manager || contentBlockerManagers().contains(manager))
+        return;
+    contentBlockerManagers().insert(manager);
+    g_object_weak_ref(G_OBJECT(manager), onContentBlockerManagerDestroyed, nullptr);
+}
+
 void installContentBlockerFilter(ContentBlockerContext* context, WebKitUserContentFilter* filter, const char* source)
 {
     if (!context || !context->manager || !filter)
         return;
+
+    // The load/compile is async: the user may have toggled ad block off while
+    // it was in flight. Don't install a filter that was just turned off.
+    if (!AdBlockEngine::isEnabled()) {
+        qDebug() << "[WPE-BLOCKER] ad block disabled — discarding compiled filter from" << source;
+        webkit_user_content_filter_unref(filter);
+        return;
+    }
 
     webkit_user_content_manager_add_filter(context->manager, filter);
     qDebug() << "[WPE-BLOCKER] installed content blocker from" << source
@@ -2184,6 +2217,14 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                 static bool engineInitialized = false;
                 if (!engineInitialized) {
                     engineInitialized = true;
+                    // Restore the persisted toggle BEFORE the first content
+                    // blocker install. AdBlockEngine::s_enabled defaults to
+                    // true, and the dconf binding in BrowserPage.qml only
+                    // fires on *changes* — so without this read a disabled
+                    // ad blocker came back on after every browser restart.
+                    MDConfItem adBlockConf(QStringLiteral("/apps/atlantic-browser/settings/adblock_enabled"));
+                    AdBlockEngine::setEnabled(adBlockConf.value(true).toBool());
+                    qInfo() << "[ADBLOCK] enabled (persisted):" << AdBlockEngine::isEnabled();
                     QString cachePath = QStringLiteral("/usr/share/atlantic-browser/engine.dat");
                     if (!QFileInfo::exists(cachePath)) {
                         cachePath = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation)
@@ -2210,7 +2251,11 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
 
             // --- HTML <select> via JS bridge ---
             WebKitUserContentManager* ucm = webkit_web_view_get_user_content_manager(wv);
-            ensureContentBlocker(ucm);
+            // Always register (so a later enable can install the filter on
+            // this tab), but only install when the toggle is on.
+            registerContentBlockerManager(ucm);
+            if (AdBlockEngine::isEnabled())
+                ensureContentBlocker(ucm);
 
             // Tab-level crash isolation: catch WebProcess termination before it
             // propagates up and kills the UI, surface the crash state to QML,
@@ -3950,6 +3995,25 @@ bool WPEWebPage::adBlockEnabled() const
 
 void WPEWebPage::setAdBlockEnabled(bool enabled)
 {
+    if (AdBlockEngine::isEnabled() == enabled)
+        return;
     AdBlockEngine::setEnabled(enabled);
+
+    // The AdBlockEngine flag only gates frame-level policy and cosmetic
+    // injection; the bulk of the blocking is the compiled WebKit content
+    // filter installed on every tab's user content manager. Toggling used to
+    // stop here, leaving those filters installed — the blocker looked
+    // permanently on. Walk all live managers and install/remove accordingly
+    // (takes effect on the next page load).
+    const auto managers = contentBlockerManagers();
+    for (WebKitUserContentManager* manager : managers) {
+        if (enabled)
+            ensureContentBlocker(manager);
+        else
+            webkit_user_content_manager_remove_all_filters(manager);
+    }
+    qDebug() << "[WPE-BLOCKER] ad block toggled" << (enabled ? "ON" : "OFF")
+             << "across" << managers.size() << "tab(s)";
+
     emit adBlockEnabledChanged();
 }

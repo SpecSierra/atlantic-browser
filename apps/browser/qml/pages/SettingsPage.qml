@@ -201,8 +201,13 @@ Page {
                 leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
                 _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
                 onClicked: {
+                    // dconf is the single source of truth: BrowserPage's
+                    // ConfigurationValue pushes the change into the engine via
+                    // contentItem.adBlockEnabled. The old extra
+                    // settingManager.setAdBlockEnabled(!adBlockConf.value)
+                    // call read the value AFTER the flip, so it set the engine
+                    // to the INVERSE of the visible switch state.
                     adBlockConf.value = !adBlockConf.value
-                    settingManager.setAdBlockEnabled(!adBlockConf.value)
                 }
             }
 
