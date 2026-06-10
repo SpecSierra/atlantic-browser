@@ -14,6 +14,7 @@ import QtGraphicalEffects 1.0
 import Sailfish.Silica 1.0
 import Sailfish.Ambience 1.0
 import "." as Browser
+import "WallpaperUtils.js" as WallpaperUtils
 
 Item {
     id: wallpaper
@@ -23,14 +24,7 @@ Item {
     // the blurred texture stays high-res enough not to look pixelated.
     property int blurDownscale: 4
 
-    property string wpUrl: {
-        var s = String(Ambience.source).replace("file://", "");
-        var p = s.lastIndexOf("/");
-        if (p < 0) return "file:///usr/share/ambience/fire/images/ambience_fire.jpg";
-        var dir = s.substring(0, p);
-        var name = s.substring(p + 1).replace(".ambience", "");
-        return "file://" + dir + "/images/ambience_" + name + ".jpg";
-    }
+    property string wpUrl: WallpaperUtils.ambienceImageUrl(Ambience.source)
 
     // Full-screen ambience wallpaper, rendered off-screen. It is captured only;
     // it is NOT positioned relative to this Background item, so that the chrome

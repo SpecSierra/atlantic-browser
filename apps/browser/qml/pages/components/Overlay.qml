@@ -18,6 +18,7 @@ import Sailfish.WebView.Popups 1.0
 import com.jolla.settings.system 1.0
 import "." as Browser
 import "../../shared" as Shared
+import "UrlUtils.js" as UrlUtils
 
 Shared.Background {
     id: overlay
@@ -50,17 +51,6 @@ Shared.Background {
                                             ? (Screen.topCutout.height + Theme.paddingSmall)
                                             : 0)
 
-    // WPE: detect whether input is a URL or a search query
-    function _isUrl(text) {
-        text = text.trim()
-        if (text.indexOf("://") !== -1) return true
-        if (text.indexOf("about:") === 0) return true
-        if (/^[a-zA-Z0-9\-]+\.[a-zA-Z]{2,}/.test(text)) return true
-        if (/^localhost(:[0-9]+)?/.test(text)) return true
-        if (/^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/.test(text)) return true
-        return false
-    }
-
     function loadPage(url, newTab) {
         var openInNewTab = !!newTab || searchField.enteringNewTabUrl
         console.log("[QML-LOAD] loadPage url=" + url + " newTab=" + openInNewTab)
@@ -69,14 +59,8 @@ Shared.Background {
         } else if (url == "about:settings") {
             pageStack.animatorPush(Qt.resolvedUrl("../SettingsPage.qml"))
         } else {
-            var pageUrl = url.trim()
-            // WPE: convert search keywords to search URL
-            if (pageUrl && !_isUrl(pageUrl)) {
-                pageUrl = "https://www.google.com/search?q=" + encodeURIComponent(pageUrl)
-            } else if (pageUrl && pageUrl.indexOf("://") === -1 && pageUrl.indexOf("about:") !== 0) {
-                pageUrl = "https://" + pageUrl
-            }
-
+            // WPE: search keywords -> search URL, bare host -> https:// (see UrlUtils.js)
+            var pageUrl = UrlUtils.normalize(url)
             console.log("[QML-LOAD] resolved pageUrl=" + pageUrl)
             webView.load(pageUrl, "", openInNewTab)
         }

@@ -13,6 +13,7 @@ import Sailfish.Silica.Background 1.0 as Background
 import Sailfish.Silica.private 1.0 as Private
 import Sailfish.Ambience 1.0
 import "." as Components
+import "../../shared/WallpaperUtils.js" as WallpaperUtils
 
 SilicaControl {
     id: popUpMenu
@@ -77,14 +78,7 @@ SilicaControl {
 
     // Blurred ambience wallpaper, in the menu's own coordinate space, for the
     // FrostedBox glass to sample by region (FBO-immune, unlike gl_FragCoord).
-    property string _wpUrl: {
-        var s = String(Ambience.source).replace("file://", "")
-        var p = s.lastIndexOf("/")
-        if (p < 0) return "file:///usr/share/ambience/fire/images/ambience_fire.jpg"
-        var dir = s.substring(0, p)
-        var name = s.substring(p + 1).replace(".ambience", "")
-        return "file://" + dir + "/images/ambience_" + name + ".jpg"
-    }
+    property string _wpUrl: WallpaperUtils.ambienceImageUrl(Ambience.source)
 
     // The raw wallpaper must be captured but never drawn (hideSource is unreliable
     // here), so keep it inside a zero-size clipped container; the capture SES below

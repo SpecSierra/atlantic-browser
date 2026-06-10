@@ -11,6 +11,7 @@ import QtGraphicalEffects 1.0
 import Sailfish.Silica 1.0
 import Sailfish.Ambience 1.0
 import "." as Browser
+import "../../shared/WallpaperUtils.js" as WallpaperUtils
 
 Item {
     id: root
@@ -28,14 +29,7 @@ Item {
 
     property var now: new Date()
 
-    property string wpUrl: {
-        var s = String(Ambience.source).replace("file://", "")
-        var p = s.lastIndexOf("/")
-        if (p < 0) return "file:///usr/share/ambience/fire/images/ambience_fire.jpg"
-        var dir = s.substring(0, p)
-        var name = s.substring(p + 1).replace(".ambience", "")
-        return "file://" + dir + "/images/ambience_" + name + ".jpg"
-    }
+    property string wpUrl: WallpaperUtils.ambienceImageUrl(Ambience.source)
 
     Timer {
         interval: 20000

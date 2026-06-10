@@ -1,6 +1,7 @@
 import QtQuick 2.2
 import QtQuick.Window 2.2
 import Sailfish.Browser 1.0
+import "pages/components/UrlUtils.js" as UrlUtils
 
 Rectangle {
     id: root
@@ -17,31 +18,8 @@ Rectangle {
                                               ? webView.url
                                               : "Atlantic")
 
-    function isLikelyUrl(text) {
-        var trimmed = text.trim()
-        if (trimmed.indexOf("://") !== -1) return true
-        if (trimmed.indexOf("about:") === 0) return true
-        if (/^[a-zA-Z0-9\-]+\.[a-zA-Z]{2,}/.test(trimmed)) return true
-        if (/^localhost(:[0-9]+)?/.test(trimmed)) return true
-        if (/^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/.test(trimmed)) return true
-        return false
-    }
-
     function normalizedInput(text) {
-        var candidate = text.trim()
-        if (!candidate.length) {
-            return ""
-        }
-
-        if (!isLikelyUrl(candidate)) {
-            return "https://www.google.com/search?q=" + encodeURIComponent(candidate)
-        }
-
-        if (candidate.indexOf("://") === -1 && candidate.indexOf("about:") !== 0) {
-            return "https://" + candidate
-        }
-
-        return candidate
+        return UrlUtils.normalize(text)
     }
 
     function loadAddress(text) {
