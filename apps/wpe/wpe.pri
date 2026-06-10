@@ -19,6 +19,7 @@ LIBS += -L$${WPE_SFOS_PREFIX}/lib -latlantic_adblock
 HEADERS += \
     $$PWD/AdBlockEngine.h \
     $$PWD/WPEWebPage.h \
+    $$PWD/WPEUserScripts.h \
     $$PWD/WPEWebContainer.h \
     $$PWD/WPEWebPageCreator.h
 
