@@ -356,6 +356,42 @@ bool envVarEnabled(const QByteArray &value)
     return normalized == "1" || normalized == "true" || normalized == "yes" || normalized == "on";
 }
 
+// ── User agent ───────────────────────────────────────────────────────────────
+// Reworked after the engine switch: the gecko-era strings carried no Safari
+// "Version/x" token, so version-sniffing sites could not classify the browser
+// and fell back to their legacy/most-degraded code paths (one root cause of
+// the YouTube icon trouble). Shape now mirrors what real WebKit browsers send:
+//  - AppleWebKit/605.1.15 + Safari/605.1.15: frozen WebKit-family tokens.
+//  - Version/26.0: Safari's feature-version token, matching the WebKit 2.52.x
+//    era — this is what "is this a modern Safari?" sniffers read.
+//  - Mobile ... Mobile Safari: standard mobile-detection tokens.
+//  - SailfishOS in the platform comment slot: honest, ignored by sniffers.
+//  - Atlantic/1.0 placed Chrome-style before "Mobile Safari" (the
+//    "<Brand>/<ver> Mobile Safari/..." shape every UA parser handles).
+// Desktop mode mirrors Safari's own "Request Desktop Website", which presents
+// the macOS Safari UA — sites then serve the well-tested Mac variant instead
+// of reacting to the rare "Linux + Safari" combination.
+// ATLANTIC_USER_AGENT / ATLANTIC_USER_AGENT_DESKTOP override for testing
+// without a rebuild.
+QString atlanticUserAgent(bool desktopMode)
+{
+    const QByteArray envOverride =
+        qgetenv(desktopMode ? "ATLANTIC_USER_AGENT_DESKTOP" : "ATLANTIC_USER_AGENT");
+    if (!envOverride.trimmed().isEmpty())
+        return QString::fromUtf8(envOverride.trimmed());
+
+    if (desktopMode) {
+        return QStringLiteral(
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+            "Version/26.0 Atlantic/1.0 Safari/605.1.15");
+    }
+    return QStringLiteral(
+        "Mozilla/5.0 (Linux; Mobile; SailfishOS 5.1) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+        "Version/26.0 Atlantic/1.0 Mobile Safari/605.1.15");
+}
+
 bool perfLoggingEnabled()
 {
     return envVarEnabled(qgetenv("ATLANTIC_PERF_LOG"));
@@ -999,71 +1035,208 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
     webkit_user_content_manager_add_script(ucm, perfScript);
     webkit_user_script_unref(perfScript);
 
-    static const gchar* ytIconFixCssJs = R"JS(
+    // Generic CSS-mask icon healer. Replaces the old YouTube-specific CSS
+    // override (hardcoded English aria-label selectors + hand-drawn glyphs,
+    // injected into EVERY site), which needed a manual patch for each newly
+    // broken icon and could clobber legitimate "Share"/"Next"/"Comment"
+    // elements on unrelated sites. Diagnosis recap: WPE 2.52.4 parses all
+    // mask shorthands/longhands fine (verified against CSSProperties.json);
+    // what actually broke was masked icons painting nothing — either the
+    // EXTERNAL mask image (sprite) never became usable while inline data:
+    // URI masks worked, or the icon had a mask but no background paint. So:
+    //  1. Walk same-origin stylesheets once for rules whose mask-image is an
+    //     external url(); fetch each unique URL and re-issue the rule with
+    //     the image inlined as a data: URI (the form known to work). Real
+    //     glyphs are preserved — nothing is hand-drawn, any language, any
+    //     site, including icons that do not exist yet.
+    //  2. For elements matched by mask rules that would paint nothing (mask
+    //     present, fully transparent background, no background-image, no
+    //     children/text), set background-color: currentColor — the color the
+    //     site intends for masked icons.
+    // Bounded cost: each stylesheet is walked once (deferred to idle); the
+    // element pass only runs querySelectorAll over the handful of collected
+    // mask selectors. Heals are logged with [WPE-ICON-HEAL] so future icon
+    // breakage is diagnosable from the remote inspector instead of patched
+    // blind. Set ATLANTIC_DISABLE_ICON_HEAL=1 to turn off.
+    static const gchar* iconHealJs = R"JS(
 (function() {
-    if (document.getElementById('__wpe_yt_icon_fix')) return;
-    var s = document.createElement('style');
-    s.id = '__wpe_yt_icon_fix';
-    s.textContent = ''
-        + '[aria-label*="Previous"], [title*="Previous"] {'
-        +   '-webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\'%3E%3Cpath d=\'M6 6h2v12H6zm3.5 6l8.5 6V6z\'/%3E%3C/svg%3E") !important;'
-        +   '-webkit-mask-size: contain !important;'
-        +   '-webkit-mask-position: center !important;'
-        +   '-webkit-mask-repeat: no-repeat !important;'
-        +   'background-color: #fff !important;'
-        + '}'
-        + '[aria-label*="Next"], [title*="Next"] {'
-        +   '-webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\'%3E%3Cpath d=\'M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z\'/%3E%3C/svg%3E") !important;'
-        +   '-webkit-mask-size: contain !important;'
-        +   '-webkit-mask-position: center !important;'
-        +   '-webkit-mask-repeat: no-repeat !important;'
-        +   'background-color: #fff !important;'
-        + '}'
-        + '[aria-label*="Full screen"], [title*="Full screen"], [data-tooltip-text*="Full screen"] {'
-        +   '-webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\'%3E%3Cpath d=\'M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z\'/%3E%3C/svg%3E") !important;'
-        +   '-webkit-mask-size: contain !important;'
-        +   '-webkit-mask-position: center !important;'
-        +   '-webkit-mask-repeat: no-repeat !important;'
-        +   'background-color: #fff !important;'
-        + '}'
-        + '[aria-label*="like this video"], [aria-label*="I like this"] {'
-        +   '-webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\'%3E%3Cpath d=\'M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z\'/%3E%3C/svg%3E") !important;'
-        +   '-webkit-mask-size: contain !important;'
-        +   '-webkit-mask-position: center !important;'
-        +   '-webkit-mask-repeat: no-repeat !important;'
-        +   'background-color: #fff !important;'
-        + '}'
-        + '[aria-label*="Dislike this video"], [aria-label*="I dislike this"] {'
-        +   '-webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\'%3E%3Cpath d=\'M15 3H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v2c0 1.1.9 2 2 2h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 23l6.59-6.59c.36-.36.58-.86.58-1.41V5c0-1.1-.9-2-2-2zm4 0v12h4V3h-4z\'/%3E%3C/svg%3E") !important;'
-        +   '-webkit-mask-size: contain !important;'
-        +   '-webkit-mask-position: center !important;'
-        +   '-webkit-mask-repeat: no-repeat !important;'
-        +   'background-color: #fff !important;'
-        + '}'
-        + '[aria-label*="Share"] {'
-        +   '-webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\'%3E%3Cpath d=\'M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z\'/%3E%3C/svg%3E") !important;'
-        +   '-webkit-mask-size: contain !important;'
-        +   '-webkit-mask-position: center !important;'
-        +   '-webkit-mask-repeat: no-repeat !important;'
-        +   'background-color: #fff !important;'
-        + '}'
-        + '[aria-label*="Comment"] {'
-        +   '-webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\'%3E%3Cpath d=\'M21.99 4c0-1.1-.89-2-1.99-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4-.01-18zM18 14H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z\'/%3E%3C/svg%3E") !important;'
-        +   '-webkit-mask-size: contain !important;'
-        +   '-webkit-mask-position: center !important;'
-        +   '-webkit-mask-repeat: no-repeat !important;'
-        +   'background-color: #fff !important;'
-        + '}';
-    (document.head || document.documentElement).appendChild(s);
+    if (window.__wpeIconHealInstalled) return;
+    window.__wpeIconHealInstalled = true;
+
+    var inlinePromises = {};   // absolute url -> Promise<data URI>
+    var seenSheets = [];       // stylesheets already walked
+    var maskSelectors = [];    // selectors of url()-mask rules
+    var healedCount = 0;
+    var styleEl = null;
+
+    function overrideSheet() {
+        if (!styleEl || !styleEl.parentNode) {
+            styleEl = document.createElement('style');
+            styleEl.id = '__wpe_icon_heal';
+            (document.head || document.documentElement).appendChild(styleEl);
+        }
+        return styleEl.sheet;
+    }
+
+    function inlineUrl(abs) {
+        if (!inlinePromises[abs]) {
+            inlinePromises[abs] = fetch(abs, { credentials: 'omit' })
+                .then(function(r) {
+                    if (!r.ok) throw new Error('http ' + r.status);
+                    return r.blob();
+                })
+                .then(function(blob) {
+                    return new Promise(function(resolve, reject) {
+                        var fr = new FileReader();
+                        fr.onload = function() { resolve(fr.result); };
+                        fr.onerror = reject;
+                        fr.readAsDataURL(blob);
+                    });
+                });
+        }
+        return inlinePromises[abs];
+    }
+
+    function maskValueOf(style) {
+        return style.getPropertyValue('-webkit-mask-image')
+            || style.getPropertyValue('mask-image')
+            || style.getPropertyValue('-webkit-mask')
+            || style.getPropertyValue('mask')
+            || '';
+    }
+
+    function externalUrlIn(value, baseHref) {
+        if (value.indexOf('url(') === -1) return null;
+        if (value.indexOf('data:') !== -1 || value.indexOf('gradient') !== -1) return null;
+        var m = value.match(/url\((["']?)([^)"']+)\1\)/);
+        if (!m) return null;
+        var abs;
+        try { abs = new URL(m[2], baseHref || document.baseURI).href; } catch (e) { return null; }
+        return abs.indexOf('http') === 0 ? abs : null;
+    }
+
+    function walkRules(rules, baseHref) {
+        for (var i = 0; i < rules.length; i++) {
+            var rule = rules[i];
+            if (rule.styleSheet) { walkSheet(rule.styleSheet); continue; }      // @import
+            if (rule.cssRules) { walkRules(rule.cssRules, baseHref); continue; } // @media etc.
+            if (!rule.style || !rule.selectorText) continue;
+            var mv = maskValueOf(rule.style);
+            if (!mv || mv.indexOf('url(') === -1 || mv.indexOf('gradient') !== -1) continue;
+            var sel = rule.selectorText;
+            if (maskSelectors.indexOf(sel) === -1) maskSelectors.push(sel);
+            var abs = externalUrlIn(mv, baseHref);
+            if (abs) {
+                (function(sel2, abs2) {
+                    inlineUrl(abs2).then(function(dataUri) {
+                        var sheet = overrideSheet();
+                        sheet.insertRule(sel2 + '{-webkit-mask-image:url("' + dataUri + '") !important;'
+                                              + 'mask-image:url("' + dataUri + '") !important;}',
+                                         sheet.cssRules.length);
+                        healedCount++;
+                        console.log('[WPE-ICON-HEAL] inlined external mask ' + abs2.slice(0, 120));
+                    }).catch(function(e) {
+                        console.log('[WPE-ICON-HEAL] cannot inline ' + abs2.slice(0, 120) + ': ' + e);
+                    });
+                })(sel, abs);
+            }
+            // Pseudo-elements cannot get inline styles; if a masked pseudo
+            // declares no background paint at all, give it currentColor.
+            if (/::?(before|after)/.test(sel)
+                && !rule.style.getPropertyValue('background-color')
+                && !rule.style.getPropertyValue('background')
+                && !rule.style.getPropertyValue('background-image')) {
+                try {
+                    var s2 = overrideSheet();
+                    s2.insertRule(sel + '{background-color:currentColor !important;}', s2.cssRules.length);
+                } catch (e) {}
+            }
+        }
+    }
+
+    function walkSheet(sheet) {
+        if (!sheet || seenSheets.indexOf(sheet) !== -1) return;
+        seenSheets.push(sheet);
+        var rules = null;
+        try { rules = sheet.cssRules; } catch (e) { return; } // cross-origin
+        if (rules) walkRules(rules, sheet.href);
+    }
+
+    function elementPass() {
+        for (var i = 0; i < maskSelectors.length; i++) {
+            var nodes;
+            try { nodes = document.querySelectorAll(maskSelectors[i]); } catch (e) { continue; }
+            for (var j = 0; j < nodes.length; j++) {
+                var el = nodes[j];
+                if (el.__wpeIconHealed || el.childElementCount > 0) continue;
+                if (el.textContent && el.textContent.trim()) continue;
+                var cs = getComputedStyle(el);
+                var mi = cs.webkitMaskImage || cs.maskImage || 'none';
+                if (mi.indexOf('url(') === -1) continue;
+                if (cs.backgroundImage !== 'none') continue;
+                var bg = cs.backgroundColor;
+                if (bg !== 'transparent' && !/rgba\([^)]+,\s*0\)$/.test(bg)) continue;
+                var rect = el.getBoundingClientRect();
+                if (!rect.width || !rect.height || rect.width > 160 || rect.height > 160) continue;
+                el.style.setProperty('background-color', 'currentColor', 'important');
+                el.__wpeIconHealed = true;
+                healedCount++;
+            }
+        }
+        if (healedCount && healedCount !== window.__wpeIconHealLogged) {
+            window.__wpeIconHealLogged = healedCount;
+            console.log('[WPE-ICON-HEAL] healed ' + healedCount + ' icon(s) so far');
+        }
+    }
+
+    var passPending = false;
+    function pass() {
+        if (passPending) return;
+        passPending = true;
+        var run = function() {
+            passPending = false;
+            try {
+                var sheets = document.styleSheets;
+                for (var i = 0; i < sheets.length; i++) walkSheet(sheets[i]);
+                elementPass();
+            } catch (e) {}
+        };
+        if (window.requestIdleCallback) requestIdleCallback(run, { timeout: 1000 });
+        else setTimeout(run, 50);
+    }
+
+    document.addEventListener('DOMContentLoaded', pass, true);
+    window.addEventListener('load', function() {
+        pass();
+        setTimeout(pass, 1500);
+        setTimeout(pass, 5000);
+    });
+    // Late-loading <link rel=stylesheet> (capture phase sees their load events).
+    document.addEventListener('load', function(e) {
+        if (e.target && e.target.tagName === 'LINK') pass();
+    }, true);
+    // Player chrome / lazy UI appears on fullscreen or interaction.
+    document.addEventListener('fullscreenchange', pass, true);
+    document.addEventListener('webkitfullscreenchange', pass, true);
+    var lastInteractionPass = 0;
+    document.addEventListener('pointerup', function() {
+        var now = Date.now();
+        if (now - lastInteractionPass < 1000 || !maskSelectors.length) return;
+        lastInteractionPass = now;
+        pass();
+    }, { capture: true, passive: true });
+    pass();
 })();
 )JS";
-    WebKitUserScript* ytIconFixScript = webkit_user_script_new(
-        ytIconFixCssJs,
-        WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
-        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_END,
-        nullptr, nullptr);
-    webkit_user_content_manager_add_script(ucm, ytIconFixScript);
-    webkit_user_script_unref(ytIconFixScript);
+    if (!envVarEnabled(qgetenv("ATLANTIC_DISABLE_ICON_HEAL"))) {
+        WebKitUserScript* iconHealScript = webkit_user_script_new(
+            iconHealJs,
+            WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+            WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_END,
+            nullptr, nullptr);
+        webkit_user_content_manager_add_script(ucm, iconHealScript);
+        webkit_user_script_unref(iconHealScript);
+    }
 
     // Always-smooth scrolling. JS-heavy pages — notably WordPress + Divi /
     // WPBakery (jolla.com) — attach NON-passive touch/wheel listeners at the
@@ -1837,11 +2010,7 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     m_volumePollTimer.setInterval(500);
     connect(&m_volumePollTimer, &QTimer::timeout, this, &WPEWebPage::pollMainVolume);
 
-    // Honest mobile UA: Sailfish OS, WebKit engine, Atlantic browser
-    setUserAgent(QStringLiteral(
-        "Mozilla/5.0 (Linux; Sailfish OS; Mobile) "
-        "AppleWebKit/605.1.15 (KHTML, like Gecko) "
-        "Atlantic/2.3.30 Mobile Safari/604.1"));
+    setUserAgent(atlanticUserAgent(false));
 
     connect(this, &WPEQtView::loadingChanged,
             this, &WPEWebPage::onLoadingChanged);
@@ -2469,15 +2638,7 @@ void WPEWebPage::setDesktopMode(bool desktop)
 {
     const bool changed = (m_desktopMode != desktop);
     m_desktopMode = desktop;
-    static const char* mobileUA =
-        "Mozilla/5.0 (Linux; Sailfish OS; Mobile) "
-        "AppleWebKit/605.1.15 (KHTML, like Gecko) "
-        "Atlantic/2.3.30 Mobile Safari/604.1";
-    static const char* desktopUA =
-        "Mozilla/5.0 (X11; Linux x86_64) "
-        "AppleWebKit/605.1.15 (KHTML, like Gecko) "
-        "Atlantic/2.3.30 Safari/604.1";
-    setUserAgent(QString::fromUtf8(desktop ? desktopUA : mobileUA));
+    setUserAgent(atlanticUserAgent(desktop));
     if (changed) {
         emit desktopModeChanged();
         // Reload so the server sends the correct page variant.
