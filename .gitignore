@@ -11,3 +11,5 @@ Makefile
 RPMS/*
 sailfish-browser.pro.user
 build/
+build_browser/
+settings/.qmake.stash
