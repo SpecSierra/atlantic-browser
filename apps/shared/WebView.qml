@@ -148,7 +148,9 @@ WebContainer {
         }
     }
 
-    foreground: visibility >= QuickWindow.Window.Maximized && Qt.application.state === Qt.ApplicationActive
+    // foreground is owned by WPEWebContainer C++ (tracks the real window
+    // visibility); the old binding here evaluated false at startup and never
+    // re-fired (fakeVisibility has no notify), which kept pages hidden.
     readyToPaint: resourceController.videoActive ? webView.visible && !resourceController.displayOff
                                                  : webView.visible && webView.contentItem
                                                    && (webView.contentItem.domContentLoaded

@@ -21,6 +21,7 @@
 #include <QScreen>
 #include <QDebug>
 #include <QFileInfo>
+#include <QQuickWindow>
 #include <QWindow>
 
 #pragma push_macro("signals")
@@ -89,6 +90,42 @@ WPEWebContainer::WPEWebContainer(QQuickItem *parent)
 {
     setAcceptedMouseButtons(Qt::AllButtons);
     setFiltersChildMouseEvents(false);
+
+    // Foreground tracking follows the Wayland window visibility: lipstick
+    // marks the window Minimized when the app is covered/on the home screen
+    // and Hidden when the display is off. (The former QML binding via
+    // fakeVisibility()/Qt.application.state evaluated false at startup and
+    // never re-fired, so it cannot be trusted for page visibility.)
+    connect(this, &QQuickItem::windowChanged,
+            this, &WPEWebContainer::onWindowChangedForForeground);
+}
+
+void WPEWebContainer::onWindowChangedForForeground(QQuickWindow *win)
+{
+    if (m_foregroundWindow) {
+        disconnect(m_foregroundWindow.data(), &QWindow::visibilityChanged,
+                   this, &WPEWebContainer::updateForegroundFromWindow);
+    }
+    m_foregroundWindow = win;
+    if (win) {
+        connect(win, &QWindow::visibilityChanged,
+                this, &WPEWebContainer::updateForegroundFromWindow);
+    }
+    updateForegroundFromWindow();
+}
+
+void WPEWebContainer::updateForegroundFromWindow()
+{
+    // Fail towards visible: only an explicit Minimized/Hidden report counts
+    // as background. No window yet (startup) or an unexpected visibility
+    // value must never leave the active page hidden (black content).
+    const QQuickWindow *win = m_foregroundWindow.data();
+    const QWindow::Visibility vis = win ? win->visibility() : QWindow::AutomaticVisibility;
+    const bool fg = vis != QWindow::Minimized && vis != QWindow::Hidden;
+    qDebug() << "[WPE-VIS] window visibility="
+             << (win ? static_cast<int>(win->visibility()) : -1)
+             << "-> foreground" << fg;
+    setForeground(fg);
 }
 
 WPEWebContainer::~WPEWebContainer()

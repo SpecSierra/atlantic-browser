@@ -271,7 +271,6 @@ Rectangle {
         anchors.right: parent.right
         anchors.top: header.bottom
         anchors.bottom: parent.bottom
-        foreground: Qt.application.state === Qt.ApplicationActive
         maxLiveTabCount: 3
         readyToPaint: true
 

@@ -148,6 +148,8 @@ Q_SIGNALS:
     void forwardButtonPressed();
 
 private Q_SLOTS:
+    void onWindowChangedForForeground(QQuickWindow *win);
+    void updateForegroundFromWindow();
     void onActiveTabChanged(int activeTabId);
     void onTabAdded(int tabId);
     void onTabClosed(int tabId);
@@ -179,6 +181,7 @@ private:
     QPointer<QQmlComponent> m_webPageComponent;
     QPointer<QObject> m_chromeWindow;
     QPointer<QQuickItem> m_rotationHandler;
+    QPointer<QQuickWindow> m_foregroundWindow;
     bool m_completed = false;
     bool m_foreground = true;
     bool m_privateMode = false;
