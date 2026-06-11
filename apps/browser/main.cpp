@@ -501,6 +501,16 @@ static void configureGpuModeFromCapabilities()
         // per scroll workload) and artifact-free; user-confirmed build 312.
         qputenv("WEBKIT_BITMAP_TEXTURE_POOL_DISABLED", QByteArrayLiteral("1"));
         qputenv("WEBKIT_COMPOSITOR_GL_FINISH", QByteArrayLiteral("1"));
+        // Directional tile prepaint (webkit-directional-tile-coverage-env.patch
+        // v2): triple cover budget spent vertically, biased 70% ahead of the
+        // sustained scroll direction, stable keep rect (no eviction on flips).
+        // Hides tile paint-in at the leading edge of fast flicks through
+        // image-heavy feeds; user-verified on device build 316. Honoured only
+        // if not preset in the environment.
+        if (!qEnvironmentVariableIsSet("WEBKIT_DIRECTIONAL_TILE_COVERAGE"))
+            qputenv("WEBKIT_DIRECTIONAL_TILE_COVERAGE", QByteArrayLiteral("1"));
+        if (!qEnvironmentVariableIsSet("WEBKIT_COVER_AREA_MULTIPLIER"))
+            qputenv("WEBKIT_COVER_AREA_MULTIPLIER", QByteArrayLiteral("3"));
         paintingMode = QByteArrayLiteral("gpu-sync(auto)");
     } else {
         gpuPaintingThreads = QByteArray::number(kCapableGpuPaintingThreads);
