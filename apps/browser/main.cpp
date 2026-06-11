@@ -458,20 +458,14 @@ static void configureGpuModeFromCapabilities()
 
     // Select the Skia painting backend from GPU capability, unless the user
     // pinned WEBKIT_SKIA_ENABLE_CPU_RENDERING or WEBKIT_SKIA_GPU_PAINTING_THREADS
-    // explicitly. Capable stacks (EGL surfaceless context present: Mali, desktop)
-    // get multi-threaded Skia GPU painting. Conservative stacks (libhybris
-    // Adreno, or probe failure) get Skia CPU painting: GPU painting there
-    // corrupts tiles regardless of thread count — tiles are painted in one GL
-    // context and composited from another, and the driver does not honour the
-    // EGL fence server-waits that are supposed to order that handoff (A/B on
-    // Xperia 10 II build 308: 1-thread AND main-thread GPU painting both flash
-    // black/stale/misplaced tiles on image-heavy pages like YouTube or Reddit;
-    // CPU painting is artifact-free at ~+30% of one core while scrolling).
-    // CPU-painted tiles are rastered by WEBKIT_SKIA_CPU_PAINTING_THREADS
-    // workers (default 2, runtime-common.sh) and uploaded from the compositor
-    // context itself, so no cross-context hazard exists. NOTE:
-    // runtime-common.sh must NOT pre-set either variable, or the explicit-
-    // override checks below would always win and pin the value.
+    // explicitly. Capable stacks (EGL surfaceless context present: Mali,
+    // desktop) get multi-threaded Skia GPU painting with regular fence
+    // synchronization. Conservative stacks (libhybris Adreno, or probe
+    // failure) get single-threaded GPU painting in "gpu-sync" mode — see the
+    // conservative branch below. WEBKIT_SKIA_ENABLE_CPU_RENDERING=1 remains
+    // available as a launch-time escape hatch to the all-CPU raster path.
+    // NOTE: runtime-common.sh must NOT pre-set either variable, or the
+    // explicit-override checks below would always win and pin the value.
     static constexpr int kCapableGpuPaintingThreads = 3;
     const bool presetCpuRendering = qEnvironmentVariableIsSet("WEBKIT_SKIA_ENABLE_CPU_RENDERING");
     const bool presetThreads = qEnvironmentVariableIsSet("WEBKIT_SKIA_GPU_PAINTING_THREADS");
@@ -484,8 +478,22 @@ static void configureGpuModeFromCapabilities()
     } else if (presetThreads) {
         paintingMode = QByteArrayLiteral("gpu(preset-threads)");
     } else if (conservativeEffective) {
-        qputenv("WEBKIT_SKIA_ENABLE_CPU_RENDERING", QByteArrayLiteral("1"));
-        paintingMode = QByteArrayLiteral("cpu(auto)");
+        // "gpu-sync": GPU painting with driver fences disabled. The hybris
+        // Adreno EGL advertises fence support but its server waits don't
+        // actually order GPU work across the paint/composite contexts, which
+        // corrupted tiles (black/stale/misplaced) on image-heavy pages.
+        // WPE_GL_FENCE_DISABLED (webkit-glfence-disable-env.patch) makes
+        // every fence call site fall back to synchronous completion, so a
+        // tile is provably finished before the compositor can sample it,
+        // while rasterization stays on the GPU. The interim CPU-painting
+        // default (build 309) was artifact-free but raster-bound: fast
+        // scrolling through image feeds outran it even with 4 raster threads.
+        // gpu-sync measured ~+8% WebProcess CPU vs the broken fence path and
+        // artifact-free over the same stress run (build 310).
+        qputenv("WPE_GL_FENCE_DISABLED", QByteArrayLiteral("1"));
+        gpuPaintingThreads = QByteArrayLiteral("1");
+        qputenv("WEBKIT_SKIA_GPU_PAINTING_THREADS", gpuPaintingThreads);
+        paintingMode = QByteArrayLiteral("gpu-sync(auto)");
     } else {
         gpuPaintingThreads = QByteArray::number(kCapableGpuPaintingThreads);
         qputenv("WEBKIT_SKIA_GPU_PAINTING_THREADS", gpuPaintingThreads);
