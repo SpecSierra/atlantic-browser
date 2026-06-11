@@ -182,6 +182,11 @@ public:
     // to decide whether WebKit should treat the page as visible.
     void setAppForeground(bool foreground);
 
+    // All live WPEWebPage instances. Pages get only a visual parent
+    // (setParentItem), never a QObject parent, so findChildren() on the view
+    // cannot discover them — the render-recovery code must use this instead.
+    static const QList<WPEWebPage *> &liveInstances();
+
     bool throttlePainting() const;
     void setThrottlePainting(bool throttle);
 

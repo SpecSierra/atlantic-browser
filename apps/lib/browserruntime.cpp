@@ -56,7 +56,12 @@ void requestActivePageRenderRecovery(QQuickView *view, const char *reason)
 
     static bool s_reloadingQml = false;
 
-    const QList<WPEWebPage *> pages = view->findChildren<WPEWebPage *>();
+    // findChildren() cannot be used here: pages only get a visual parent
+    // (setParentItem), so the QObject tree under the view never contains
+    // them. Before the registry existed this branch concluded "no pages
+    // remain" on EVERY app resume and reloaded the QML source over a live
+    // session (start page shown / pre-guard sandbox abort).
+    const QList<WPEWebPage *> pages = WPEWebPage::liveInstances();
     int resumedPageCount = 0;
     for (WPEWebPage *page : pages) {
         if (!page || !page->active()) {

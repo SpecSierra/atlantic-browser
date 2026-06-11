@@ -1098,6 +1098,12 @@ bool shouldInterceptSoftKeyboardEvent(const QKeyEvent* event)
 
 } // namespace
 
+static QList<WPEWebPage *> &liveWebPages()
+{
+    static QList<WPEWebPage *> s_pages;
+    return s_pages;
+}
+
 WPEWebPage::WPEWebPage(QQuickItem *parent)
     : WPEQtView(parent)
     , m_security(new WPESecurityInfo(this))
@@ -1108,6 +1114,8 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     // recognition. Disable permanently. WebKit still synthesises a sticky hover
     // from taps (touchstart+touchend), so CSS :hover menus still work on tap.
     setAcceptHoverEvents(false);
+
+    liveWebPages().append(this);
 
     // Pages start inactive (background); only activatePage() flips them
     // visible. Without this, a restored-but-never-activated tab would keep
@@ -1440,8 +1448,14 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     updateFramePumpState();
 }
 
+const QList<WPEWebPage *> &WPEWebPage::liveInstances()
+{
+    return liveWebPages();
+}
+
 WPEWebPage::~WPEWebPage()
 {
+    liveWebPages().removeAll(this);
     clearFileChooserRequest(true);
 }
 
