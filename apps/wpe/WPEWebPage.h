@@ -177,6 +177,11 @@ public:
     bool active() const;
     void setActive(bool active);
 
+    // App-level foreground state (window maximized + application active),
+    // pushed down by WPEWebContainer. Combined with the per-tab active flag
+    // to decide whether WebKit should treat the page as visible.
+    void setAppForeground(bool foreground);
+
     bool throttlePainting() const;
     void setThrottlePainting(bool throttle);
 
@@ -337,6 +342,7 @@ private slots:
     void updateSecurityInfo();
 
 private:
+    void updateWebKitVisibility();
     qreal selectionDisplayScale() const;
     void syncEffectiveFullscreenState();
     void updateFramePumpState();
@@ -369,6 +375,7 @@ private:
     qreal m_fullscreenHeight = 0.0;
     qreal m_toolbarHeight = 0.0;
     bool m_active = false;
+    bool m_appForeground = true;
     bool m_throttlePainting = false;
     bool m_chromeGestureEnabled = true;
     qreal m_chromeGestureThreshold = 10.0;

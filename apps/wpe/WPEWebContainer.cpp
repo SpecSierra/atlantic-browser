@@ -122,6 +122,17 @@ static void configureNetworkProcessMemoryPressure()
 
 void WPEWebContainer::configureSandboxPaths()
 {
+    // The default web context is process-global and sandbox paths cannot be
+    // added once a WebProcess has spawned (g_error → abort). A second
+    // WPEWebContainer instance — e.g. the render-recovery QML reload — must
+    // not re-run this.
+    static bool s_configured = false;
+    if (s_configured) {
+        qDebug() << "[WPE] Sandbox paths already configured; skipping re-run";
+        return;
+    }
+    s_configured = true;
+
     // NetworkProcess memory limits must be applied before any session is created.
     configureNetworkProcessMemoryPressure();
 
@@ -365,6 +376,13 @@ void WPEWebContainer::setForeground(bool f)
 {
     if (m_foreground != f) {
         m_foreground = f;
+        // Tell every page about the app-level state so WebKit can throttle
+        // pages while the app is minimized (and resume them on return).
+        for (auto it = m_pages.constBegin(); it != m_pages.constEnd(); ++it) {
+            if (it.value()) {
+                it.value()->setAppForeground(f);
+            }
+        }
         emit foregroundChanged();
     }
 }
@@ -642,6 +660,7 @@ WPEWebPage *WPEWebContainer::getOrCreatePage(int tabId)
     page->setTabId(tabId);
     page->setVisible(false);
     page->setActive(false);
+    page->setAppForeground(m_foreground);
 
     const QScreen *screen = QGuiApplication::primaryScreen();
     const QSizeF screenSize = screenSizeOrFallback(QGuiApplication::primaryScreen());

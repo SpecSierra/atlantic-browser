@@ -1109,6 +1109,11 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     // from taps (touchstart+touchend), so CSS :hover menus still work on tap.
     setAcceptHoverEvents(false);
 
+    // Pages start inactive (background); only activatePage() flips them
+    // visible. Without this, a restored-but-never-activated tab would keep
+    // the plugin's default visible state and burn CPU in the background.
+    setWebKitVisible(false);
+
     const int framePumpIntervalMs = framePumpIntervalForCurrentGpuMode();
     m_framePump.setInterval(framePumpIntervalMs);
     m_framePump.setTimerType(Qt::PreciseTimer);
@@ -1686,7 +1691,29 @@ void WPEWebPage::setActive(bool active)
         m_active = active;
         setVisible(active);
         updateFramePumpState();
+        updateWebKitVisibility();
         emit activeChanged();
+    }
+}
+
+void WPEWebPage::setAppForeground(bool foreground)
+{
+    if (m_appForeground != foreground) {
+        m_appForeground = foreground;
+        updateWebKitVisibility();
+    }
+}
+
+void WPEWebPage::updateWebKitVisibility()
+{
+    // Background tabs and a minimized app must report a hidden page to
+    // WebKit, otherwise rAF loops and timer storms (e.g. Divi-built sites)
+    // keep a WebProcess core pinned indefinitely.
+    const bool visible = m_active && m_appForeground;
+    if (visible != webKitVisible()) {
+        qDebug() << "[WPE-VIS] tabId=" << m_tabId << "webkit visible ->" << visible
+                 << "(active=" << m_active << "appForeground=" << m_appForeground << ")";
+        setWebKitVisible(visible);
     }
 }
 

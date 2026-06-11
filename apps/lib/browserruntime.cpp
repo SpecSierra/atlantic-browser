@@ -129,7 +129,12 @@ void installRenderRecoveryHooks(QQuickView *view, QGuiApplication *app)
                      view,
                      [view, app]() {
         fprintf(stderr, "[ATLANTIC-RUNTIME] Scene graph invalidated\n");
-        if (app && app->applicationState() == Qt::ApplicationActive) {
+        // Minimizing tears down the scene graph while applicationState still
+        // reads Active (the state change lands later), so the app-state check
+        // alone is not enough. An unexposed window means this invalidation is
+        // part of normal hide/minimize — recovering here would reload the QML
+        // source over a live session. The app-activated hook handles resume.
+        if (app && app->applicationState() == Qt::ApplicationActive && view->isExposed()) {
             requestActivePageRenderRecovery(view, "scenegraph-invalidated");
         }
     },
