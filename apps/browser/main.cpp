@@ -493,6 +493,14 @@ static void configureGpuModeFromCapabilities()
         qputenv("WPE_GL_FENCE_DISABLED", QByteArrayLiteral("1"));
         gpuPaintingThreads = QByteArrayLiteral("1");
         qputenv("WEBKIT_SKIA_GPU_PAINTING_THREADS", gpuPaintingThreads);
+        // Close the texture-reuse race as well (rare residual artifacts with
+        // fence-disable alone): fresh GL texture per tile acquisition, and
+        // compositor finishes its GPU work each frame before tiles can be
+        // recycled (webkit-texpool-compositor-sync-env.patch). Measured
+        // cheaper than every other mode on device (559 vs 650-843 jiffies
+        // per scroll workload) and artifact-free; user-confirmed build 312.
+        qputenv("WEBKIT_BITMAP_TEXTURE_POOL_DISABLED", QByteArrayLiteral("1"));
+        qputenv("WEBKIT_COMPOSITOR_GL_FINISH", QByteArrayLiteral("1"));
         paintingMode = QByteArrayLiteral("gpu-sync(auto)");
     } else {
         gpuPaintingThreads = QByteArray::number(kCapableGpuPaintingThreads);
