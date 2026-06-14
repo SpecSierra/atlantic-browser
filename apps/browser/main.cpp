@@ -217,6 +217,15 @@ static void configureBrowserProcessEnvironment()
     }
     if (qgetenv("WEBKIT_GST_ENABLE_HLS_SUPPORT").isEmpty())
         qputenv("WEBKIT_GST_ENABLE_HLS_SUPPORT", "1");
+
+    // Touch panning scrolls on the async scrolling thread even over non-passive
+    // wheel regions (webkit-touch-async-scroll-env.patch) — the keystone that
+    // lets WPE's already-enabled APZ + kinetic momentum actually engage on SPAs
+    // like reddit. Default ON; set WEBKIT_TOUCH_SCROLL_ASYNC=0 to A/B against the
+    // old synchronous main-thread behaviour on device. Independent of GPU mode,
+    // so set unconditionally here.
+    if (qgetenv("WEBKIT_TOUCH_SCROLL_ASYNC").isEmpty())
+        qputenv("WEBKIT_TOUCH_SCROLL_ASYNC", "1");
     if (qgetenv("LIBGL_DRIVERS_PATH").isEmpty()) {
         const QByteArray driverPath = firstExistingDirectory({
             QString::fromUtf8(WPERuntimePaths::kLibGLDriversDir),
