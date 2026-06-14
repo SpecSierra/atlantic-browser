@@ -226,6 +226,16 @@ static void configureBrowserProcessEnvironment()
     // so set unconditionally here.
     if (qgetenv("WEBKIT_TOUCH_SCROLL_ASYNC").isEmpty())
         qputenv("WEBKIT_TOUCH_SCROLL_ASYNC", "1");
+
+    // Kinetic-fling deceleration friction (webkit-kinetic-decel-friction-env.patch).
+    // Async scrolling + fling both work on this build, but upstream's friction=4
+    // (desktop trackpad tuning) makes a hard touch flick coast only ~half a screen
+    // then stop dead — felt as "no momentum". Total coast = velocity/friction and
+    // fling time-constant = 1/friction, so a lower value gives the longer, smoother
+    // glide phone flicking expects. 1.5 ≈ 2.6x the upstream coast distance.
+    // Tunable on-device via WEBKIT_KINETIC_DECEL_FRICTION for A/B.
+    if (qgetenv("WEBKIT_KINETIC_DECEL_FRICTION").isEmpty())
+        qputenv("WEBKIT_KINETIC_DECEL_FRICTION", "1.5");
     if (qgetenv("LIBGL_DRIVERS_PATH").isEmpty()) {
         const QByteArray driverPath = firstExistingDirectory({
             QString::fromUtf8(WPERuntimePaths::kLibGLDriversDir),
