@@ -702,15 +702,17 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
         webkit_user_script_unref(passiveScript);
     }
 
-    // Reddit memory/render fix. Reddit's infinite feed grows the DOM without
-    // bound and keeps every scrolled-past post fully rendered (decoded images +
-    // layer backing), which drives this device into the kernel lowmemorykiller
-    // (browser crash) on a long scroll and progressively janks scrolling.
-    // content-visibility:auto lets WebKit release the rendering resources for
-    // off-screen posts (device-measured ~3x lower per-post RSS). Reddit-scoped
-    // inside the script; see kRedditPerf. Set ATLANTIC_DISABLE_REDDIT_PERF=1 to
-    // disable. Injected at DOCUMENT_START so the rule is in place before posts
-    // first paint (no reflow flash).
+    // Reddit feed performance fix. Reddit autoplays MUTED <video> feed posts on
+    // scroll-into-view (media_playback_requires_user_gesture only blocks AUDIBLE
+    // autoplay), and on the Adreno 610 a continuously-decoding video competes
+    // with the compositor for the GPU and holds a GStreamer pipeline + buffered
+    // media resident. kRedditPerf pauses muted videos that play without a user
+    // gesture (tap-to-play is preserved) and forces preload=none. Reddit-scoped
+    // inside the script. Injected at DOCUMENT_START so the play-event listeners
+    // are installed before Reddit's own scripts trigger autoplay. The memory/OOM
+    // side is handled in the engine by webkit-memory-pressure-threshold-env.patch
+    // (an earlier content-visibility approach here was removed — it halved scroll
+    // fps). Set ATLANTIC_DISABLE_REDDIT_PERF=1 to disable.
     if (!envVarEnabled(qgetenv("ATLANTIC_DISABLE_REDDIT_PERF"))) {
         const gchar* redditPerfJs = WPEUserScripts::kRedditPerf;
         WebKitUserScript* redditScript = webkit_user_script_new(

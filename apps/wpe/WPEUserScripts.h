@@ -482,43 +482,63 @@ static const char* const kPassiveScroll = R"JS(
 })();
 )JS";
 
-// Reddit's infinite feed appends post nodes without bound and keeps every
-// scrolled-past post fully rendered — decoded images plus composited layer
-// backing store stay resident. On this 3.5 GB device a long scroll drives the
-// WebProcess RSS up until the kernel lowmemorykiller reaps processes and the
-// browser crashes; it also makes scrolling progressively jankier as the live
-// render tree grows. content-visibility:auto lets WebKit skip layout/paint AND
-// release the decoded-image / backing store for posts that are off-screen,
-// re-rendering them only when they scroll back into view (their painted size is
-// remembered, so contain-intrinsic-size only seeds the first, off-screen pass).
-// Device-measured on r/aww after 8 flicks: 74 posts at 371 MB WITH this rule vs
-// 30 posts at 429 MB without — ~3x lower per-post memory, and far more headroom
-// before the OOM ceiling. Pure CSS so the infinite feed's later posts are
-// covered with no MutationObserver cost. Scoped to reddit.com only: generic
-// content-visibility on arbitrary sites can disturb sticky headers and scroll
-// anchoring. (Autoplay is already blocked globally by
-// media_playback_requires_user_gesture; this addresses the render/memory side.)
-// Set ATLANTIC_DISABLE_REDDIT_PERF=1 to turn off.
+// Reddit feed video autoplay is the main remaining per-frame cost on this
+// device. media_playback_requires_user_gesture (set globally in WPEWebPage)
+// only blocks AUDIBLE autoplay; Reddit's feed posts are MUTED <video> elements
+// that Reddit plays on scroll-into-view via an IntersectionObserver, which is
+// permitted. On the libhybris/Adreno 610 a continuously-decoding muted video
+// (often several queued as you scroll) competes with the compositor for the GPU
+// and keeps a GStreamer pipeline + buffered media resident — visible as both
+// "videos still autoplay" and lower scroll fps. Block it: pause any muted
+// <video> that starts playing WITHOUT a transient user activation, and force
+// preload=none so a gated element does not eagerly buffer (one paused feed video
+// was observed buffering a full ~53 s HLS stream). A real tap-to-play sets
+// navigator.userActivation.isActive for the gesture, so intentional playback is
+// untouched; a scroll grants no activation (verified on device), so autoplay is.
+//
+// NOTE: an earlier version of this script applied content-visibility:auto to
+// feed posts to bound memory. It was REMOVED: device A/B on build 331 showed it
+// HALVED scroll fps (2.5 vs 5.8) because every post re-rendered as it re-entered
+// the viewport, pegging the already GPU-bound compositor. The OOM/memory side is
+// now handled in the engine by webkit-memory-pressure-threshold-env.patch (WebKit
+// purges its caches at a realistic device budget), which bounds RSS without the
+// per-scroll re-raster churn. Set ATLANTIC_DISABLE_REDDIT_PERF=1 to turn off.
 static const char* const kRedditPerf = R"JS(
 (function() {
     try {
         if (!/(^|\.)reddit\.com$/i.test(location.hostname)) return;
-        function apply() {
-            if (document.getElementById('__wpe_reddit_perf')) return;
-            var s = document.createElement('style');
-            s.id = '__wpe_reddit_perf';
-            s.textContent =
-                'shreddit-post, shreddit-ad-post, article,'
-              + ' [data-testid="post-container"] {'
-              + ' content-visibility: auto;'
-              + ' contain-intrinsic-size: 0 600px; }';
-            (document.head || document.documentElement).appendChild(s);
+        if (window.__wpeRedditPerfInstalled) return;
+        window.__wpeRedditPerfInstalled = true;
+
+        function userInitiated() {
+            return !!(navigator.userActivation && navigator.userActivation.isActive);
         }
-        apply();
-        // At document-start <head> may not exist yet; re-apply once it does so
-        // the rule is guaranteed to land even if the early insert was dropped.
-        if (!document.getElementById('__wpe_reddit_perf'))
-            document.addEventListener('DOMContentLoaded', apply, { once: true });
+        // A muted video starting to play with no transient user activation is
+        // Reddit's scroll-into-view autoplay; pause it. Tap-to-play keeps the
+        // activation, so it is allowed through.
+        function tame(v) {
+            if (!v || v.tagName !== 'VIDEO') return;
+            try { if (v.preload !== 'none') v.preload = 'none'; } catch (e) {}
+            try { v.autoplay = false; v.removeAttribute('autoplay'); } catch (e) {}
+            if (!v.paused && v.muted && !userInitiated()) {
+                try { v.pause(); } catch (e) {}
+            }
+        }
+        // Capture phase sees play events for every <video>, including those in
+        // shadow DOM (shreddit-player) and ones added after load — no observer.
+        document.addEventListener('play', function(e) { tame(e.target); }, true);
+        document.addEventListener('playing', function(e) { tame(e.target); }, true);
+        // Pause anything already autoplaying at install time.
+        function sweep(root) {
+            if (!root || !root.querySelectorAll) return;
+            var vids = root.querySelectorAll('video');
+            for (var i = 0; i < vids.length; i++) tame(vids[i]);
+            var all = root.querySelectorAll('*');
+            for (var j = 0; j < all.length; j++)
+                if (all[j].shadowRoot) sweep(all[j].shadowRoot);
+        }
+        sweep(document);
+        document.addEventListener('DOMContentLoaded', function() { sweep(document); }, { once: true });
     } catch (e) {}
 })();
 )JS";
