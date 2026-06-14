@@ -478,40 +478,52 @@ static void configureGpuModeFromCapabilities()
     } else if (presetThreads) {
         paintingMode = QByteArrayLiteral("gpu(preset-threads)");
     } else if (conservativeEffective) {
-        // "gpu-sync": GPU painting with driver fences disabled. The hybris
-        // Adreno EGL advertises fence support but its server waits don't
-        // actually order GPU work across the paint/composite contexts, which
-        // corrupted tiles (black/stale/misplaced) on image-heavy pages.
-        // WPE_GL_FENCE_DISABLED (webkit-glfence-disable-env.patch) makes
-        // every fence call site fall back to synchronous completion, so a
-        // tile is provably finished before the compositor can sample it,
-        // while rasterization stays on the GPU. The interim CPU-painting
-        // default (build 309) was artifact-free but raster-bound: fast
-        // scrolling through image feeds outran it even with 4 raster threads.
-        // gpu-sync measured ~+8% WebProcess CPU vs the broken fence path and
-        // artifact-free over the same stress run (build 310).
-        qputenv("WPE_GL_FENCE_DISABLED", QByteArrayLiteral("1"));
-        gpuPaintingThreads = QByteArrayLiteral("1");
-        qputenv("WEBKIT_SKIA_GPU_PAINTING_THREADS", gpuPaintingThreads);
-        // Close the texture-reuse race as well (rare residual artifacts with
-        // fence-disable alone): fresh GL texture per tile acquisition, and
-        // compositor finishes its GPU work each frame before tiles can be
-        // recycled (webkit-texpool-compositor-sync-env.patch). Measured
-        // cheaper than every other mode on device (559 vs 650-843 jiffies
-        // per scroll workload) and artifact-free; user-confirmed build 312.
-        qputenv("WEBKIT_BITMAP_TEXTURE_POOL_DISABLED", QByteArrayLiteral("1"));
-        qputenv("WEBKIT_COMPOSITOR_GL_FINISH", QByteArrayLiteral("1"));
+        const bool forceGlFinish = qEnvironmentVariableIsSet("ATLANTIC_GPU_FORCE_GLFINISH")
+            && qgetenv("ATLANTIC_GPU_FORCE_GLFINISH") != QByteArrayLiteral("0");
+
         // Directional tile prepaint (webkit-directional-tile-coverage-env.patch
         // v2): triple cover budget spent vertically, biased 70% ahead of the
         // sustained scroll direction, stable keep rect (no eviction on flips).
         // Hides tile paint-in at the leading edge of fast flicks through
-        // image-heavy feeds; user-verified on device build 316. Honoured only
-        // if not preset in the environment.
+        // image-heavy feeds; user-verified on device build 316. Orthogonal to
+        // the paint/composite sync strategy below, so applied to both. Honoured
+        // only if not preset in the environment.
         if (!qEnvironmentVariableIsSet("WEBKIT_DIRECTIONAL_TILE_COVERAGE"))
             qputenv("WEBKIT_DIRECTIONAL_TILE_COVERAGE", QByteArrayLiteral("1"));
         if (!qEnvironmentVariableIsSet("WEBKIT_COVER_AREA_MULTIPLIER"))
             qputenv("WEBKIT_COVER_AREA_MULTIPLIER", QByteArrayLiteral("3"));
-        paintingMode = QByteArrayLiteral("gpu-sync(auto)");
+
+        if (!forceGlFinish) {
+            // "gpu-explicit": rasterize tiles on the compositor thread so paint
+            // and composite submit to one GL command stream in program order
+            // (webkit-raster-on-compositor-thread-env.patch). This removes the
+            // cross-context tile race on the libhybris Adreno — whose EGL fence
+            // server-waits don't order GPU work across contexts, and which
+            // exposes no EGL_ANDROID_native_fence_sync to use instead — WITHOUT
+            // the gpu-sync glFinish stalls. Same-thread, two-shared-context,
+            // flush-only ordering was verified to hold on device (Adreno 610).
+            // Texture pooling stays ON and there is no per-frame/per-tile
+            // glFinish, so this should pipeline far better than gpu-sync.
+            qputenv("WEBKIT_RASTER_ON_COMPOSITOR_THREAD", QByteArrayLiteral("1"));
+            // A GPU worker pool must exist (>0) for threaded record/replay to be
+            // used, but the replay GPU work is redirected to the compositor
+            // thread, so one idle worker thread is enough.
+            gpuPaintingThreads = QByteArrayLiteral("1");
+            qputenv("WEBKIT_SKIA_GPU_PAINTING_THREADS", gpuPaintingThreads);
+            paintingMode = QByteArrayLiteral("gpu-explicit(auto)");
+        } else {
+            // Legacy "gpu-sync" escape hatch (ATLANTIC_GPU_FORCE_GLFINISH=1):
+            // GPU painting with driver fences disabled + per-frame compositor
+            // glFinish + texture-pool reuse disabled. Correct but raster-bound
+            // (559 jiffies/scroll baseline). Kept as a fallback in case the
+            // compositor-thread path regresses on some device.
+            qputenv("WPE_GL_FENCE_DISABLED", QByteArrayLiteral("1"));
+            gpuPaintingThreads = QByteArrayLiteral("1");
+            qputenv("WEBKIT_SKIA_GPU_PAINTING_THREADS", gpuPaintingThreads);
+            qputenv("WEBKIT_BITMAP_TEXTURE_POOL_DISABLED", QByteArrayLiteral("1"));
+            qputenv("WEBKIT_COMPOSITOR_GL_FINISH", QByteArrayLiteral("1"));
+            paintingMode = QByteArrayLiteral("gpu-sync(forced)");
+        }
     } else {
         gpuPaintingThreads = QByteArray::number(kCapableGpuPaintingThreads);
         qputenv("WEBKIT_SKIA_GPU_PAINTING_THREADS", gpuPaintingThreads);
