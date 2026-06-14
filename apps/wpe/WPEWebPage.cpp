@@ -701,6 +701,26 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
         webkit_user_content_manager_add_script(ucm, passiveScript);
         webkit_user_script_unref(passiveScript);
     }
+
+    // Reddit memory/render fix. Reddit's infinite feed grows the DOM without
+    // bound and keeps every scrolled-past post fully rendered (decoded images +
+    // layer backing), which drives this device into the kernel lowmemorykiller
+    // (browser crash) on a long scroll and progressively janks scrolling.
+    // content-visibility:auto lets WebKit release the rendering resources for
+    // off-screen posts (device-measured ~3x lower per-post RSS). Reddit-scoped
+    // inside the script; see kRedditPerf. Set ATLANTIC_DISABLE_REDDIT_PERF=1 to
+    // disable. Injected at DOCUMENT_START so the rule is in place before posts
+    // first paint (no reflow flash).
+    if (!envVarEnabled(qgetenv("ATLANTIC_DISABLE_REDDIT_PERF"))) {
+        const gchar* redditPerfJs = WPEUserScripts::kRedditPerf;
+        WebKitUserScript* redditScript = webkit_user_script_new(
+            redditPerfJs,
+            WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+            WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+            nullptr, nullptr);
+        webkit_user_content_manager_add_script(ucm, redditScript);
+        webkit_user_script_unref(redditScript);
+    }
 }
 
 static void onImageLongPressBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
