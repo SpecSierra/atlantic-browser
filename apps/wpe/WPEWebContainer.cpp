@@ -139,7 +139,26 @@ static void configureNetworkProcessMemoryPressure()
     // network session is created.  The NetworkProcess only handles HTTP/DNS;
     // 256 MB is already generous for mobile workloads.
     WebKitMemoryPressureSettings *s = webkit_memory_pressure_settings_new();
-    webkit_memory_pressure_settings_set_memory_limit(s, 256);        // 256 MB hard ceiling
+
+    // All five knobs are env-tunable for on-device A/B; the defaults below
+    // (256 MB limit, conservative/strict/kill at 0.5/0.75/1.0 of it, 30 s poll)
+    // apply when the corresponding variable is unset, so behaviour is unchanged
+    // until something is explicitly set.
+    auto envDouble = [](const char *name, double dflt) {
+        bool ok = false;
+        const double v = qgetenv(name).toDouble(&ok);
+        return ok ? v : dflt;
+    };
+    bool limitOk = false;
+    int memLimitMb = qEnvironmentVariableIntValue("ATLANTIC_NETPROC_MEM_LIMIT_MB", &limitOk);
+    if (!limitOk || memLimitMb <= 0)
+        memLimitMb = 256;                                            // MB hard ceiling
+    const double conservativeFrac = envDouble("ATLANTIC_NETPROC_MEM_CONSERVATIVE", 0.5);
+    const double strictFrac       = envDouble("ATLANTIC_NETPROC_MEM_STRICT", 0.75);
+    const double killFrac         = envDouble("ATLANTIC_NETPROC_MEM_KILL", 1.0);
+    const double pollIntervalS    = envDouble("ATLANTIC_NETPROC_MEM_POLL_S", 30.0);
+
+    webkit_memory_pressure_settings_set_memory_limit(s, static_cast<unsigned>(memLimitMb));
     // Set thresholds high→low. Each setter validates against the CURRENT stored
     // values (WebKit defaults: conservative=0.33, strict=0.5, kill=unset):
     //   set_strict       requires  value > conservative_current  &&  value < kill_current(if set)
@@ -148,13 +167,17 @@ static void configureNetworkProcessMemoryPressure()
     // Setting conservative=0.5 FIRST tripped `g_return_if_fail(value < strictThresholdFraction)`
     // because the default strict was still 0.5 (0.5 < 0.5 is false), so the whole
     // settings object was left misconfigured. strict→kill→conservative satisfies all.
-    webkit_memory_pressure_settings_set_strict_threshold(s, 0.75);       // 192 MB → aggressive eviction
-    webkit_memory_pressure_settings_set_kill_threshold(s, 1.0);          // 256 MB → kill and restart
-    webkit_memory_pressure_settings_set_conservative_threshold(s, 0.5);  // 128 MB → start evicting
-    webkit_memory_pressure_settings_set_poll_interval(s, 30.0);          // poll every 30 s
+    // (Overrides that violate this ordering will be rejected by WebKit — keep
+    //  conservative < strict < kill.)
+    webkit_memory_pressure_settings_set_strict_threshold(s, strictFrac);
+    webkit_memory_pressure_settings_set_kill_threshold(s, killFrac);
+    webkit_memory_pressure_settings_set_conservative_threshold(s, conservativeFrac);
+    webkit_memory_pressure_settings_set_poll_interval(s, pollIntervalS);
     webkit_network_session_set_memory_pressure_settings(s);
     webkit_memory_pressure_settings_free(s);
-    qDebug() << "[WPE] NetworkProcess memory pressure: limit=256 MB, conservative=128 MB, strict=192 MB, kill=256 MB";
+    qDebug() << "[WPE] NetworkProcess memory pressure: limit=" << memLimitMb << "MB"
+             << "conservative=" << conservativeFrac << "strict=" << strictFrac
+             << "kill=" << killFrac << "poll=" << pollIntervalS << "s";
 }
 
 void WPEWebContainer::configureSandboxPaths()
@@ -174,7 +197,29 @@ void WPEWebContainer::configureSandboxPaths()
     configureNetworkProcessMemoryPressure();
 
     WebKitWebContext *ctx = webkit_web_context_get_default();
-    webkit_web_context_set_cache_model(ctx, WEBKIT_CACHE_MODEL_WEB_BROWSER);
+    // Cache model is env-tunable via ATLANTIC_CACHE_MODEL:
+    //   "web"/"browser"  → WEB_BROWSER      (largest dead-resource + decoded-image
+    //                                         caches + back/forward page cache; default)
+    //   "document"       → DOCUMENT_BROWSER  (moderate caches, smaller page cache)
+    //   "viewer"/"minimal" → DOCUMENT_VIEWER (no page cache, smallest caches → lowest
+    //                                         WebProcess RSS; the footprint lever for the
+    //                                         memory-pressure thrash on heavy feeds)
+    // Default is unchanged (WEB_BROWSER) so behaviour only moves when set.
+    const QByteArray cacheModelEnv = qgetenv("ATLANTIC_CACHE_MODEL").trimmed().toLower();
+    WebKitCacheModel cacheModel = WEBKIT_CACHE_MODEL_WEB_BROWSER;
+    const char *cacheModelName = "web_browser";
+    if (cacheModelEnv == "viewer" || cacheModelEnv == "minimal") {
+        cacheModel = WEBKIT_CACHE_MODEL_DOCUMENT_VIEWER;
+        cacheModelName = "document_viewer";
+    } else if (cacheModelEnv == "document") {
+        cacheModel = WEBKIT_CACHE_MODEL_DOCUMENT_BROWSER;
+        cacheModelName = "document_browser";
+    } else if (!cacheModelEnv.isEmpty() && cacheModelEnv != "web" && cacheModelEnv != "browser") {
+        qWarning() << "[WPE] Unknown ATLANTIC_CACHE_MODEL" << cacheModelEnv
+                   << "- falling back to web_browser";
+    }
+    webkit_web_context_set_cache_model(ctx, cacheModel);
+    qDebug() << "[WPE] Cache model:" << cacheModelName;
 
     // Register the network ad-block WebProcess extension. The Brave/Rust engine
     // only sees every subresource from inside the WebProcess (UI-process
