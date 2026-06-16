@@ -524,8 +524,28 @@ static const char* const kRedditPerf = R"JS(
                 try { v.pause(); } catch (e) {}
             }
         }
-        // Capture phase sees play events for every <video>, including those in
-        // shadow DOM (shreddit-player) and ones added after load — no observer.
+        // PRIMARY blocker: override play() itself. The 'play'/'playing' events
+        // are NOT composed, so a document-level capture listener never sees plays
+        // from inside shreddit-player's shadow DOM — which is exactly where
+        // Reddit's feed videos live (device-verified: the capture listener saw 0
+        // of the shadow-DOM autoplays while a muted video played). Overriding the
+        // prototype method catches every play() call regardless of shadow
+        // boundary. A muted video calling play() with no transient user activation
+        // is scroll-into-view autoplay → reject like the browser's own autoplay
+        // policy (NotAllowedError) so Reddit's player falls back to tap-to-play.
+        var origPlay = HTMLMediaElement.prototype.play;
+        HTMLMediaElement.prototype.play = function() {
+            try {
+                if (this.tagName === 'VIDEO' && this.muted && !userInitiated()) {
+                    try { this.pause(); } catch (e) {}
+                    return Promise.reject(
+                        new DOMException('autoplay blocked by Atlantic', 'NotAllowedError'));
+                }
+            } catch (e) {}
+            return origPlay.apply(this, arguments);
+        };
+        // Backstop for any light-DOM videos (these events don't cross shadow
+        // boundaries, so the override above is what covers shreddit-player).
         document.addEventListener('play', function(e) { tame(e.target); }, true);
         document.addEventListener('playing', function(e) { tame(e.target); }, true);
         // Pause anything already autoplaying at install time.
