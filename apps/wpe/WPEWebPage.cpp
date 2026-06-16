@@ -723,6 +723,25 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
         webkit_user_content_manager_add_script(ucm, redditScript);
         webkit_user_script_unref(redditScript);
     }
+
+    // MSE prebuffer cap. hls.js buffers its SourceBuffer up to its config limits
+    // independently of <video> play state, so a paused/gated feed video keeps
+    // buffering the whole clip (resident media that kRedditPerf's pause() can't
+    // stop). kMediaBufferCap clamps hls.js's supported maxBuffer* knobs (the
+    // player just buffers less ahead; playback is unaffected). DOCUMENT_START so
+    // the window.Hls hook is in place before the page's player script runs; all
+    // frames since players are often iframed. Set ATLANTIC_DISABLE_MEDIA_BUFCAP=1
+    // to disable.
+    if (!envVarEnabled(qgetenv("ATLANTIC_DISABLE_MEDIA_BUFCAP"))) {
+        const gchar* mediaBufCapJs = WPEUserScripts::kMediaBufferCap;
+        WebKitUserScript* bufCapScript = webkit_user_script_new(
+            mediaBufCapJs,
+            WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+            WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+            nullptr, nullptr);
+        webkit_user_content_manager_add_script(ucm, bufCapScript);
+        webkit_user_script_unref(bufCapScript);
+    }
 }
 
 static void onImageLongPressBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)

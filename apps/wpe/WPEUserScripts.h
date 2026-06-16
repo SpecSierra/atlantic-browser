@@ -543,6 +543,63 @@ static const char* const kRedditPerf = R"JS(
 })();
 )JS";
 
+// Cap MSE prebuffering. hls.js (the dominant MSE player on the web — Reddit,
+// many embeds) keeps filling its SourceBuffer up to maxBufferLength /
+// maxMaxBufferLength / maxBufferSize *regardless of whether the <video> is
+// paused*, so a gated/paused feed video buffers the whole clip (tens of MB of
+// resident media that kRedditPerf's pause() does NOT stop — hls.js buffers
+// independently of play state). These are SUPPORTED hls.js config knobs, so
+// clamping them just makes the player buffer less ahead; it does not break
+// playback (12 s of read-ahead is ample). Site-agnostic — bounded prebuffer is
+// broadly good on a 3.5 GB device. Limitation: only reaches builds that expose
+// the global `window.Hls` (UMD/CDN); ES-module imports are not interceptable
+// from a user script. Native/dash.js/Shaka MSE is out of scope for now.
+// hls.js defaults: maxBufferLength=30, maxMaxBufferLength=600, maxBufferSize=60M,
+// backBufferLength=Infinity. Set ATLANTIC_DISABLE_MEDIA_BUFCAP=1 to disable.
+static const char* const kMediaBufferCap = R"JS(
+(function() {
+    try {
+        if (window.__wpeMediaBufCapInstalled) return;
+        window.__wpeMediaBufCapInstalled = true;
+
+        var CAP = { maxBufferLength: 12, maxMaxBufferLength: 30,
+                    maxBufferSize: 20 * 1000 * 1000, backBufferLength: 10 };
+        function clampConfig(cfg) {
+            cfg = cfg || {};
+            try {
+                for (var k in CAP) {
+                    if (typeof cfg[k] !== 'number' || cfg[k] > CAP[k]) cfg[k] = CAP[k];
+                }
+            } catch (e) {}
+            return cfg;
+        }
+        function patchHls(H) {
+            if (!H || H.__wpeCapped) return H;
+            try {
+                if (H.DefaultConfig) clampConfig(H.DefaultConfig);
+                // Wrap the constructor so an explicit per-instance config is
+                // clamped too; inherit hls.js statics (Events, isSupported,
+                // DefaultConfig, ...) via the prototype chain.
+                var Wrapped = function(userCfg) { return new H(clampConfig(userCfg)); };
+                Wrapped.prototype = H.prototype;
+                Object.setPrototypeOf(Wrapped, H);
+                Wrapped.__wpeCapped = true;
+                return Wrapped;
+            } catch (e) { return H; }
+        }
+
+        var _Hls = window.Hls ? patchHls(window.Hls) : undefined;
+        try {
+            Object.defineProperty(window, 'Hls', {
+                configurable: true,
+                get: function() { return _Hls; },
+                set: function(v) { _Hls = patchHls(v); }
+            });
+        } catch (e) { if (window.Hls) window.Hls = _Hls; }
+    } catch (e) {}
+})();
+)JS";
+
 static const char* const kScrollBridge = R"JS(
 (function() {
     if (window.__wpeScrollBridgeInstalled) return;
