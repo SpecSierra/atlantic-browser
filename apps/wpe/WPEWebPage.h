@@ -208,6 +208,9 @@ public:
     bool dragging() const;
     bool desktopMode() const;
     void setDesktopMode(bool desktop);
+    // Pick and apply the UA for a destination URL (handles per-site quirks
+    // such as Google Maps); called from the navigation policy handler.
+    void applyUserAgentForUrl(const QUrl &url);
     void applyInitialDeviceScale(qreal scale);
     void setFullscreenState(bool fullscreen);
     void setNativeFullscreenRequested(bool fullscreen);

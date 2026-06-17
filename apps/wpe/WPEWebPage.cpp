@@ -277,6 +277,40 @@ QString atlanticUserAgent(bool desktopMode)
         "Version/26.0 Atlantic/1.0 Mobile Safari/605.1.15");
 }
 
+// Google Maps lives at maps.google.<tld> and at google.<tld>/maps (the bare
+// maps.google.com redirects to www.google.com/maps), so match both shapes.
+static bool urlIsGoogleMaps(const QUrl &url)
+{
+    const QString host = url.host().toLower();
+    if (host.startsWith(QStringLiteral("maps.google.")))
+        return true;
+    // google.<tld> or any *.google.<tld> serving the /maps app.
+    if ((host == QStringLiteral("google.com") || host.endsWith(QStringLiteral(".google.com"))
+         || host.contains(QStringLiteral(".google.")) || host.startsWith(QStringLiteral("google.")))
+        && (url.path() == QStringLiteral("/maps") || url.path().startsWith(QStringLiteral("/maps/"))))
+        return true;
+    return false;
+}
+
+// Per-site UA quirk. Under our default mobile UA the Google Maps loader aborts
+// with "app undefined" and leaves a blank page: its bootstrap branches on the
+// platform token and has no working path for the unrecognised
+// "(Linux; Mobile; SailfishOS 5.1)" combo, so it never loads the real app
+// bundles. Presenting a recognised iPhone-Safari UA — the exact shape verified
+// on device to load the full map — fixes it. Scoped to Maps hosts so the
+// global UA (deliberately tuned for other sites) is untouched. Desktop mode
+// already sends a "Macintosh" UA, which Maps recognises, so it is left alone.
+QString atlanticUserAgentForUrl(const QUrl &url, bool desktopMode)
+{
+    if (!desktopMode && urlIsGoogleMaps(url)) {
+        return QStringLiteral(
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+            "Version/18.0 Mobile/15E148 Safari/604.1");
+    }
+    return atlanticUserAgent(desktopMode);
+}
+
 bool perfLoggingEnabled()
 {
     return envVarEnabled(qgetenv("ATLANTIC_PERF_LOG"));
@@ -519,8 +553,24 @@ void onNetworkSessionDownloadStarted(WebKitNetworkSession*, WebKitDownload* down
     g_signal_connect(download, "failed", G_CALLBACK(onDownloadFailed), nullptr);
 }
 
-gboolean onDecidePolicy(WebKitWebView* webView, WebKitPolicyDecision* decision, WebKitPolicyDecisionType type, gpointer)
+gboolean onDecidePolicy(WebKitWebView* webView, WebKitPolicyDecision* decision, WebKitPolicyDecisionType type, gpointer userData)
 {
+    // Before a top-level navigation commits, choose the UA for the destination
+    // so per-site quirks (Google Maps) take effect for the main document and
+    // all of its subresources. Returning FALSE lets WebKit proceed with the
+    // default decision — now carrying the corrected UA.
+    if (type == WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION) {
+        if (WPEWebPage* page = static_cast<WPEWebPage*>(userData)) {
+            WebKitNavigationPolicyDecision* navDecision = WEBKIT_NAVIGATION_POLICY_DECISION(decision);
+            WebKitNavigationAction* action = webkit_navigation_policy_decision_get_navigation_action(navDecision);
+            WebKitURIRequest* request = action ? webkit_navigation_action_get_request(action) : nullptr;
+            const gchar* uri = request ? webkit_uri_request_get_uri(request) : nullptr;
+            if (uri && *uri)
+                page->applyUserAgentForUrl(QUrl(QString::fromUtf8(uri)));
+        }
+        return FALSE;
+    }
+
     // Network ad/tracker blocking is handled per-request by the WebProcess
     // adblock extension (Brave/Rust engine), so this callback only routes
     // new-window navigations into the current view.
@@ -1375,7 +1425,7 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                     qInfo("[Atlantic] site isolation enabled (experimental, opt-in)");
                 }
             }
-            g_signal_connect(wv, "decide-policy", G_CALLBACK(onDecidePolicy), nullptr);
+            g_signal_connect(wv, "decide-policy", G_CALLBACK(onDecidePolicy), this);
             {
                 static bool engineInitialized = false;
                 if (!engineInitialized) {
@@ -1832,12 +1882,19 @@ void WPEWebPage::setDesktopMode(bool desktop)
 {
     const bool changed = (m_desktopMode != desktop);
     m_desktopMode = desktop;
-    setUserAgent(atlanticUserAgent(desktop));
+    // Route through the per-URL picker so a desktop-mode toggle while on a
+    // quirked site (e.g. Google Maps) keeps the correct UA.
+    applyUserAgentForUrl(url());
     if (changed) {
         emit desktopModeChanged();
         // Reload so the server sends the correct page variant.
         setUrl(url());
     }
+}
+
+void WPEWebPage::applyUserAgentForUrl(const QUrl &url)
+{
+    setUserAgent(atlanticUserAgentForUrl(url, m_desktopMode));
 }
 
 void WPEWebPage::applyInitialDeviceScale(qreal scale)
