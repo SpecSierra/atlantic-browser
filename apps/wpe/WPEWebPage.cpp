@@ -219,20 +219,25 @@ void applyMediaVolumeToPage(WPEWebPage* page, qreal volume, bool postState)
         return;
     }
 
-    page->runJavaScript(QString::fromLatin1(
-        "(function(volume, postState){"
-        "  window.__wpeDesiredMediaVolume = volume;"
-        "  if (window.__wpeApplyDesiredMediaStateToMedia)"
-        "    window.__wpeApplyDesiredMediaStateToMedia(document);"
-        "  else {"
-        "    var media = document.querySelectorAll('audio,video');"
-        "    for (var i = 0; i < media.length; i++) {"
-        "      media[i].volume = volume;"
-        "    }"
-        "  }"
-        "  if (postState && window.__wpePostMediaState)"
-        "    window.__wpePostMediaState();"
-        "})(%1,%2);").arg(volume, 0, 'f', 3).arg(postState ? QStringLiteral("true") : QStringLiteral("false")));
+    // Apply the volume at the engine level. webkit_web_view_set_media_volume()
+    // sets a page-global output multiplier (WebCore Page::setMediaVolume, folded
+    // into HTMLMediaElement::effectiveVolume = el.volume * page->mediaVolume())
+    // that attenuates EVERY <audio>/<video> element in the page and is re-read
+    // live (so elements created later, and sites that expose no volume control,
+    // are covered) — all without touching the page-visible el.volume. Because it
+    // is a separate multiplier the page's own JS can neither see nor reset, it
+    // works on players that manage their own el.volume (e.g. YouTube), where the
+    // old per-element el.volume injection was fought/reset and "didn't work".
+    if (WebKitWebView* wv = page->webView()) {
+        webkit_web_view_set_media_volume(wv, static_cast<gdouble>(volume));
+    }
+
+    // Refresh the UI's media indicator if asked (state report only — this no
+    // longer changes el.volume).
+    if (postState) {
+        page->runJavaScript(QStringLiteral(
+            "window.__wpePostMediaState && window.__wpePostMediaState();"));
+    }
 }
 
 bool envVarEnabled(const QByteArray &value)
@@ -1535,6 +1540,13 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                     WEBKIT_COOKIE_PERSISTENT_STORAGE_SQLITE);
                 webkit_cookie_manager_set_accept_policy(cookieManager, WEBKIT_COOKIE_POLICY_ACCEPT_ALWAYS);
             }
+
+            // Mirror the current system media volume onto the freshly-created
+            // page immediately (don't wait up to 500ms for the next poll tick).
+            // Reset the cached step so pollMainVolume re-applies even if the
+            // level is unchanged since the last page.
+            m_lastKnownVolumeStep = -1;
+            pollMainVolume();
         }
     });
 
@@ -1690,8 +1702,8 @@ void WPEWebPage::pollMainVolume()
         ? qreal(state.currentStep) / qreal(state.maximumStep)
         : 1.0;
     qDebug() << "[WPE-VOLUME] poll: step=" << state.currentStep
-             << "/" << state.maximumStep << "→ el.volume=" << volume;
-    // Apply to page: set __wpeDesiredMediaVolume and trigger applyDesiredMediaState.
+             << "/" << state.maximumStep << "→ page mediaVolume=" << volume;
+    // Apply as the page-global media volume (webkit_web_view_set_media_volume).
     // We do NOT set m_pageInitiatedVolumeChange so updateObservedMediaState won't
     // write back to the hardware slider (avoids round-trip).
     applyMediaVolumeToPage(this, volume, false);
