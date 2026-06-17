@@ -197,6 +197,19 @@ static const char* const kSelectionBridge = R"JS(
         return null;
     }
 
+    // Returns true if an image was found at (x, y) and its URL handed to the
+    // QML image panel. Shared by both long-press triggers below.
+    function postImageLongPress(x, y) {
+        var imgUrl = imageUrlAtPoint(x, y);
+        if (!imgUrl)
+            return false;
+        try {
+            window.webkit.messageHandlers.imageLongPressBridge.postMessage(
+                { imageUrl: imgUrl, x: x, y: y });
+        } catch(e) {}
+        return true;
+    }
+
     function beginLongPress(x, y) {
         cancelLongPress();
         longPressPoint = { x: x, y: y };
@@ -206,14 +219,8 @@ static const char* const kSelectionBridge = R"JS(
             if (!longPressPoint) return;
             var lx = longPressPoint.x, ly = longPressPoint.y;
             longPressPoint = null;
-            var imgUrl = imageUrlAtPoint(lx, ly);
-            if (imgUrl) {
-                try {
-                    window.webkit.messageHandlers.imageLongPressBridge.postMessage(
-                        { imageUrl: imgUrl, x: lx, y: ly });
-                } catch(e) {}
+            if (postImageLongPress(lx, ly))
                 return;
-            }
             if (selectWordAtPoint(lx, ly))
                 postSelectionFinal();
         }, 350);
@@ -232,6 +239,15 @@ static const char* const kSelectionBridge = R"JS(
     document.addEventListener('touchend', postSelectionFinal, {capture: true, passive: true});
     document.addEventListener('keyup', postSelectionFinal, true);
     document.addEventListener('contextmenu', function(e) {
+        // WebKit's native long-press fires contextmenu reliably (this is the
+        // working text-selection trigger); the JS touch-timer above can be
+        // pre-empted by the compositor's scroll/gesture handling. Check for an
+        // image here too so the image panel uses the same dependable signal.
+        cancelLongPress();
+        if (postImageLongPress(e.clientX, e.clientY)) {
+            e.preventDefault();
+            return;
+        }
         if (selectWordAtPoint(e.clientX, e.clientY)) {
             e.preventDefault();
             postSelectionFinal();
