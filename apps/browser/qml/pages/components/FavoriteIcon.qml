@@ -28,6 +28,13 @@ Image {
                    || icon.indexOf("data:image/png;base64") === 0
                    || icon.indexOf("data:image/jpeg;base64") === 0) {
             return icon
+        } else if (icon.indexOf("iVBOR") === 0) {
+            // Raw base64 PNG (page thumbnails stored without a data: URI prefix).
+            // Heal legacy entries instead of feeding them to image://theme/.
+            return "data:image/png;base64," + icon
+        } else if (icon.indexOf("/9j/") === 0) {
+            // Raw base64 JPEG stored without a data: URI prefix.
+            return "data:image/jpeg;base64," + icon
         } else if (icon.indexOf('/') === 0) {
             return 'file://' + icon.split("/").map(encodeURIComponent).join("/")
         } else {

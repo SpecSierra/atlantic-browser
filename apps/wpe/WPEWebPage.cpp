@@ -1985,7 +1985,11 @@ static void onSnapshotThumbnailReady(GObject *object, GAsyncResult *result, gpoi
         buf.open(QIODevice::WriteOnly);
         img.save(&buf, "PNG");
         buf.close();
-        emit ctx->page->thumbnailResult(QString::fromLatin1(ba.toBase64()));
+        // Emit a proper data: URI so consumers (FavoriteIcon.qml et al.) can render
+        // it directly. Without the prefix the raw base64 was fed to image://theme/,
+        // producing broken favicon tiles and log spam.
+        emit ctx->page->thumbnailResult(QStringLiteral("data:image/png;base64,")
+                                        + QString::fromLatin1(ba.toBase64()));
     }
 }
 
