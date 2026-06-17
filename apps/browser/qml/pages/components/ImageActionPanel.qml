@@ -30,6 +30,12 @@ DockedPanel {
     // closes when the URL is cleared (Save/Cancel call clearImageLongPress()).
     open: pendingImageUrl.length > 0
 
+    // Opaque black backdrop so the buttons aren't drawn over the live page.
+    Rectangle {
+        anchors.fill: parent
+        color: "black"
+    }
+
     Row {
         anchors.centerIn: parent
         spacing: Theme.paddingLarge
