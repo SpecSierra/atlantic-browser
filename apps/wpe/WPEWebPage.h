@@ -223,7 +223,6 @@ public:
     void setMediaPlaybackState(bool audioActive, bool videoActive);
     void updateObservedMediaState(bool audioActive, bool videoActive, bool fullscreenActive,
                                   qreal volume, bool muted, bool volumeChangedByPage);
-    Q_INVOKABLE void setMediaVolume(qreal volume);
     Q_INVOKABLE void setMediaMuted(bool muted);
 
     Q_INVOKABLE void loadTab(const QString &url, bool force = false);
@@ -388,7 +387,6 @@ private:
     bool m_mediaVideoActive = false;
     qreal m_mediaVolume = 1.0;
     bool m_mediaMuted = false;
-    bool m_pageInitiatedVolumeChange = false;
     bool m_atYBeginning = true;
     bool m_atYEnd = false;
     QString m_favicon;
@@ -433,9 +431,6 @@ private:
     QTimer m_pendingFullscreenEntryGuard;
     QTimer m_fullscreenEnteredGuard;      // 3s guard after entering: blocks spurious false reports
     QElapsedTimer m_lastNativeFullscreenEnter;
-    QTimer m_volumePollTimer;
-    int m_lastKnownVolumeStep = -1;
-    void pollMainVolume();
     QElapsedTimer m_perfFrameLogWindow;
     int m_perfFramesInWindow = 0;
     qreal m_lastInteractionX = -1.0;

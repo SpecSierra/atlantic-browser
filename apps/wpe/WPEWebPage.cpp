@@ -53,192 +53,18 @@ constexpr double kMinimumPinchZoomFactor = 0.5;
 constexpr double kMaximumPinchZoomFactor = 3.0;
 constexpr int kDefaultFramePumpIntervalMs = 2000;
 constexpr int kMediaInactiveDebounceMs = 400;
-const char kPulseLookupService[] = "org.pulseaudio.Server";
-const char kPulseLookupPath[] = "/org/pulseaudio/server_lookup1";
-const char kPulseLookupInterface[] = "org.PulseAudio.ServerLookup1";
-const char kPropertiesInterface[] = "org.freedesktop.DBus.Properties";
-const char kMainVolumePath[] = "/com/meego/mainvolume2";
-const char kMainVolumeInterface[] = "com.Meego.MainVolume2";
-
-struct MainVolumeState {
-    int currentStep = -1;
-    int maximumStep = -1;
-
-    bool valid() const
-    {
-        return maximumStep >= 0;
-    }
-};
-
 // Ad/tracker network blocking now lives entirely in the WebProcess adblock
 // extension (atlantic-engine/web-extension), which runs the Brave/Rust engine
 // against every resource request. The old per-tab WebKit content-filter path
 // (WebKitUserContentFilterStore + content-blocker.json) has been removed.
 
-QString wellKnownPulseSocket()
-{
-    const QByteArray runtimeDir = qgetenv("XDG_RUNTIME_DIR").trimmed();
-    if (runtimeDir.isEmpty()) {
-        return {};
-    }
-    return QStringLiteral("unix:path=%1/pulse/dbus-socket")
-        .arg(QString::fromLocal8Bit(runtimeDir));
-}
-
-QString pulseDbusAddress()
-{
-    const QByteArray envAddress = qgetenv("PULSE_DBUS_SERVER").trimmed();
-    if (!envAddress.isEmpty()) {
-        return QString::fromLocal8Bit(envAddress);
-    }
-
-    QDBusMessage request = QDBusMessage::createMethodCall(
-        QString::fromLatin1(kPulseLookupService),
-        QString::fromLatin1(kPulseLookupPath),
-        QString::fromLatin1(kPropertiesInterface),
-        QStringLiteral("Get"));
-    request << QString::fromLatin1(kPulseLookupInterface) << QStringLiteral("Address");
-
-    const QDBusMessage reply = QDBusConnection::sessionBus().call(request);
-    if (reply.type() == QDBusMessage::ReplyMessage && !reply.arguments().isEmpty()) {
-        const QVariant value = reply.arguments().constFirst();
-        const QString address = value.canConvert<QDBusVariant>()
-            ? qvariant_cast<QDBusVariant>(value).variant().toString()
-            : value.toString();
-        if (!address.isEmpty()) {
-            return address;
-        }
-    }
-
-    // org.pulseaudio.Server is not always registered on the session bus (seen
-    // on SFOS 5.1.0.5 / Xperia 10 II), but the peer socket still lives at the
-    // well-known path under XDG_RUNTIME_DIR. Fall back to it.
-    return wellKnownPulseSocket();
-}
-
-// com.Meego.MainVolume2 is served by PulseAudio's module-dbus-protocol on the
-// PulseAudio peer-to-peer D-Bus socket, NOT on the session bus. The peer socket
-// answers org.freedesktop.DBus.Properties GetAll/Set with StepCount/CurrentStep.
-//
-// We use GDBus (GIO) rather than QtDBus for this peer connection: Qt 5.6.3's
-// QDBusConnection::connectToPeer() does not complete the auth handshake against
-// PulseAudio's socket (every GetAll failed → the volume slider never reached
-// the page), whereas a GDBus peer connection — G_DBUS_CONNECTION_FLAGS_-
-// AUTHENTICATION_CLIENT, no "Hello" — works, matching `dbus-send --peer`.
-// GIO is already linked here for the WebKit GLib API.
-//
-// One cached connection is reused; it is dropped and reopened if PulseAudio
-// restarted and the socket went away.
-GDBusConnection* mainVolumePeerConnection()
-{
-    static GDBusConnection* cached = nullptr;
-    if (cached) {
-        if (!g_dbus_connection_is_closed(cached)) {
-            return cached;
-        }
-        g_object_unref(cached);
-        cached = nullptr;
-    }
-
-    const QString address = pulseDbusAddress();
-    if (address.isEmpty()) {
-        return nullptr;
-    }
-
-    GError* error = nullptr;
-    cached = g_dbus_connection_new_for_address_sync(
-        address.toUtf8().constData(),
-        G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT,
-        nullptr, nullptr, &error);
-    if (!cached) {
-        qWarning() << "[WPE-VOLUME] peer connect failed:"
-                   << (error ? error->message : "unknown");
-        g_clear_error(&error);
-        return nullptr;
-    }
-    return cached;
-}
-
-MainVolumeState queryMainVolumeState()
-{
-    GDBusConnection* connection = mainVolumePeerConnection();
-    if (!connection) {
-        return {};
-    }
-
-    GError* error = nullptr;
-    GVariant* reply = g_dbus_connection_call_sync(
-        connection,
-        nullptr, // peer connection: no destination bus name
-        kMainVolumePath,
-        kPropertiesInterface,
-        "GetAll",
-        g_variant_new("(s)", kMainVolumeInterface),
-        G_VARIANT_TYPE("(a{sv})"),
-        G_DBUS_CALL_FLAGS_NONE,
-        3000,
-        nullptr,
-        &error);
-    if (!reply) {
-        g_clear_error(&error);
-        return {};
-    }
-
-    GVariant* properties = g_variant_get_child_value(reply, 0);
-    GVariant* stepCountVar = g_variant_lookup_value(properties, "StepCount", G_VARIANT_TYPE_UINT32);
-    GVariant* currentStepVar = g_variant_lookup_value(properties, "CurrentStep", G_VARIANT_TYPE_UINT32);
-
-    MainVolumeState state;
-    if (stepCountVar && currentStepVar) {
-        const int stepCount = static_cast<int>(g_variant_get_uint32(stepCountVar));
-        const int currentStep = static_cast<int>(g_variant_get_uint32(currentStepVar));
-        if (stepCount > 0) {
-            state.maximumStep = stepCount - 1;
-            state.currentStep = qBound(0, currentStep, state.maximumStep);
-        }
-    }
-
-    if (stepCountVar) {
-        g_variant_unref(stepCountVar);
-    }
-    if (currentStepVar) {
-        g_variant_unref(currentStepVar);
-    }
-    g_variant_unref(properties);
-    g_variant_unref(reply);
-    return state;
-}
-
-// NOTE: there is intentionally no setMainVolume* writer. Volume sync is
-// read-only (system → el.volume); the browser never writes MainVolume2. A
-// previous writer fed back through the poll and pinned the native slider.
-
-void applyMediaVolumeToPage(WPEWebPage* page, qreal volume, bool postState)
-{
-    if (!page) {
-        return;
-    }
-
-    // Apply the volume at the engine level. webkit_web_view_set_media_volume()
-    // sets a page-global output multiplier (WebCore Page::setMediaVolume, folded
-    // into HTMLMediaElement::effectiveVolume = el.volume * page->mediaVolume())
-    // that attenuates EVERY <audio>/<video> element in the page and is re-read
-    // live (so elements created later, and sites that expose no volume control,
-    // are covered) — all without touching the page-visible el.volume. Because it
-    // is a separate multiplier the page's own JS can neither see nor reset, it
-    // works on players that manage their own el.volume (e.g. YouTube), where the
-    // old per-element el.volume injection was fought/reset and "didn't work".
-    if (WebKitWebView* wv = page->webView()) {
-        webkit_web_view_set_media_volume(wv, static_cast<gdouble>(volume));
-    }
-
-    // Refresh the UI's media indicator if asked (state report only — this no
-    // longer changes el.volume).
-    if (postState) {
-        page->runJavaScript(QStringLiteral(
-            "window.__wpePostMediaState && window.__wpePostMediaState();"));
-    }
-}
+// Audio output volume is handled entirely at the engine/PulseAudio level: the
+// WebProcess tags its GStreamer audio streams media.role=x-maemo (via the
+// WEBKIT_GST_MEDIA_ROLE env var, set in the engine runtime), so the SFOS system
+// media volume (MainVolume2 / module-meego-mainvolume) attenuates browser audio
+// natively through the hardware volume keys. The browser no longer reads or
+// mirrors MainVolume2, and never touches el.volume — that per-element JS hack
+// only worked on simple pages and double-attenuated once the engine fix landed.
 
 bool envVarEnabled(const QByteArray &value)
 {
@@ -1258,11 +1084,6 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     });
     m_fullscreenEnteredGuard.setSingleShot(true); // started by setDomFullscreenActive(true)
 
-    // Volume poll timer: reads com.Meego.MainVolume2 on the session bus every 500ms
-    // and applies the step as el.volume when the slider changes.
-    m_volumePollTimer.setInterval(500);
-    connect(&m_volumePollTimer, &QTimer::timeout, this, &WPEWebPage::pollMainVolume);
-
     setUserAgent(atlanticUserAgent(false));
 
     connect(this, &WPEQtView::loadingChanged,
@@ -1540,13 +1361,6 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                     WEBKIT_COOKIE_PERSISTENT_STORAGE_SQLITE);
                 webkit_cookie_manager_set_accept_policy(cookieManager, WEBKIT_COOKIE_POLICY_ACCEPT_ALWAYS);
             }
-
-            // Mirror the current system media volume onto the freshly-created
-            // page immediately (don't wait up to 500ms for the next poll tick).
-            // Reset the cached step so pollMainVolume re-applies even if the
-            // level is unchanged since the last page.
-            m_lastKnownVolumeStep = -1;
-            pollMainVolume();
         }
     });
 
@@ -1687,28 +1501,6 @@ qreal WPEWebPage::selectionDisplayScale() const
     return scale > 0.0 ? scale : 1.0;
 }
 
-void WPEWebPage::pollMainVolume()
-{
-    const MainVolumeState state = queryMainVolumeState();
-    if (!state.valid()) {
-        qDebug() << "[WPE-VOLUME] poll: MainVolumeState invalid (peer socket unavailable?)";
-        return;
-    }
-    if (state.currentStep == m_lastKnownVolumeStep) {
-        return; // no change
-    }
-    m_lastKnownVolumeStep = state.currentStep;
-    const qreal volume = (state.maximumStep > 0)
-        ? qreal(state.currentStep) / qreal(state.maximumStep)
-        : 1.0;
-    qDebug() << "[WPE-VOLUME] poll: step=" << state.currentStep
-             << "/" << state.maximumStep << "→ page mediaVolume=" << volume;
-    // Apply as the page-global media volume (webkit_web_view_set_media_volume).
-    // We do NOT set m_pageInitiatedVolumeChange so updateObservedMediaState won't
-    // write back to the hardware slider (avoids round-trip).
-    applyMediaVolumeToPage(this, volume, false);
-}
-
 void WPEWebPage::setMediaPlaybackState(bool audioActive, bool videoActive)
 {
     if (m_mediaInactiveDebounceTimer.isActive())
@@ -1722,27 +1514,6 @@ void WPEWebPage::setMediaPlaybackState(bool audioActive, bool videoActive)
     if (m_mediaVideoActive != videoActive) {
         m_mediaVideoActive = videoActive;
         emit mediaVideoActiveChanged();
-    }
-
-    if (!m_mediaAudioActive)
-        m_pageInitiatedVolumeChange = false;
-
-    // Start/stop volume poll timer based on audio activity.
-    if (m_mediaAudioActive || m_mediaVideoActive) {
-        if (!m_volumePollTimer.isActive()) {
-            m_lastKnownVolumeStep = -1; // force immediate apply on first poll
-            m_volumePollTimer.start();
-            qDebug() << "[WPE-VOLUME] started poll timer";
-            // Sync the system volume onto the page right away instead of
-            // letting the media play at el.volume=1.0 (or a stale value) for
-            // the first 500 ms poll interval.
-            pollMainVolume();
-        }
-    } else {
-        if (m_volumePollTimer.isActive()) {
-            m_volumePollTimer.stop();
-            qDebug() << "[WPE-VOLUME] stopped poll timer";
-        }
     }
 
     if (changed) {
@@ -1772,24 +1543,18 @@ void WPEWebPage::updateObservedMediaState(bool audioActive, bool videoActive, bo
     }
     setDomFullscreenActive(fullscreenActive);
 
+    // Output volume is owned by the user via the system media volume (hardware
+    // keys), applied natively in PulseAudio because the WebProcess tags its audio
+    // streams media.role=x-maemo. The browser does not read, mirror, or write the
+    // system volume, and does not touch el.volume. We only track the page-reported
+    // level/mute for reference; nothing here attenuates playback.
     if (volume < 0.0)
         volume = 0.0;
     if (volume > 1.0)
         volume = 1.0;
-
-    // Volume sync is one-directional ONLY: system volume → el.volume (via the
-    // poll timer). We deliberately do NOT write the page's volume back to the
-    // system MainVolume2 here. Doing so (the old volumeChangedByPage path) fed
-    // back on itself — the poll setting el.volume fires a 'volumechange', which
-    // was reported as page-initiated and written back to the system volume,
-    // pinning the native slider (and fighting in-page players). The browser now
-    // only ever READS the system volume; the user owns it via the slider/keys.
-    const bool volumeChanged = !qFuzzyCompare(m_mediaVolume + 1.0, volume + 1.0);
-    const bool mutedChanged = (m_mediaMuted != muted);
-    if (volumeChanged || mutedChanged) {
-        m_mediaVolume = volume;
-        m_mediaMuted = muted;
-    }
+    m_mediaVolume = volume;
+    m_mediaMuted = muted;
+    Q_UNUSED(volumeChangedByPage);
 }
 
 qreal WPEWebPage::toolbarHeight() const { return m_toolbarHeight; }
@@ -2150,20 +1915,6 @@ void WPEWebPage::sendAsyncMessage(const QString &name, const QVariant &data)
             "})();"));
         setFullscreenState(false);
     }
-}
-
-void WPEWebPage::setMediaVolume(qreal volume)
-{
-    if (volume > 1.0) volume /= 100.0;
-    if (volume < 0.0) volume = 0.0;
-    if (volume > 1.0) volume = 1.0;
-
-    m_mediaVolume = volume;
-
-    // Apply to the page only; never write the system MainVolume2 (read-only — see
-    // updateObservedMediaState).
-    qDebug() << "[WPE-MEDIA] set volume" << volume;
-    applyMediaVolumeToPage(this, volume, true);
 }
 
 void WPEWebPage::setMediaMuted(bool muted)
