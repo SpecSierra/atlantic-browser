@@ -5,21 +5,30 @@
 import QtQuick 2.2
 import Sailfish.Silica 1.0
 
-// Image long-press panel. DockedPanel avoids the SilicaFlickable ancestor
-// requirement that ContextMenu has, so it works when triggered programmatically
-// from inside a plain Page. Opens itself in response to the bound webView's
-// imageLongPressed signal and holds the pending image URL internally.
+// Image long-press panel. Driven by the bound webView's contentItem
+// imageLongPressUrl PROPERTY binding — NOT a recvAsyncMessage/signal handler,
+// which never fires because the WebKit script-message callback runs outside the
+// QML JS context (same reason SelectMenuOverlay uses selectMenuActive bindings).
+// DockedPanel avoids the SilicaFlickable ancestor requirement that ContextMenu
+// has, so it works when triggered from inside a plain Page.
 DockedPanel {
     id: imagePanel
 
     property var webView
-    property string pendingImageUrl: ""
+    readonly property string pendingImageUrl:
+        (webView && webView.contentItem) ? webView.contentItem.imageLongPressUrl : ""
+
+    function clear() {
+        if (webView && webView.contentItem)
+            webView.contentItem.clearImageLongPress()
+    }
 
     width: parent.width
     height: Theme.itemSizeLarge + Theme.paddingLarge
     dock: Dock.Bottom
-    open: false
-    onOpenChanged: if (!open) pendingImageUrl = ""
+    // Pure binding: opens when the active page reports a long-pressed image,
+    // closes when the URL is cleared (Save/Cancel call clearImageLongPress()).
+    open: pendingImageUrl.length > 0
 
     Row {
         anchors.centerIn: parent
@@ -31,23 +40,14 @@ DockedPanel {
             onClicked: {
                 if (imagePanel.webView.contentItem && imagePanel.pendingImageUrl.length > 0)
                     imagePanel.webView.contentItem.downloadUrl(imagePanel.pendingImageUrl)
-                imagePanel.open = false
+                imagePanel.clear()
             }
         }
 
         Button {
             //% "Cancel"
             text: qsTrId("atlantic-bt-cancel")
-            onClicked: imagePanel.open = false
-        }
-    }
-
-    Connections {
-        target: imagePanel.webView
-        onImageLongPressed: {
-            if (imageUrl.length === 0) return
-            imagePanel.pendingImageUrl = imageUrl
-            imagePanel.open = true
+            onClicked: imagePanel.clear()
         }
     }
 }

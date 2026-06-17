@@ -130,6 +130,11 @@ class WPEWebPage : public WPEQtView
     Q_PROPERTY(bool selectMenuActive READ selectMenuActive NOTIFY selectMenuActiveChanged FINAL)
     Q_PROPERTY(QStringList selectMenuOptions READ selectMenuOptions NOTIFY selectMenuOptionsChanged FINAL)
     Q_PROPERTY(int selectMenuSelectedIndex READ selectMenuSelectedIndex NOTIFY selectMenuSelectedIndexChanged FINAL)
+    // Image long-press state — property binding (not recvAsyncMessage) because the
+    // WebKit script-message callback runs outside the QML JS context, so a plain
+    // signal to onRecvAsyncMessage never fires. A NOTIFY property is observed
+    // reliably via QML bindings (same approach as selectMenu* above).
+    Q_PROPERTY(QString imageLongPressUrl READ imageLongPressUrl NOTIFY imageLongPressUrlChanged FINAL)
     Q_PROPERTY(bool fileChooserActive READ fileChooserActive NOTIFY fileChooserActiveChanged FINAL)
     Q_PROPERTY(QStringList fileChooserNameFilters READ fileChooserNameFilters NOTIFY fileChooserNameFiltersChanged FINAL)
     Q_PROPERTY(bool fileChooserSelectMultiple READ fileChooserSelectMultiple NOTIFY fileChooserSelectMultipleChanged FINAL)
@@ -256,6 +261,12 @@ public:
     Q_INVOKABLE void cancelFileChooser();
     void openSelectMenu(const QStringList &options, int selectedIndex);
     bool selectMenuActive() const { return m_selectMenuActive; }
+
+    // Image long-press
+    void openImageLongPress(const QString &imageUrl);
+    Q_INVOKABLE void clearImageLongPress();
+    QString imageLongPressUrl() const { return m_imageLongPressUrl; }
+
     QStringList selectMenuOptions() const { return m_selectMenuOptions; }
     int selectMenuSelectedIndex() const { return m_selectMenuSelectedIdx; }
     bool fileChooserActive() const { return m_fileChooserActive; }
@@ -322,6 +333,7 @@ signals:
     void selectMenuActiveChanged();
     void selectMenuOptionsChanged();
     void selectMenuSelectedIndexChanged();
+    void imageLongPressUrlChanged();
     void fileChooserActiveChanged();
     void fileChooserNameFiltersChanged();
     void fileChooserSelectMultipleChanged();
@@ -437,6 +449,7 @@ private:
     bool m_selectMenuActive = false;
     QStringList m_selectMenuOptions;
     int m_selectMenuSelectedIdx = 0;
+    QString m_imageLongPressUrl;
     WebKitFileChooserRequest *m_fileChooserRequest = nullptr;
     bool m_fileChooserActive = false;
     QStringList m_fileChooserNameFilters;

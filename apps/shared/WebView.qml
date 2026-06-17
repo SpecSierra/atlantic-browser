@@ -35,8 +35,6 @@ WebContainer {
     property bool findInPageHasResult: contentItem ? contentItem.findInPageHasResult : false
     property bool canShowSelectionMarkers: true
 
-    signal imageLongPressed(string imageUrl)
-
     property var resourceController: ResourceController {
         webPage: contentItem
         background: !webView.visible
@@ -477,10 +475,6 @@ WebContainer {
                         // This adds this search as available if not already there
                         SearchEngineModel.add(data.engine.title, data.engine.href)
                     }
-                    break
-                }
-                case "Content:ImageLongPress": {
-                    webView.imageLongPressed(data.imageUrl || "")
                     break
                 }
                 }

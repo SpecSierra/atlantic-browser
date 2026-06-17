@@ -818,11 +818,13 @@ static void onImageLongPressBridgeMessage(WebKitUserContentManager*, JSCValue* v
     if (imageUrl.isEmpty())
         return;
 
-    QVariantMap data;
-    data[QStringLiteral("imageUrl")] = imageUrl;
-    data[QStringLiteral("x")] = x;
-    data[QStringLiteral("y")] = y;
-    emit page->recvAsyncMessage(QStringLiteral("Content:ImageLongPress"), data);
+    Q_UNUSED(x);
+    Q_UNUSED(y);
+    // NB: this runs in the WebKit UCM script-message callback, which is outside
+    // the QML JS execution context — emitting recvAsyncMessage here never reaches
+    // the QML onRecvAsyncMessage handler ("No JavaScript engine"). Drive a NOTIFY
+    // property instead, observed via a plain QML binding (like openSelectMenu).
+    page->openImageLongPress(imageUrl);
 }
 
 static void onImageLongPressBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page)
@@ -3083,6 +3085,22 @@ void WPEWebPage::openSelectMenu(const QStringList &options, int selectedIndex)
     emit selectMenuOptionsChanged();
     emit selectMenuSelectedIndexChanged();
     emit selectMenuActiveChanged();
+}
+
+void WPEWebPage::openImageLongPress(const QString &imageUrl)
+{
+    if (m_imageLongPressUrl != imageUrl) {
+        m_imageLongPressUrl = imageUrl;
+        emit imageLongPressUrlChanged();
+    }
+}
+
+void WPEWebPage::clearImageLongPress()
+{
+    if (!m_imageLongPressUrl.isEmpty()) {
+        m_imageLongPressUrl.clear();
+        emit imageLongPressUrlChanged();
+    }
 }
 
 void WPEWebPage::downloadUrl(const QString &url)
