@@ -636,6 +636,70 @@ static const char* const kMediaBufferCap = R"JS(
 })();
 )JS";
 
+// Force HW-decodable video on YouTube (h264ify technique). The Xperia 10 II HW
+// decoder (droidvdec) accelerates H.264/H.265; VP8/VP9/AV1 fall back to SOFTWARE
+// (vp9dec/vpxdec), which cannot keep up with YouTube's 1080p VP9 (device-measured
+// ~0 fps decode, the picture barely advances). YouTube's HTML5 player chooses its
+// codec from MediaSource.isTypeSupported / HTMLMediaElement.canPlayType /
+// navigator.mediaCapabilities.decodingInfo — NOT from the User-Agent (verified on
+// device: an iPhone UA still got VP9) — and it always offers an avc1 (H.264)
+// adaptive format alongside vp9/av01. So we make those three probes report
+// vp9/vp8/av01 as unsupported; the player then picks avc1, which droidvdec
+// hardware-decodes (device-verified: decode path flips vpx → droidvdec0:src).
+// Trade-off: H.264 on YouTube caps at 1080p (no VP9/AV1 1440p+), which matches
+// this device's panel and the droidvdec 1080p ceiling. DOCUMENT_START so the
+// overrides are in place before the player's player.js probes codecs; all frames
+// since the player can be iframed (youtube-nocookie embeds). Self-scoped to
+// YouTube hosts. Set ATLANTIC_DISABLE_YT_H264=1 to disable.
+static const char* const kYouTubeH264 = R"JS(
+(function() {
+    try {
+        if (!/(^|\.)youtube\.com$|(^|\.)youtube-nocookie\.com$|(^|\.)youtu\.be$/i.test(location.hostname))
+            return;
+        if (window.__wpeYtH264Installed) return;
+        window.__wpeYtH264Installed = true;
+
+        var BLOCKED = /vp0?9|vp0?8|av01/i;
+
+        function wrapIsTypeSupported(ctor) {
+            try {
+                if (!ctor || !ctor.isTypeSupported || ctor.__wpeH264) return;
+                var orig = ctor.isTypeSupported;
+                ctor.isTypeSupported = function(type) {
+                    return BLOCKED.test(String(type)) ? false : orig.call(ctor, type);
+                };
+                ctor.__wpeH264 = true;
+            } catch (e) {}
+        }
+        wrapIsTypeSupported(window.MediaSource);
+        wrapIsTypeSupported(window.WebKitMediaSource);
+        wrapIsTypeSupported(window.ManagedMediaSource);
+
+        try {
+            var cpt = HTMLMediaElement.prototype.canPlayType;
+            HTMLMediaElement.prototype.canPlayType = function(type) {
+                return BLOCKED.test(String(type)) ? "" : cpt.call(this, type);
+            };
+        } catch (e) {}
+
+        try {
+            var mc = navigator.mediaCapabilities;
+            if (mc && mc.decodingInfo) {
+                var di = mc.decodingInfo.bind(mc);
+                mc.decodingInfo = function(cfg) {
+                    try {
+                        var ct = cfg && cfg.video && cfg.video.contentType;
+                        if (ct && BLOCKED.test(ct))
+                            return Promise.resolve({ supported: false, smooth: false, powerEfficient: false });
+                    } catch (e) {}
+                    return di(cfg);
+                };
+            }
+        } catch (e) {}
+    } catch (e) {}
+})();
+)JS";
+
 static const char* const kScrollBridge = R"JS(
 (function() {
     if (window.__wpeScrollBridgeInstalled) return;

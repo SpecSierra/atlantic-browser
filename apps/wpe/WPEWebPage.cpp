@@ -623,6 +623,26 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
         webkit_user_content_manager_add_script(ucm, bufCapScript);
         webkit_user_script_unref(bufCapScript);
     }
+
+    // Force HW-decodable video on YouTube. droidvdec accelerates H.264/H.265 but
+    // VP8/VP9/AV1 decode in SOFTWARE, which can't keep up with YouTube's 1080p VP9
+    // (device-measured ~0 fps). YouTube's player picks its codec from the
+    // MediaSource/canPlayType/mediaCapabilities support probes (not the UA), and
+    // always offers an avc1 format too. kYouTubeH264 makes those probes report
+    // vp9/vp8/av01 as unsupported so the player falls back to avc1, which droidvdec
+    // hardware-decodes (device-verified: vpx → droidvdec0:src). DOCUMENT_START, all
+    // frames (the player can be iframed). YouTube-scoped inside the script. Set
+    // ATLANTIC_DISABLE_YT_H264=1 to disable.
+    if (!envVarEnabled(qgetenv("ATLANTIC_DISABLE_YT_H264"))) {
+        const gchar* ytH264Js = WPEUserScripts::kYouTubeH264;
+        WebKitUserScript* ytH264Script = webkit_user_script_new(
+            ytH264Js,
+            WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+            WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+            nullptr, nullptr);
+        webkit_user_content_manager_add_script(ucm, ytH264Script);
+        webkit_user_script_unref(ytH264Script);
+    }
 }
 
 static void onImageLongPressBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
