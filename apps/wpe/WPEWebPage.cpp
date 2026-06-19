@@ -123,6 +123,15 @@ static bool urlIsGoogleMaps(const QUrl &url)
     return false;
 }
 
+// Twitch lives at twitch.tv and m.twitch.tv (the bare twitch.tv redirects to the
+// mobile host on a mobile UA).
+static bool urlIsTwitch(const QUrl &url)
+{
+    const QString host = url.host().toLower();
+    return host == QStringLiteral("twitch.tv")
+        || host.endsWith(QStringLiteral(".twitch.tv"));
+}
+
 // Per-site UA quirk. Under our default mobile UA the Google Maps loader aborts
 // with "app undefined" and leaves a blank page: its bootstrap branches on the
 // platform token and has no working path for the unrecognised
@@ -131,6 +140,18 @@ static bool urlIsGoogleMaps(const QUrl &url)
 // on device to load the full map — fixes it. Scoped to Maps hosts so the
 // global UA (deliberately tuned for other sites) is untouched. Desktop mode
 // already sends a "Macintosh" UA, which Maps recognises, so it is left alone.
+//
+// Twitch needs the OPPOSITE of a Safari UA. Its player chooses a playback engine
+// from the UA + a codec probe: under our Safari-shaped UA it picks the Safari
+// *native-HLS* path, which WPE can't actually play (it has no HLS demuxer and
+// canPlayType('application/vnd.apple.mpegurl') misreports "maybe") — so every
+// stream dies with "Error #4000 (not supported in this browser)". Presenting an
+// Android-Chrome UA makes Twitch use its MSE + JS-transmux player instead, whose
+// fragmented-MP4 H.264/AAC output WPE *does* decode (device-verified: the
+// GStreamer pipeline parses video/x-h264 and plugs droidvdec for HW decode).
+// Paired with the kTwitch user-script (autoplay-mute + "open in app" dismiss).
+// Desktop mode's "Macintosh" UA already gets Twitch's (working) MSE player, so it
+// is left alone.
 QString atlanticUserAgentForUrl(const QUrl &url, bool desktopMode)
 {
     if (!desktopMode && urlIsGoogleMaps(url)) {
@@ -138,6 +159,12 @@ QString atlanticUserAgentForUrl(const QUrl &url, bool desktopMode)
             "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) "
             "AppleWebKit/605.1.15 (KHTML, like Gecko) "
             "Version/18.0 Mobile/15E148 Safari/604.1");
+    }
+    if (!desktopMode && urlIsTwitch(url)) {
+        return QStringLiteral(
+            "Mozilla/5.0 (Linux; Android 14; Pixel 7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/130.0.0.0 Mobile Safari/537.36");
     }
     return atlanticUserAgent(desktopMode);
 }
@@ -645,6 +672,25 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
             nullptr, nullptr);
         webkit_user_content_manager_add_script(ucm, ytH264Script);
         webkit_user_script_unref(ytH264Script);
+    }
+
+    // Twitch playback fix. The Android-Chrome UA quirk (atlanticUserAgentForUrl)
+    // gets Twitch onto its MSE player so WPE can decode the stream; kTwitch then
+    // clears the two gates that still stop playback — it force-mutes load-time
+    // autoplay (the engine rejects audible autoplay, and Twitch tears the source
+    // down on that rejection) and dismisses the "Open in App" interstitial that
+    // pauses the page. DOCUMENT_START so the play() wrapper is in place before
+    // Twitch's player autoplays; all frames since the player can be iframed.
+    // Twitch-scoped inside the script. Set ATLANTIC_DISABLE_TWITCH=1 to disable.
+    if (!envVarEnabled(qgetenv("ATLANTIC_DISABLE_TWITCH"))) {
+        const gchar* twitchJs = WPEUserScripts::kTwitch;
+        WebKitUserScript* twitchScript = webkit_user_script_new(
+            twitchJs,
+            WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+            WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+            nullptr, nullptr);
+        webkit_user_content_manager_add_script(ucm, twitchScript);
+        webkit_user_script_unref(twitchScript);
     }
 }
 

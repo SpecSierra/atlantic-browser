@@ -849,6 +849,96 @@ static const char* const kYouTubeH264 = R"JS(
 })();
 )JS";
 
+// Twitch playback fix. Paired with the Android-Chrome UA quirk in WPEWebPage
+// (which gets Twitch onto its MSE player so WPE can decode the stream — see
+// atlanticUserAgentForUrl), this clears the two remaining gates that stop a
+// stream from actually starting on this device:
+//
+//  1. Autoplay. Twitch calls video.play() on load with sound, but the engine's
+//     media_playback_requires_user_gesture policy rejects AUDIBLE autoplay
+//     (UserGestureRequired), and Twitch's player tears the MediaSource down on
+//     that rejection — so the picture never appears. MUTED autoplay IS permitted
+//     (same policy that lets Reddit's muted feed videos play). So force the
+//     player <video> muted whenever play() is called WITHOUT a transient user
+//     activation: autoplay then starts muted (picture shows immediately) and the
+//     user unmutes with a tap. A real tap keeps its activation, so intentional
+//     audible play (and unmute) is untouched — this only catches the automatic
+//     load-time autoplay, exactly like a desktop browser's autoplay-muted.
+//
+//  2. The "Open in App / Keep using web" interstitial. Twitch's mobile web shows
+//     an app-install gate to mobile-Chrome UAs that pauses the page until it is
+//     dismissed (device-observed: the stream uptime freezes behind it). Click
+//     its "Keep using web" affordance so playback proceeds. Controls render late
+//     and the gate can reappear, so a MutationObserver + short interval keep
+//     watching. Self-scoped to Twitch hosts. Set ATLANTIC_DISABLE_TWITCH=1 to
+//     disable the whole script.
+static const char* const kTwitch = R"JS(
+(function() {
+    try {
+        if (!/(^|\.)twitch\.tv$/i.test(location.hostname)) return;
+        if (window.__wpeTwitchInstalled) return;
+        window.__wpeTwitchInstalled = true;
+
+        function userInitiated() {
+            return !!(navigator.userActivation && navigator.userActivation.isActive);
+        }
+
+        // Force muted autoplay so the engine's gesture policy permits it; a real
+        // user tap (which carries an activation) still plays/unmutes with sound.
+        var origPlay = HTMLMediaElement.prototype.play;
+        HTMLMediaElement.prototype.play = function() {
+            try {
+                if (this.tagName === 'VIDEO' && !userInitiated() && !this.muted)
+                    this.muted = true;
+            } catch (e) {}
+            return origPlay.apply(this, arguments);
+        };
+
+        // Dismiss Twitch's "Open in App / Keep using web" gate so it stops
+        // pausing the page. Find the smallest clickable element whose text is the
+        // "keep using web" affordance and click it.
+        function dismissAppGate() {
+            var nodes = document.querySelectorAll(
+                'a, button, [role="button"], [tabindex], div, span');
+            for (var i = 0; i < nodes.length; i++) {
+                var el = nodes[i];
+                if (el.__wpeTwitchGateTried) continue;
+                var txt = (el.textContent || '').trim();
+                if (txt.length > 40) continue;
+                if (/^(keep using web|continue (on|in) (web|browser)|not now)$/i.test(txt)) {
+                    el.__wpeTwitchGateTried = true;
+                    try { el.click(); } catch (e) {}
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        var pending = false;
+        function schedule() {
+            if (pending) return;
+            pending = true;
+            var run = function() { pending = false; dismissAppGate(); };
+            if (window.requestAnimationFrame) requestAnimationFrame(run);
+            else setTimeout(run, 16);
+        }
+
+        var mo = new MutationObserver(schedule);
+        function start() {
+            mo.observe(document.documentElement, { childList: true, subtree: true });
+            dismissAppGate();
+        }
+        if (document.documentElement) start();
+        else document.addEventListener('DOMContentLoaded', start, { once: true });
+        var ticks = 0;
+        var timer = setInterval(function() {
+            dismissAppGate();
+            if (++ticks > 40) clearInterval(timer);   // ~20s safety net, then stop
+        }, 500);
+    } catch (e) {}
+})();
+)JS";
+
 static const char* const kScrollBridge = R"JS(
 (function() {
     if (window.__wpeScrollBridgeInstalled) return;
