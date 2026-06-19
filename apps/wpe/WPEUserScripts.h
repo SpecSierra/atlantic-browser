@@ -339,7 +339,7 @@ static const char* const kYouTubeIconFix = R"JS(
     // changes; and never cache while the <svg> has no drawable shape yet (the
     // icon often lazy-loads its <path> a frame after the node appears — masking
     // then would bake in an empty, fully-transparent mask = invisible).
-    function maskHost(host, size) {
+    function maskHost(host, size, boxOverride) {
         var svg = host.querySelector('svg');
         if (!svg) return;
         var sig = svg.innerHTML;
@@ -351,7 +351,11 @@ static const char* const kYouTubeIconFix = R"JS(
         for (var i = 0; i < glyphs.length; i++) glyphs[i].setAttribute('fill', '#000');
         var uri = 'url("data:image/svg+xml,'
                 + encodeURIComponent(new XMLSerializer().serializeToString(clone)) + '")';
-        var box = host.querySelector('div') || host;        // the icon-sized box
+        // The element we paint the mask onto must be one WPE actually composites.
+        // Default: the host's own icon-sized box. Some hosts (the Shorts action
+        // bar) sit on a leaf the compositor never paints, so the caller passes an
+        // ancestor box that DOES paint (see the reel-action-bar scan below).
+        var box = boxOverride || host.querySelector('div') || host;
         size = size || 'contain';
         box.style.setProperty('-webkit-mask-image', uri, 'important');
         box.style.setProperty('mask-image', uri, 'important');
@@ -383,6 +387,19 @@ static const char* const kYouTubeIconFix = R"JS(
           + '.player-controls-top .yt-icon-shape, '
           + '#movie_player .yt-icon-shape, #player .yt-icon-shape');
         for (var i = 0; i < hosts.length; i++) maskHost(hosts[i]);
+        // YouTube Shorts right-side action bar (like / dislike / comments / share)
+        // lives in <reel-action-bar-view-model>, outside the watch-player overlay,
+        // so the scan above never reaches it. Extra twist, device-proven with a
+        // per-layer paint test: WPE does NOT composite the <c3-icon>/.yt-icon-shape
+        // leaf here (a solid background on it never reaches the screen), but it DOES
+        // composite the wrapping div.ytSpecButtonShapeNextIcon. So mask THAT ancestor
+        // with the leaf's glyph — masking the leaf itself paints nothing on screen.
+        var reel = document.querySelectorAll('reel-action-bar-view-model .yt-icon-shape');
+        for (var r = 0; r < reel.length; r++) {
+            var box = reel[r].closest('div.ytSpecButtonShapeNextIcon')
+                   || reel[r].closest('div');
+            if (box) maskHost(reel[r], 'contain', box);
+        }
         var unmute = document.querySelectorAll('.ytp-unmute-icon');
         for (var j = 0; j < unmute.length; j++) {
             var u = unmute[j], usvg = u.querySelector('svg');
