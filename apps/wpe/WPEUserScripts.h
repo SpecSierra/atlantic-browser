@@ -388,6 +388,33 @@ static const char* const kYouTubeIconFix = R"JS(
             var u = unmute[j], usvg = u.querySelector('svg');
             maskHost(u, usvg ? (usvg.getAttribute('width') || '24') + 'px' : '24px');
         }
+        syncUnmute();
+    }
+
+    // YouTube's mobile player never surfaces the legacy "Tap to unmute" popup on
+    // WPE — it stays display:none even during muted autoplay (device-confirmed:
+    // muted+playing, .ytp-unmute is display:none / 0x0), though the tap-to-unmute
+    // hit area still works, so the affordance is simply invisible. Force the
+    // popup visible whenever the video is muted (its own CSS positions it
+    // top-left; its icon is masked above); drop the override once unmuted so it
+    // returns to YouTube's hidden state. Only touches display/opacity — never the
+    // video's mute state or audio.
+    function syncUnmute() {
+        var u = document.querySelector('.ytp-unmute');
+        if (!u) return;
+        var v = document.querySelector('video');
+        if (v && v.muted) {
+            u.style.setProperty('display', 'block', 'important');
+            u.style.setProperty('opacity', '1', 'important');
+            u.style.setProperty('visibility', 'visible', 'important');
+        } else {
+            // YouTube hides this popup via an inline display:none which our
+            // override clobbered; re-assert none (not removeProperty, which would
+            // fall back to the stylesheet's default display:block = stuck open).
+            u.style.setProperty('display', 'none', 'important');
+            u.style.removeProperty('opacity');
+            u.style.removeProperty('visibility');
+        }
     }
 
     var pending = false;
@@ -402,6 +429,9 @@ static const char* const kYouTubeIconFix = R"JS(
     var mo = new MutationObserver(schedule);
     mo.observe(document.documentElement, { childList: true, subtree: true });
     setInterval(scan, 800);   // safety net for mutations the observer coalesces away
+    // mute/unmute doesn't mutate the DOM, so react to it directly (volumechange
+    // doesn't bubble — capture phase catches it) to toggle the unmute popup.
+    document.addEventListener('volumechange', schedule, true);
     scan();
 })();
 )JS";
