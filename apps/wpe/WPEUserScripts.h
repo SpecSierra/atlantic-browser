@@ -330,10 +330,21 @@ static const char* const kYouTubeIconFix = R"JS(
     // fill on the icon-sized box. `size` is the mask-size: 'contain' fills the
     // box (icon hosts whose box IS the glyph), or an explicit px for a glyph
     // that sits in a larger padded box (e.g. the unmute popup's 50x49 area).
+    //
+    // YouTube mutates a button's glyph IN PLACE (fullscreen<->exit, play<->pause,
+    // mute<->unmute, autoplay on<->off) by swapping the <svg>'s contents on the
+    // SAME host node. A one-shot boolean cache would leave a stale/empty mask —
+    // e.g. the fullscreen icon goes blank after a fullscreen round-trip. So key
+    // the cache on the glyph's CONTENT signature and re-derive whenever it
+    // changes; and never cache while the <svg> has no drawable shape yet (the
+    // icon often lazy-loads its <path> a frame after the node appears — masking
+    // then would bake in an empty, fully-transparent mask = invisible).
     function maskHost(host, size) {
-        if (host.__wpeMasked) return;
         var svg = host.querySelector('svg');
         if (!svg) return;
+        var sig = svg.innerHTML;
+        if (!/<(path|polygon|rect|circle|ellipse|use)/i.test(sig)) return;  // no glyph yet
+        if (host.__wpeMaskSig === sig) return;                              // already current
         var clone = svg.cloneNode(true);
         clone.setAttribute('fill', '#000');                 // solid mask alpha
         var glyphs = clone.querySelectorAll('path,polygon,rect,circle,ellipse');
@@ -352,7 +363,7 @@ static const char* const kYouTubeIconFix = R"JS(
         box.style.setProperty('mask-position', 'center', 'important');
         box.style.setProperty('background-color', '#fff', 'important');
         svg.style.setProperty('visibility', 'hidden', 'important');
-        host.__wpeMasked = true;
+        host.__wpeMaskSig = sig;
     }
 
     // The mobile player's control bar is NOT inside #movie_player — it lives in
