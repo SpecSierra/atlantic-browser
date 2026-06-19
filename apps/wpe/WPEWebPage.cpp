@@ -513,8 +513,11 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
     webkit_user_content_manager_add_script(ucm, perfScript);
     webkit_user_script_unref(perfScript);
 
-    // YouTube player icons (.ytp-svg-fill inline SVG) compute to black on WPE
-    // and vanish on the dark player; force them white. See kYouTubeIconFix.
+    // YouTube player icons come up blank on WPE: the legacy play button
+    // (.ytp-svg-fill) computes black, and the mobile player's <c3-icon> control
+    // glyphs (fullscreen/seek/mute/prev-next) fail to paint as inline <svg>.
+    // kYouTubeIconFix forces the former white and re-issues the latter as
+    // data-URI -webkit-mask-images sourced from YouTube's own SVG. See header.
     const gchar* ytIconFixJs = WPEUserScripts::kYouTubeIconFix;
     WebKitUserScript* ytIconFixScript = webkit_user_script_new(
         ytIconFixJs,

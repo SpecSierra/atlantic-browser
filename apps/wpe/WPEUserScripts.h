@@ -285,22 +285,113 @@ static const char* const kPerfCss = R"JS(
 })();
 )JS";
 
-// YouTube player control icons are inline <svg><path class="ytp-svg-fill">, not
-// CSS masks. On WPE 2.52 their computed fill is the SVG default black (YouTube's
-// intended white never applies — its fill rule resolves to an unset custom
-// property), so the controls are invisible on the dark player. Force the fill
-// white. Diagnosed on-device via the remote inspector: computed fill goes
-// rgb(0,0,0) -> rgb(255,255,255) the moment this rule is present. One stable
-// class, language-agnostic, robust across redesigns — unlike the old per-icon
-// aria-label/hand-drawn-SVG override. (The generic mask healer below does not
-// help here: YouTube uses inline SVG, not url() masks.)
+// YouTube player control icons come up blank on WPE 2.52. There are TWO distinct
+// players and TWO distinct icon mechanisms — this fixes both:
+//
+// 1. Legacy / large play button: inline <svg><path class="ytp-svg-fill">. Its
+//    computed fill resolves to black (YouTube's intended white never applies),
+//    invisible on the dark player. A single `.ytp-svg-fill{fill:#fff}` rule
+//    flips it white. Cheap and harmless everywhere, so it stays global.
+//
+// 2. Mobile player (m.youtube.com, which our Safari-shaped UA now gets) renders
+//    its controls with YouTube's modern <c3-icon> web component:
+//      <c3-icon><span class="yt-icon-shape"><div style="fill:currentcolor">
+//        <svg viewBox="0 0 24 24"><path d="…"></svg></div></span></c3-icon>
+//    WPE fails to PAINT these inline player <svg> glyphs — fullscreen, seek
+//    fwd/back, mute and prev/next are blank — even though the identically
+//    structured settings gear and the page's action icons (like/share/save)
+//    DO paint. So it is not a colour/fill problem (device-verified: the broken
+//    and the working buttons have byte-identical computed fill, both white).
+//    WPE does, however, reliably paint a CSS -webkit-mask-image fed an inline
+//    data: URI (the same path the generic icon healer relies on). So for every
+//    such glyph, re-issue it as a mask sourced from YouTube's OWN <svg> with an
+//    explicit white fill, and hide the non-painting original. This reuses the
+//    real glyphs (language-agnostic, nothing hand-drawn, robust across player
+//    redesigns) — the proven replacement for the old per-icon aria-label hack.
+//    Controls are torn down/rebuilt on every show/hide, so a MutationObserver +
+//    periodic re-scan keeps them patched. Scoped to the player control overlays
+//    (the mobile bar lives in <ytm-watch-player-controls>, a SIBLING of
+//    #movie_player — not inside it) on youtube hosts, so the page's own
+//    (already-fine) action icons and other sites are untouched.
 static const char* const kYouTubeIconFix = R"JS(
 (function() {
-    if (document.getElementById('__wpe_yt_icon_fix')) return;
-    var s = document.createElement('style');
-    s.id = '__wpe_yt_icon_fix';
-    s.textContent = '.ytp-svg-fill{fill:#fff !important;}';
-    (document.head || document.documentElement).appendChild(s);
+    if (!document.getElementById('__wpe_yt_icon_fix')) {
+        var s = document.createElement('style');
+        s.id = '__wpe_yt_icon_fix';
+        s.textContent = '.ytp-svg-fill{fill:#fff !important;}';
+        (document.head || document.documentElement).appendChild(s);
+    }
+
+    if (!/(^|\.)youtube\.com$/.test(location.hostname)) return;
+    if (window.__wpeYtPlayerIconFix) return;
+    window.__wpeYtPlayerIconFix = true;
+
+    // Re-issue the (non-painting) inline <svg> in `host` as a CSS mask + white
+    // fill on the icon-sized box. `size` is the mask-size: 'contain' fills the
+    // box (icon hosts whose box IS the glyph), or an explicit px for a glyph
+    // that sits in a larger padded box (e.g. the unmute popup's 50x49 area).
+    function maskHost(host, size) {
+        if (host.__wpeMasked) return;
+        var svg = host.querySelector('svg');
+        if (!svg) return;
+        var clone = svg.cloneNode(true);
+        clone.setAttribute('fill', '#000');                 // solid mask alpha
+        var glyphs = clone.querySelectorAll('path,polygon,rect,circle,ellipse');
+        for (var i = 0; i < glyphs.length; i++) glyphs[i].setAttribute('fill', '#000');
+        var uri = 'url("data:image/svg+xml,'
+                + encodeURIComponent(new XMLSerializer().serializeToString(clone)) + '")';
+        var box = host.querySelector('div') || host;        // the icon-sized box
+        size = size || 'contain';
+        box.style.setProperty('-webkit-mask-image', uri, 'important');
+        box.style.setProperty('mask-image', uri, 'important');
+        box.style.setProperty('-webkit-mask-size', size, 'important');
+        box.style.setProperty('mask-size', size, 'important');
+        box.style.setProperty('-webkit-mask-repeat', 'no-repeat', 'important');
+        box.style.setProperty('mask-repeat', 'no-repeat', 'important');
+        box.style.setProperty('-webkit-mask-position', 'center', 'important');
+        box.style.setProperty('mask-position', 'center', 'important');
+        box.style.setProperty('background-color', '#fff', 'important');
+        svg.style.setProperty('visibility', 'hidden', 'important');
+        host.__wpeMasked = true;
+    }
+
+    // The mobile player's control bar is NOT inside #movie_player — it lives in
+    // a sibling overlay (<ytm-watch-player-controls>, under .player-container).
+    // Device-confirmed: #movie_player holds 0 of these icon hosts; the 8 control
+    // glyphs are under ytm-watch-player-controls. Scope to the control overlays
+    // (plus #movie_player / #player as fallbacks for other variants) so we patch
+    // ONLY player chrome, never the page's own (already-fine) action icons.
+    // The "Tap to unmute" popup is a separate ytp overlay using the legacy
+    // .ytp-svg-fill inline <svg> (no .yt-icon-shape) and hits the same paint
+    // failure — mask it too, at the glyph's native size (its box is padded).
+    function scan() {
+        var hosts = document.querySelectorAll(
+            'ytm-watch-player-controls .yt-icon-shape, '
+          + '.player-controls-bottom .yt-icon-shape, '
+          + '.player-controls-middle .yt-icon-shape, '
+          + '.player-controls-top .yt-icon-shape, '
+          + '#movie_player .yt-icon-shape, #player .yt-icon-shape');
+        for (var i = 0; i < hosts.length; i++) maskHost(hosts[i]);
+        var unmute = document.querySelectorAll('.ytp-unmute-icon');
+        for (var j = 0; j < unmute.length; j++) {
+            var u = unmute[j], usvg = u.querySelector('svg');
+            maskHost(u, usvg ? (usvg.getAttribute('width') || '24') + 'px' : '24px');
+        }
+    }
+
+    var pending = false;
+    function schedule() {
+        if (pending) return;
+        pending = true;
+        var run = function() { pending = false; scan(); };
+        if (window.requestAnimationFrame) requestAnimationFrame(run);
+        else setTimeout(run, 16);
+    }
+
+    var mo = new MutationObserver(schedule);
+    mo.observe(document.documentElement, { childList: true, subtree: true });
+    setInterval(scan, 800);   // safety net for mutations the observer coalesces away
+    scan();
 })();
 )JS";
 
