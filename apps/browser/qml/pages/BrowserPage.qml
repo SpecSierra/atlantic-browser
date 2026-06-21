@@ -161,6 +161,19 @@ Page {
 
     Browser.DownloadRemorsePopup { id: downloadPopup }
 
+    // Direct-composite: on lipstick the web surface always stacks above the chrome
+    // (it is a subsurface of the chrome window), so it cannot sit behind the overlay.
+    // Hide the web surface while the overlay is engaged (chrome shown) and show it
+    // full-screen while browsing. allowContentUse is true exactly when the web is the
+    // interactive foreground (overlay dismissed). No-op on the QSG path.
+    Connections {
+        target: overlay.animator
+        onAllowContentUseChanged: {
+            if (webView.contentItem)
+                webView.contentItem.setWebContentSurfaceVisible(overlay.animator.allowContentUse)
+        }
+    }
+
     Shared.WebView {
         id: webView
 
