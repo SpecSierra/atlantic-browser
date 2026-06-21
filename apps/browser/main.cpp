@@ -16,6 +16,7 @@
 #include <QFileInfo>
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
+#include <QColor>
 #include <QQuickView>
 #include <QQuickWindow>
 #include <QSet>
@@ -579,6 +580,19 @@ static void configureBrowserApplication(QGuiApplication *app, QQuickView *view)
     QTranslator *translator = new QTranslator(app);
     translator->load(QLocale(), "atlantic-browser", "-", translationPath);
     qApp->installTranslator(translator);
+
+    // Direct-composite (ATLANTIC_DIRECT_COMPOSITE): web frames are presented on a
+    // dedicated wl_subsurface placed *below* this chrome window (see the qt5 plugin's
+    // WPEWaylandSubsurface). For the web content to show through, the chrome window
+    // must clear to transparent rather than the default opaque white — the web item
+    // paints nothing, leaving a transparent hole the sub-surface shows through, while
+    // opaque chrome (toolbar/overlay) still draws normally on top. No-op for the
+    // legacy QSG texture-node path.
+    {
+        const QByteArray dc = qgetenv("ATLANTIC_DIRECT_COMPOSITE");
+        if (!dc.isEmpty() && dc != "0")
+            view->setColor(Qt::transparent);
+    }
 
     //% "Atlantic"
     view->setTitle(qtTrId("atlantic-browser-ap-name"));
