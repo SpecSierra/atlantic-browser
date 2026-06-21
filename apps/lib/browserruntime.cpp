@@ -23,6 +23,9 @@
 #include "bookmarkmanager.h"
 
 #include <QGuiApplication>
+#include <QColor>
+#include <QFile>
+#include <QUrl>
 #include <QDBusConnection>
 #include <QJSEngine>
 #include <QQmlEngine>
@@ -265,5 +268,34 @@ extern "C" Q_DECL_EXPORT bool atlanticBrowserRuntimeStart(QQuickView *view,
     view->setProperty("atlanticBrowserRuntimeLoaded", true);
     view->raise();
     view->requestActivate();
+
+    // Probe (ATLANTIC_DC_CHILDWIN_TEST): can a Qt child window host the chrome on a
+    // layer above the web subsurface? Show a transparent child QQuickView (transient
+    // child of the main window) with a labelled translucent box over the bottom half.
+    // If it composites above the web, QtWayland gives child windows stackable
+    // subsurfaces and we can move the real Silica chrome onto such a layer. Throwaway.
+    if (!qEnvironmentVariableIsEmpty("ATLANTIC_DC_CHILDWIN_TEST")) {
+        static const char* kProbeQml =
+            "import QtQuick 2.2\n"
+            "Rectangle { color: '#cc00aaff';\n"
+            "  Text { anchors.centerIn: parent; text: 'CHILD WINDOW LAYER';\n"
+            "         font.pixelSize: 56; color: 'white' } }\n";
+        const QString path = QStringLiteral("/tmp/atl-childwin-probe.qml");
+        QFile f(path);
+        if (f.open(QIODevice::WriteOnly)) {
+            f.write(kProbeQml);
+            f.close();
+            QQuickView* child = new QQuickView();
+            child->setTransientParent(view);
+            child->setFlags(child->flags() | Qt::FramelessWindowHint);
+            child->setColor(QColor(0, 0, 0, 0));
+            child->setResizeMode(QQuickView::SizeRootObjectToView);
+            child->resize(view->width(), view->height() / 2);
+            child->setPosition(0, view->height() / 2);
+            child->setSource(QUrl::fromLocalFile(path));
+            child->show();
+            fprintf(stderr, "[ATLANTIC-RUNTIME] childwin-test: child QQuickView shown over bottom half\n");
+        }
+    }
     return true;
 }
