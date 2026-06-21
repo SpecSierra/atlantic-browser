@@ -780,29 +780,10 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     configureBrowserApplication(app.data(), view.data());
     installApplicationShutdownHooks(app.data(), view.data());
 
-    // Direct-composite: the chrome can only sit ABOVE the web on lipstick by living in
-    // a window layered over it (a subsurface never stacks below its own parent, but a
-    // transient CHILD window of the web's parent does render above the web subsurface —
-    // device-proven). So `view` stays the foreground main window AND the web's parent
-    // (keeping its splash and all app/window logic), while the Silica chrome scene runs
-    // in this transparent transient-child window above the web. The web subsurface picks
-    // up `view` as its parent via the chrome window's transientParent(); the runtime
-    // loads browser.qml into the chrome window below. No-op for the legacy QSG path.
-    QScopedPointer<QQuickView> chromeView;
-    const QByteArray dcEnv = qgetenv("ATLANTIC_DIRECT_COMPOSITE");
-    const bool directComposite = !dcEnv.isEmpty() && dcEnv != "0";
-    if (directComposite) {
-        chromeView.reset(new QQuickView);
-        chromeView->setColor(Qt::transparent);
-        chromeView->setTransientParent(view.data());
-        chromeView->showFullScreen();
-    }
-    QQuickView* uiView = directComposite ? chromeView.data() : view.data();
-
     std::unique_ptr<QLibrary> runtimeLibrary(new QLibrary);
     if (!silicaMainSmokeUi) {
         QTimer::singleShot(browserRuntimeDelayMs(), app.data(),
-                           [runtimeLibrary = runtimeLibrary.get(), view = uiView, app = app.data()]() {
+                           [runtimeLibrary = runtimeLibrary.get(), view = view.data(), app = app.data()]() {
             loadBrowserRuntime(runtimeLibrary, view, app);
         });
     }
