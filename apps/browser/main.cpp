@@ -775,6 +775,30 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     QScopedPointer<QGuiApplication> app(new QGuiApplication(argc, argv));
     configureGpuModeFromCapabilities();
     QScopedPointer<QQuickView> view(new QQuickView);
+
+    // Direct-composite: split into a bottom transparent root surface that parents the
+    // web subsurface, with the chrome window (`view`) layered above it as a transient
+    // child. This is the only way the chrome can sit ABOVE the web on lipstick — a
+    // subsurface never stacks below its own parent, but a sibling (the chrome window)
+    // does stack above the web. The web subsurface picks up this root via the chrome
+    // window's transientParent(). See WPEWaylandSubsurface.
+    QScopedPointer<QQuickView> rootView;
+    {
+        const QByteArray dc = qgetenv("ATLANTIC_DIRECT_COMPOSITE");
+        if (!dc.isEmpty() && dc != "0") {
+            rootView.reset(new QQuickView);
+            rootView->setColor(Qt::transparent);
+            rootView->setResizeMode(QQuickView::SizeRootObjectToView);
+#ifdef USE_RESOURCES
+            rootView->setSource(QUrl(QStringLiteral("qrc:///direct-composite-root.qml")));
+#else
+            rootView->setSource(QUrl::fromLocalFile(QStringLiteral(DEPLOYMENT_PATH) + QStringLiteral("direct-composite-root.qml")));
+#endif
+            rootView->showFullScreen();
+            view->setTransientParent(rootView.data());
+        }
+    }
+
     configureBrowserApplication(app.data(), view.data());
     installApplicationShutdownHooks(app.data(), view.data());
 
