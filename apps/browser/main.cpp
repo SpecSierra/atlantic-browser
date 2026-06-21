@@ -17,6 +17,7 @@
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
 #include <QColor>
+#include <QFile>
 #include <QQuickView>
 #include <QQuickWindow>
 #include <QSet>
@@ -786,14 +787,23 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     {
         const QByteArray dc = qgetenv("ATLANTIC_DIRECT_COMPOSITE");
         if (!dc.isEmpty() && dc != "0") {
+            // The root only needs to map a transparent surface (it parents the web
+            // subsurface). Write its trivial QML to a temp file at startup so it
+            // never depends on packaging/deploy globs. A 1x1 transparent rect forces
+            // a frame so the surface maps a (transparent) buffer.
+            static const char* kRootQml =
+                "import QtQuick 2.2\n"
+                "Item { Rectangle { width: 1; height: 1; color: 'transparent' } }\n";
+            const QString rootQmlPath = QDir::tempPath() + QStringLiteral("/atlantic-dc-root.qml");
+            QFile rootQmlFile(rootQmlPath);
+            if (rootQmlFile.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+                rootQmlFile.write(kRootQml);
+                rootQmlFile.close();
+            }
             rootView.reset(new QQuickView);
             rootView->setColor(Qt::transparent);
             rootView->setResizeMode(QQuickView::SizeRootObjectToView);
-#ifdef USE_RESOURCES
-            rootView->setSource(QUrl(QStringLiteral("qrc:///direct-composite-root.qml")));
-#else
-            rootView->setSource(QUrl::fromLocalFile(QStringLiteral(DEPLOYMENT_PATH) + QStringLiteral("direct-composite-root.qml")));
-#endif
+            rootView->setSource(QUrl::fromLocalFile(rootQmlPath));
             rootView->showFullScreen();
             view->setTransientParent(rootView.data());
         }
