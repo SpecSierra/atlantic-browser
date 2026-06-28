@@ -37,6 +37,7 @@
 #include <QQuickView>
 #include <QQuickWindow>
 #include <QScreen>
+#include <QTimer>
 #include <QUrl>
 #include <QWindow>
 #include <qpa/qplatformnativeinterface.h>
@@ -343,9 +344,21 @@ extern "C" Q_DECL_EXPORT bool atlanticBrowserRuntimeStart(QQuickView *view,
     // Direct-composite: host browser.qml in the chrome overlay (Browser ctor skipped its
     // view->setSource in this mode). Must run before browser->load() triggers the first
     // tab/web view, so the shell window + overlay are ready.
-    setupChromeOverlayScene(view, dataPath);
-
-    browser->load();
+    const QByteArray dc = qgetenv("ATLANTIC_DIRECT_COMPOSITE");
+    if (!dc.isEmpty() && dc != "0") {
+        // Defer the overlay + scene setup (and the load it must precede) to a later event-
+        // loop turn so the shell window and its render thread fully initialise FIRST. The
+        // DC startup otherwise races (shell QSG render thread vs the GUI-thread overlay/web
+        // setup) and intermittently corrupts the heap. Serialising startup avoids the race.
+        const QString dataPathCopy = QString::fromLocal8Bit(dataPath ? dataPath : "");
+        QQuickView* v = view;
+        QTimer::singleShot(900, view, [v, dataPathCopy, browser]() {
+            setupChromeOverlayScene(v, dataPathCopy.toLocal8Bit().constData());
+            browser->load();
+        });
+    } else {
+        browser->load();
+    }
     view->setProperty("atlanticBrowserRuntimeLoaded", true);
     view->raise();
     view->requestActivate();
