@@ -21,15 +21,25 @@
 #include "secureaction.h"
 #include "faviconmanager.h"
 #include "bookmarkmanager.h"
+#include "WPEChromeOverlay.h"
+#include "WPEWaylandSubsurface.h"
+#include "declarativewebutils.h"
+#include "settingmanager.h"
+#include "downloadmanager.h"
 
 #include <QGuiApplication>
 #include <QDBusConnection>
 #include <QJSEngine>
+#include <QQmlComponent>
+#include <QQmlContext>
 #include <QQmlEngine>
 #include <QQuickItem>
 #include <QQuickView>
 #include <QQuickWindow>
+#include <QScreen>
+#include <QUrl>
 #include <QWindow>
+#include <qpa/qplatformnativeinterface.h>
 #include <stdio.h>
 
 namespace {
@@ -199,6 +209,75 @@ static void registerBrowserQmlTypes()
     registered = true;
 }
 
+// Direct-composite: host the full browser.qml UI in an offscreen chrome overlay window
+// (rendered above the directly-composited web), instead of in the on-screen `view` which
+// becomes a transparent shell. The web view inside browser.qml re-parents its subsurface
+// to the shell (below the chrome). No-op unless ATLANTIC_DIRECT_COMPOSITE is set.
+static bool setupChromeOverlayScene(QQuickView *view, const char *dataPath)
+{
+    const QByteArray dc = qgetenv("ATLANTIC_DIRECT_COMPOSITE");
+    if (dc.isEmpty() || dc == "0")
+        return false;
+
+    QPlatformNativeInterface *ni = QGuiApplication::platformNativeInterface();
+    if (!ni)
+        return false;
+    void *display = ni->nativeResourceForIntegration(QByteArrayLiteral("display"));
+    if (!display)
+        display = ni->nativeResourceForIntegration(QByteArrayLiteral("wl_display"));
+    void *shellSurface = ni->nativeResourceForWindow(QByteArrayLiteral("surface"), view);
+    if (!display || !shellSurface) {
+        fprintf(stderr, "[ATLANTIC-RUNTIME] direct-composite: no wayland display/surface; UI stays in view\n");
+        return false;
+    }
+
+    const qreal dpr = view->effectiveDevicePixelRatio();
+    QSize sz(qRound(view->width() * dpr), qRound(view->height() * dpr));
+    if (sz.isEmpty() && view->screen())
+        sz = view->screen()->size() * dpr;
+    if (sz.isEmpty())
+        return false;
+
+    // The WPEView lives in the offscreen overlay window (no wl_surface), so its web
+    // subsurface must parent to this on-screen shell.
+    WPEWaylandSubsurface::setShellWindow(view);
+
+    auto *overlay = new WPEChromeOverlay();
+    if (!overlay->create(reinterpret_cast<wl_display *>(display),
+                         reinterpret_cast<wl_surface *>(shellSurface), sz)) {
+        fprintf(stderr, "[ATLANTIC-RUNTIME] direct-composite: chrome overlay create failed; UI stays in view\n");
+        delete overlay;
+        WPEWaylandSubsurface::setShellWindow(nullptr);
+        return false;
+    }
+    WPEChromeOverlay::setPrimary(overlay);
+
+    QQmlEngine *eng = overlay->qmlEngine();
+    eng->rootContext()->setContextProperty("WebUtils", DeclarativeWebUtils::instance());
+    eng->rootContext()->setContextProperty("Settings", SettingManager::instance());
+    eng->rootContext()->setContextProperty("DownloadManager", DownloadManager::instance());
+
+    const QString path = QString::fromLocal8Bit(dataPath ? dataPath : "") + QStringLiteral("browser.qml");
+    auto *comp = new QQmlComponent(eng, QUrl::fromLocalFile(path));
+    if (comp->isError()) {
+        fprintf(stderr, "[ATLANTIC-RUNTIME] direct-composite: browser.qml error: %s\n",
+                qPrintable(comp->errorString()));
+        return false;
+    }
+    QObject *root = comp->create();
+    QQuickItem *item = qobject_cast<QQuickItem *>(root);
+    if (!item) {
+        fprintf(stderr, "[ATLANTIC-RUNTIME] direct-composite: browser.qml root is not a QQuickItem\n");
+        delete root;
+        return false;
+    }
+    item->setParentItem(overlay->quickWindow()->contentItem());
+    overlay->contentReady();
+    fprintf(stderr, "[ATLANTIC-RUNTIME] direct-composite: browser.qml hosted in chrome overlay (%dx%d)\n",
+            sz.width(), sz.height());
+    return true;
+}
+
 extern "C" Q_DECL_EXPORT bool atlanticBrowserRuntimeStart(QQuickView *view,
                                                           QGuiApplication *app,
                                                           const char *dataPath)
@@ -260,6 +339,11 @@ extern "C" Q_DECL_EXPORT bool atlanticBrowserRuntimeStart(QQuickView *view,
         QObject::connect(uiService, &BrowserUIService::showChrome,
                          browser, &Browser::showChrome);
     }
+
+    // Direct-composite: host browser.qml in the chrome overlay (Browser ctor skipped its
+    // view->setSource in this mode). Must run before browser->load() triggers the first
+    // tab/web view, so the shell window + overlay are ready.
+    setupChromeOverlayScene(view, dataPath);
 
     browser->load();
     view->setProperty("atlanticBrowserRuntimeLoaded", true);
