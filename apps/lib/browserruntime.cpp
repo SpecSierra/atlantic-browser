@@ -28,6 +28,11 @@
 #include "downloadmanager.h"
 
 #include <QGuiApplication>
+#include <QCoreApplication>
+#include <QEvent>
+#include <QKeyEvent>
+#include <QMouseEvent>
+#include <QTouchEvent>
 #include <QDBusConnection>
 #include <QJSEngine>
 #include <QQmlComponent>
@@ -210,6 +215,62 @@ static void registerBrowserQmlTypes()
     registered = true;
 }
 
+// Direct-composite: the chrome + web view live in the OFFSCREEN overlay QQuickWindow,
+// which gets no OS input. Forward the shell window's input into it. Touch is delivered as
+// synthesized mouse (single-point) — that drives Silica MouseArea/Flickable AND the web
+// view (WPEQtView::mousePressEvent → WPE). Coords are scaled by the shell's devicePixelRatio
+// to map shell-logical px to the overlay scene's (dpr-1) coordinate space.
+namespace {
+class ShellInputForwarder : public QObject
+{
+public:
+    ShellInputForwarder(QQuickWindow *target, qreal scale, QObject *parent)
+        : QObject(parent), m_target(target), m_scale(scale) {}
+
+protected:
+    bool eventFilter(QObject *, QEvent *e) override
+    {
+        switch (e->type()) {
+        case QEvent::TouchBegin:
+        case QEvent::TouchUpdate:
+        case QEvent::TouchEnd: {
+            auto *te = static_cast<QTouchEvent *>(e);
+            if (te->touchPoints().isEmpty())
+                return false;
+            const QTouchEvent::TouchPoint &tp = te->touchPoints().first();
+            const QEvent::Type mt = e->type() == QEvent::TouchBegin ? QEvent::MouseButtonPress
+                                  : e->type() == QEvent::TouchEnd   ? QEvent::MouseButtonRelease
+                                                                    : QEvent::MouseMove;
+            const QPointF p(tp.pos().x() * m_scale, tp.pos().y() * m_scale);
+            QMouseEvent me(mt, p, p, p, Qt::LeftButton,
+                           mt == QEvent::MouseButtonRelease ? Qt::NoButton : Qt::LeftButton,
+                           Qt::NoModifier);
+            QCoreApplication::sendEvent(m_target, &me);
+            return true;
+        }
+        case QEvent::MouseButtonPress:
+        case QEvent::MouseButtonRelease:
+        case QEvent::MouseMove: {
+            auto *om = static_cast<QMouseEvent *>(e);
+            const QPointF p(om->localPos().x() * m_scale, om->localPos().y() * m_scale);
+            QMouseEvent me(om->type(), p, p, p, om->button(), om->buttons(), om->modifiers());
+            QCoreApplication::sendEvent(m_target, &me);
+            return true;
+        }
+        case QEvent::KeyPress:
+        case QEvent::KeyRelease:
+            QCoreApplication::sendEvent(m_target, e);
+            return false;
+        default:
+            return false;
+        }
+    }
+
+    QQuickWindow *m_target;
+    qreal m_scale;
+};
+} // namespace
+
 // Direct-composite: host the full browser.qml UI in an offscreen chrome overlay window
 // (rendered above the directly-composited web), instead of in the on-screen `view` which
 // becomes a transparent shell. The web view inside browser.qml re-parents its subsurface
@@ -274,6 +335,12 @@ static bool setupChromeOverlayScene(QQuickView *view, const char *dataPath)
     }
     item->setParentItem(overlay->quickWindow()->contentItem());
     overlay->contentReady();
+
+    // Forward the shell window's touch/mouse/key into the offscreen overlay scene so the
+    // UI (and the web view inside it) is interactive.
+    view->installEventFilter(new ShellInputForwarder(overlay->quickWindow(),
+                                                     view->devicePixelRatio(), view));
+
     fprintf(stderr, "[ATLANTIC-RUNTIME] direct-composite: browser.qml hosted in chrome overlay (%dx%d)\n",
             sz.width(), sz.height());
     return true;
