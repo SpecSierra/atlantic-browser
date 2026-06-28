@@ -582,26 +582,36 @@ static void configureBrowserApplication(QGuiApplication *app, QQuickView *view)
     translator->load(QLocale(), "atlantic-browser", "-", translationPath);
     qApp->installTranslator(translator);
 
-    // Direct-composite (ATLANTIC_DIRECT_COMPOSITE): web frames are presented on a
-    // dedicated wl_subsurface placed *below* this chrome window (see the qt5 plugin's
-    // WPEWaylandSubsurface). For the web content to show through, the chrome window
-    // must clear to transparent rather than the default opaque white — the web item
-    // paints nothing, leaving a transparent hole the sub-surface shows through, while
-    // opaque chrome (toolbar/overlay) still draws normally on top. No-op for the
-    // legacy QSG texture-node path.
-    {
-        const QByteArray dc = qgetenv("ATLANTIC_DIRECT_COMPOSITE");
-        if (!dc.isEmpty() && dc != "0")
-            view->setColor(Qt::transparent);
-    }
-
     //% "Atlantic"
     view->setTitle(qtTrId("atlantic-browser-ap-name"));
+
+    const QByteArray dc = qgetenv("ATLANTIC_DIRECT_COMPOSITE");
+    const bool directComposite = !dc.isEmpty() && dc != "0";
+    if (directComposite) {
+        // Direct-composite: this `view` is just the transparent SHELL — the web subsurface
+        // and the chrome overlay subsurface composite above it (the chrome runs in an
+        // offscreen render-control window; browser.qml is NOT loaded here). Load a STATIC
+        // empty Item, not the animated splash: the splash's spinner would render the shell
+        // continuously, and since it's never replaced in this mode its render thread keeps
+        // swapping until lipstick stops releasing buffers and queueBuffer/sync_wait hangs
+        // the GUI thread. A static shell renders once and goes idle.
+        view->setColor(Qt::transparent);
+        static const char* kShellQml = "import QtQuick 2.2\nItem { }\n";
+        const QString shellPath = QDir::tempPath() + QStringLiteral("/atlantic-dc-shell.qml");
+        QFile shellFile(shellPath);
+        if (shellFile.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+            shellFile.write(kShellQml);
+            shellFile.close();
+        }
+        view->setResizeMode(QQuickView::SizeRootObjectToView);
+        view->setSource(QUrl::fromLocalFile(shellPath));
+    } else {
 #ifdef USE_RESOURCES
-    view->setSource(QUrl(QStringLiteral("qrc:///browser-silica-main-smoke.qml")));
+        view->setSource(QUrl(QStringLiteral("qrc:///browser-silica-main-smoke.qml")));
 #else
-    view->setSource(QUrl::fromLocalFile(QStringLiteral(DEPLOYMENT_PATH) + QStringLiteral("browser-silica-main-smoke.qml")));
+        view->setSource(QUrl::fromLocalFile(QStringLiteral(DEPLOYMENT_PATH) + QStringLiteral("browser-silica-main-smoke.qml")));
 #endif
+    }
     view->showFullScreen();
     view->raise();
     view->requestActivate();
