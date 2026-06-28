@@ -40,10 +40,18 @@ signals:
     void downloadStatusChanged(int downloadId, int status, QVariant info);
     void pdfPrintingChanged();
     void allTransfersCompleted();
+    // Emitted when a download needs the user to choose a destination. The UI
+    // replies with confirmDownload() (with the chosen absolute path) or
+    // cancelPendingDownload().
+    void saveAsRequested(int downloadId, QString suggestedFileName, QString defaultDir);
 
 public slots:
     void cancelActiveTransfers();
     void cancel(int downloadId);
+
+    // Called by the QML "Save As" prompt once the user has chosen (or declined).
+    Q_INVOKABLE void confirmDownload(int downloadId, const QString &destinationPath);
+    Q_INVOKABLE void cancelPendingDownload(int downloadId);
 
 public:
     bool prepareDownload(WebKitDownload *download, const QString &suggestedFilename);
@@ -67,7 +75,16 @@ private:
     QString ensureDestinationPath(const QString &suggestedFilename) const;
     int transferIdForDownload(int downloadId) const;
     void finalizeDownload(int downloadId, DownloadStatus::Status status, int transferStatus, const QString &reason);
+    void releaseDownload(int downloadId);
     QVariantMap downloadInfo(int downloadId) const;
+
+    // A download completion that arrived before the asynchronous createDownload
+    // reply assigned a transfer id; flushed to the transfer engine once it does.
+    struct PendingFinal {
+        DownloadStatus::Status status;
+        int transferStatus;
+        QString reason;
+    };
 
     // TODO: unlike Gecko downloads and Sailfish transfers these mappings
     //       are not persistent -> after user has browser closed transfers can't be
@@ -78,6 +95,8 @@ private:
     QHash<WebKitDownload*, int> m_downloadObjectToId;
     QHash<int, WebKitDownload*> m_downloadIdToObject;
     QHash<int, QVariantMap> m_downloadInfoCache;
+    QHash<int, PendingFinal> m_pendingFinal;
+    QHash<int, double> m_pendingProgress;
 
     TransferEngineInterface *m_transferClient;
 

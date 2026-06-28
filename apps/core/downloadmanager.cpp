@@ -147,26 +147,52 @@ bool DownloadManager::prepareDownload(WebKitDownload *download, const QString &s
     if (!download)
         return false;
 
+    // Async destination handling (WebKit >= 2.40): we return TRUE here without
+    // setting a destination, which tells WebKit to hold the download until we
+    // call webkit_download_set_destination() (confirmDownload) or
+    // webkit_download_cancel() (cancelPendingDownload). This lets the UI prompt
+    // the user for a "Save As" location before any data is written.
     const int downloadId = ensureDownloadId(download);
-    const QString destinationPath = ensureDestinationPath(suggestedFilename);
-    if (destinationPath.isEmpty())
-        return false;
 
-    const QByteArray destinationUri = QUrl::fromLocalFile(destinationPath).toEncoded();
-    webkit_download_set_destination(download, destinationUri.constData());
-    webkit_download_set_allow_overwrite(download, FALSE);
-
+    // The response is already available at decide-destination time; cache the
+    // metadata now so the transfer entry can be created once the user confirms.
     WebKitURIResponse *response = webkit_download_get_response(download);
     const gchar *mimeType = response ? webkit_uri_response_get_mime_type(response) : nullptr;
     const qlonglong expectedSize = response ? static_cast<qlonglong>(webkit_uri_response_get_content_length(response)) : 0;
-    const QString displayName = QFileInfo(destinationPath).fileName();
 
     QVariantMap info;
-    info.insert(QStringLiteral("displayName"), displayName);
-    info.insert(QStringLiteral("path"), destinationPath);
     info.insert(QStringLiteral("mimeType"), QString::fromUtf8(mimeType ? mimeType : ""));
     info.insert(QStringLiteral("expectedSize"), QVariant::fromValue(expectedSize));
     m_downloadInfoCache.insert(downloadId, info);
+
+    const QString safeName = sanitizeFileName(suggestedFilename);
+    const QString defaultDir = BrowserPaths::downloadLocation();
+
+    emit saveAsRequested(downloadId, safeName, defaultDir);
+    return true;
+}
+
+void DownloadManager::confirmDownload(int downloadId, const QString &destinationPath)
+{
+    WebKitDownload *download = m_downloadIdToObject.value(downloadId, nullptr);
+    if (!download || destinationPath.isEmpty())
+        return;
+
+    // Make sure the chosen directory exists before handing the path to WebKit.
+    BrowserPaths::createDirectory(QFileInfo(destinationPath).absolutePath());
+
+    const QByteArray destinationUri = QUrl::fromLocalFile(destinationPath).toEncoded();
+    webkit_download_set_destination(download, destinationUri.constData());
+    // The user explicitly chose this path, so honour it even if it exists.
+    webkit_download_set_allow_overwrite(download, TRUE);
+
+    const QString displayName = QFileInfo(destinationPath).fileName();
+    QVariantMap info = m_downloadInfoCache.value(downloadId);
+    info.insert(QStringLiteral("displayName"), displayName);
+    info.insert(QStringLiteral("path"), destinationPath);
+    m_downloadInfoCache.insert(downloadId, info);
+
+    const qlonglong expectedSize = info.value(QStringLiteral("expectedSize")).toLongLong();
 
     emit downloadStarted();
     emit downloadStatusChanged(downloadId, DownloadStatus::Started, info);
@@ -190,20 +216,52 @@ bool DownloadManager::prepareDownload(WebKitDownload *download, const QString &s
         this);
 
     connect(watcher, &QDBusPendingCallWatcher::finished, this,
-            [this, watcher, downloadId](QDBusPendingCallWatcher *self) {
+            [this, downloadId](QDBusPendingCallWatcher *self) {
                 QDBusPendingReply<int> reply = *self;
                 if (reply.isError()) {
                     qCWarning(lcDownloadLog) << "createDownload failed for" << downloadId << reply.error().message();
-                } else {
-                    const int transferId = reply.value();
-                    m_download2transferMap.insert(downloadId, transferId);
-                    m_transfer2downloadMap.insert(transferId, downloadId);
-                    m_transferClient->startTransfer(transferId);
+                    // No transfer will ever exist for this download; drop the
+                    // orphaned bookkeeping so it doesn't leak or block teardown.
+                    releaseDownload(downloadId);
+                    checkAllTransfers();
+                    self->deleteLater();
+                    return;
                 }
-                watcher->deleteLater();
-            });
 
-    return true;
+                const int transferId = reply.value();
+                m_download2transferMap.insert(downloadId, transferId);
+                m_transfer2downloadMap.insert(transferId, downloadId);
+                m_transferClient->startTransfer(transferId);
+
+                // The WebKit download can finish (or report progress) before this
+                // asynchronous createDownload reply arrives — fast downloads do so
+                // routinely. Flush whatever happened in the meantime now that we
+                // finally have a transfer id; otherwise the transfer would stay
+                // stuck at "Downloading" forever.
+                if (m_pendingFinal.contains(downloadId)) {
+                    const PendingFinal pending = m_pendingFinal.take(downloadId);
+                    m_transferClient->finishTransfer(transferId, pending.transferStatus, pending.reason);
+                    m_transfer2downloadMap.remove(transferId);
+                    m_download2transferMap.remove(downloadId);
+                    releaseDownload(downloadId);
+                    checkAllTransfers();
+                } else if (m_pendingProgress.contains(downloadId)) {
+                    m_transferClient->updateTransferProgress(transferId, m_pendingProgress.take(downloadId));
+                }
+
+                self->deleteLater();
+            });
+}
+
+void DownloadManager::cancelPendingDownload(int downloadId)
+{
+    // The user dismissed the "Save As" prompt before a destination was set, so
+    // no transfer entry exists yet — just cancel the WebKit download and drop
+    // the bookkeeping.
+    if (WebKitDownload *download = m_downloadIdToObject.value(downloadId, nullptr))
+        webkit_download_cancel(download);
+
+    releaseDownload(downloadId);
 }
 
 void DownloadManager::updateDownload(WebKitDownload *download)
@@ -212,11 +270,15 @@ void DownloadManager::updateDownload(WebKitDownload *download)
         return;
 
     const int downloadId = m_downloadObjectToId.value(download);
-    const int transferId = transferIdForDownload(downloadId);
-    if (transferId <= 0)
-        return;
-
     const double progress = std::clamp(webkit_download_get_estimated_progress(download), 0.0, 1.0);
+
+    const int transferId = transferIdForDownload(downloadId);
+    if (transferId <= 0) {
+        // createDownload reply not back yet; remember the latest progress so the
+        // watcher can flush it once the transfer id is assigned.
+        m_pendingProgress.insert(downloadId, progress);
+        return;
+    }
     m_transferClient->updateTransferProgress(transferId, progress);
 }
 
@@ -298,19 +360,34 @@ void DownloadManager::finalizeDownload(int downloadId, DownloadStatus::Status st
     emit downloadStatusChanged(downloadId, status, downloadInfo(downloadId));
 
     const int transferId = transferIdForDownload(downloadId);
-    if (transferId > 0) {
-        m_transferClient->finishTransfer(transferId, transferStatus, reason);
-        m_transfer2downloadMap.remove(transferId);
-        m_download2transferMap.remove(downloadId);
+    if (transferId <= 0) {
+        // The asynchronous createDownload reply has not arrived yet, so there is
+        // no transfer id to finish against. Defer the completion; the
+        // createDownload watcher flushes it (and releases the download) once the
+        // id is known. Without this, a download that finishes before the D-Bus
+        // reply would stay stuck at "Downloading" in the transfer UI forever.
+        m_pendingProgress.remove(downloadId);
+        m_pendingFinal.insert(downloadId, { status, transferStatus, reason });
+        return;
     }
 
+    m_transferClient->finishTransfer(transferId, transferStatus, reason);
+    m_transfer2downloadMap.remove(transferId);
+    m_download2transferMap.remove(downloadId);
+
+    releaseDownload(downloadId);
+    checkAllTransfers();
+}
+
+void DownloadManager::releaseDownload(int downloadId)
+{
     if (WebKitDownload *download = m_downloadIdToObject.take(downloadId)) {
         m_downloadObjectToId.remove(download);
         g_object_unref(download);
     }
     m_downloadInfoCache.remove(downloadId);
-
-    checkAllTransfers();
+    m_pendingProgress.remove(downloadId);
+    m_pendingFinal.remove(downloadId);
 }
 
 void DownloadManager::checkAllTransfers()

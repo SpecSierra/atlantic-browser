@@ -161,6 +161,17 @@ Page {
 
     Browser.DownloadRemorsePopup { id: downloadPopup }
 
+    // Prompt the user for a "Save As" destination before a download starts.
+    Connections {
+        target: DownloadManager
+        onSaveAsRequested: {
+            pageStack.animatorPush(Qt.resolvedUrl("components/SaveDownloadDialog.qml"),
+                                   { "downloadId": downloadId,
+                                     "suggestedFileName": suggestedFileName,
+                                     "folder": defaultDir })
+        }
+    }
+
     Shared.WebView {
         id: webView
 
