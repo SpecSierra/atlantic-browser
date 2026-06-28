@@ -230,6 +230,12 @@ public:
 protected:
     bool eventFilter(QObject *, QEvent *e) override
     {
+        const QEvent::Type t = e->type();
+        if (t == QEvent::TouchBegin || t == QEvent::MouseButtonPress) {
+            static int n = 0;
+            if (n++ < 12)
+                fprintf(stderr, "[ATLANTIC-RUNTIME] forwarder: shell input type=%d → overlay\n", int(t));
+        }
         switch (e->type()) {
         case QEvent::TouchBegin:
         case QEvent::TouchUpdate:
