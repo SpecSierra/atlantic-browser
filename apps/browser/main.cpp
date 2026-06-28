@@ -615,6 +615,17 @@ static void configureBrowserApplication(QGuiApplication *app, QQuickView *view)
     view->showFullScreen();
     view->raise();
     view->requestActivate();
+
+    if (directComposite) {
+        // The shell is static, but subsurface stacking (web below the chrome overlay) is
+        // double-buffered on the shell surface and only latches on its commit. Commit it
+        // at a low rate so stacking changes (overlay place_above, new tab subsurfaces)
+        // apply, without the continuous-render buffer-pool exhaustion that hangs the GUI
+        // thread. ~3fps is plenty and trivially cheap for a transparent static shell.
+        QTimer* shellCommit = new QTimer(view);
+        QObject::connect(shellCommit, &QTimer::timeout, view, [view]() { view->update(); });
+        shellCommit->start(300);
+    }
 }
 
 static void installBrowserRestartCount()
