@@ -40,7 +40,6 @@ Requires: wpe-sfos-compat >= 1.0.0
 Requires: qt5-plugin-imageformat-ico
 Requires: qt5-plugin-imageformat-gif
 Requires: qt5-plugin-position-geoclue
-Requires: sailjail-launch-approval
 Requires: desktop-file-utils
 Requires: qt5-qtgraphicaleffects
 Requires: nemo-qml-plugin-policy-qt5 >= 0.0.4
@@ -103,19 +102,9 @@ chmod +x %{buildroot}/%{_oneshotdir}/*
 mkdir -p %{buildroot}/%{_sharedstatedir}/environment/nemo/
 cp -f data/70-browser.conf %{buildroot}/%{_sharedstatedir}/environment/nemo/
 
-# Install sailjail profile
-install -d %{buildroot}%{_sysconfdir}/sailjail/applications
-# NOTE: profile ships from wpe-sfos-build/sailjail/sailfish-browser.profile
-# For now install a minimal stub that disables sandboxing pending full profile work
-cat > %{buildroot}%{_sysconfdir}/sailjail/applications/sailfish-browser.profile << 'EOF'
-[sailfish]
-Sandboxing=disabled
-
-[X-Sailjail]
-Permissions=Internet;Audio
-OrganizationName=org.sailfishos
-ApplicationName=sailfish-browser
-EOF
+# NOTE: Sailjail confinement (the application profile + the atlantic-browser
+# custom permission) is owned entirely by the engine packaging
+# (atlantic-engine/build-rpms-native.sh). It is intentionally NOT generated here.
 
 %post
 /sbin/ldconfig || :
@@ -148,7 +137,6 @@ fi
 %{_libdir}/qt5/qml/org/sailfishos/browser/settings
 %{_datadir}/jolla-settings/entries/browser.json
 %{_datadir}/jolla-settings/pages/browser
-%config %{_sysconfdir}/sailjail/applications/sailfish-browser.profile
 
 %files ts-devel
 %{_datadir}/translations/source/*.ts

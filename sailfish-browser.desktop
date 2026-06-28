@@ -11,7 +11,9 @@ X-Maemo-Service=org.atlantic.browser.ui
 X-Maemo-Object-Path=/ui
 X-Maemo-Method=org.atlantic.browser.ui.openUrl
 
-[X-Sailjail]
-Permissions=WebView;Audio;Camera;Location;Internet;UserDirs;RemovableMedia;MediaIndexing
-OrganizationName=org.sailfishos
-ApplicationName=browser
+# NOTE: Sailjail confinement (the [X-Sailjail] permissions block, the
+# /etc/sailjail/applications profile and the atlantic-browser custom
+# permission) is owned entirely by the engine packaging
+# (atlantic-engine/build-rpms-native.sh, which generates atlantic-browser.desktop
+# + the sailjail profile/permission). This legacy desktop file is not the one
+# shipped, so any [X-Sailjail] block here would do nothing.
