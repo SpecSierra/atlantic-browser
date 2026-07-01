@@ -473,9 +473,10 @@ static void configureGpuModeFromCapabilities()
     // explicitly. Capable stacks (EGL surfaceless context present: Mali,
     // desktop) get multi-threaded Skia GPU painting with regular fence
     // synchronization. Conservative stacks (libhybris Adreno, or probe
-    // failure) get single-threaded GPU painting in "gpu-sync" mode — see the
-    // conservative branch below. WEBKIT_SKIA_ENABLE_CPU_RENDERING=1 remains
-    // available as a launch-time escape hatch to the all-CPU raster path.
+    // failure) get all-CPU raster by default — see the conservative branch
+    // below for why, and for the gpu-explicit / gpu-sync env-gated fallbacks.
+    // WEBKIT_SKIA_ENABLE_CPU_RENDERING=1 also remains available as a launch-time
+    // escape hatch on capable stacks.
     // NOTE: runtime-common.sh must NOT pre-set either variable, or the
     // explicit-override checks below would always win and pin the value.
     static constexpr int kCapableGpuPaintingThreads = 3;
@@ -492,49 +493,66 @@ static void configureGpuModeFromCapabilities()
     } else if (conservativeEffective) {
         const bool forceGlFinish = qEnvironmentVariableIsSet("ATLANTIC_GPU_FORCE_GLFINISH")
             && qgetenv("ATLANTIC_GPU_FORCE_GLFINISH") != QByteArrayLiteral("0");
+        const bool forceGpuPaint = qEnvironmentVariableIsSet("ATLANTIC_GPU_FORCE_GPU_PAINT")
+            && qgetenv("ATLANTIC_GPU_FORCE_GPU_PAINT") != QByteArrayLiteral("0");
 
         // Directional tile prepaint (webkit-directional-tile-coverage-env.patch
         // v2): triple cover budget spent vertically, biased 70% ahead of the
         // sustained scroll direction, stable keep rect (no eviction on flips).
         // Hides tile paint-in at the leading edge of fast flicks through
         // image-heavy feeds; user-verified on device build 316. Orthogonal to
-        // the paint/composite sync strategy below, so applied to both. Honoured
+        // the paint backend, so applied to all conservative sub-modes. Honoured
         // only if not preset in the environment.
         if (!qEnvironmentVariableIsSet("WEBKIT_DIRECTIONAL_TILE_COVERAGE"))
             qputenv("WEBKIT_DIRECTIONAL_TILE_COVERAGE", QByteArrayLiteral("1"));
         if (!qEnvironmentVariableIsSet("WEBKIT_COVER_AREA_MULTIPLIER"))
             qputenv("WEBKIT_COVER_AREA_MULTIPLIER", QByteArrayLiteral("3"));
 
-        if (!forceGlFinish) {
-            // "gpu-explicit": rasterize tiles on the compositor thread so paint
-            // and composite submit to one GL command stream in program order
-            // (webkit-raster-on-compositor-thread-env.patch). This removes the
-            // cross-context tile race on the libhybris Adreno — whose EGL fence
-            // server-waits don't order GPU work across contexts, and which
-            // exposes no EGL_ANDROID_native_fence_sync to use instead — WITHOUT
-            // the gpu-sync glFinish stalls. Same-thread, two-shared-context,
-            // flush-only ordering was verified to hold on device (Adreno 610).
-            // Texture pooling stays ON and there is no per-frame/per-tile
-            // glFinish, so this should pipeline far better than gpu-sync.
-            qputenv("WEBKIT_RASTER_ON_COMPOSITOR_THREAD", QByteArrayLiteral("1"));
-            // A GPU worker pool must exist (>0) for threaded record/replay to be
-            // used, but the replay GPU work is redirected to the compositor
-            // thread, so one idle worker thread is enough.
-            gpuPaintingThreads = QByteArrayLiteral("1");
-            qputenv("WEBKIT_SKIA_GPU_PAINTING_THREADS", gpuPaintingThreads);
-            paintingMode = QByteArrayLiteral("gpu-explicit(auto)");
-        } else {
+        if (forceGlFinish) {
             // Legacy "gpu-sync" escape hatch (ATLANTIC_GPU_FORCE_GLFINISH=1):
             // GPU painting with driver fences disabled + per-frame compositor
             // glFinish + texture-pool reuse disabled. Correct but raster-bound
             // (559 jiffies/scroll baseline). Kept as a fallback in case the
-            // compositor-thread path regresses on some device.
+            // default path regresses on some device.
             qputenv("WPE_GL_FENCE_DISABLED", QByteArrayLiteral("1"));
             gpuPaintingThreads = QByteArrayLiteral("1");
             qputenv("WEBKIT_SKIA_GPU_PAINTING_THREADS", gpuPaintingThreads);
             qputenv("WEBKIT_BITMAP_TEXTURE_POOL_DISABLED", QByteArrayLiteral("1"));
             qputenv("WEBKIT_COMPOSITOR_GL_FINISH", QByteArrayLiteral("1"));
             paintingMode = QByteArrayLiteral("gpu-sync(forced)");
+        } else if (forceGpuPaint) {
+            // "gpu-explicit" (ATLANTIC_GPU_FORCE_GPU_PAINT=1): rasterize tiles on
+            // the compositor thread so paint and composite submit to one GL
+            // command stream in program order
+            // (webkit-raster-on-compositor-thread-env.patch). Removes the
+            // cross-context tile race on the libhybris Adreno without the
+            // gpu-sync glFinish stalls. Was the conservative default through
+            // build ~316; superseded by CPU raster below (device A/B showed the
+            // synchronous cross-context GPU tile submit — flushAndSubmit/
+            // GrSyncCpu — is the scroll bottleneck here, so keeping raster on
+            // the GPU submit path caps fps). Kept as an env-gated fallback.
+            qputenv("WEBKIT_RASTER_ON_COMPOSITOR_THREAD", QByteArrayLiteral("1"));
+            gpuPaintingThreads = QByteArrayLiteral("1");
+            qputenv("WEBKIT_SKIA_GPU_PAINTING_THREADS", gpuPaintingThreads);
+            paintingMode = QByteArrayLiteral("gpu-explicit(forced)");
+        } else {
+            // DEFAULT on conservative stacks (libhybris Adreno 610): all-CPU
+            // raster. Device-benchmarked ~2x fps vs gpu-explicit on text/CSS-
+            // rich pages (MDN 4.2->8.2 fps, p95 630->220ms) and better worst-
+            // frame on image grids (Wikimedia Commons 484->114ms), with NO tile
+            // corruption on text, article, or full-size-photo pages. Root cause:
+            // the Adreno's synchronous cross-context tile submit
+            // (CoordinatedAcceleratedTileBuffer::completePainting ->
+            // GrDirectContext::flushAndSubmit(GrSyncCpu)) serializes on the one
+            // compositor thread; adding GPU paint threads did NOT move fps
+            // (raster parallelized, submit did not), so moving raster entirely
+            // off the GPU submit path is the win. CPU worker count comes from
+            // WEBKIT_SKIA_CPU_PAINTING_THREADS (runtime-common.sh, =2). No GPU
+            // painting thread pool and no WEBKIT_RASTER_ON_COMPOSITOR_THREAD in
+            // this mode. Override back to GPU with ATLANTIC_GPU_FORCE_GPU_PAINT=1
+            // (gpu-explicit) or ATLANTIC_GPU_FORCE_GLFINISH=1 (gpu-sync).
+            qputenv("WEBKIT_SKIA_ENABLE_CPU_RENDERING", QByteArrayLiteral("1"));
+            paintingMode = QByteArrayLiteral("cpu(auto)");
         }
     } else {
         gpuPaintingThreads = QByteArray::number(kCapableGpuPaintingThreads);
