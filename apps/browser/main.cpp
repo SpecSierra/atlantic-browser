@@ -452,6 +452,28 @@ static GpuCapabilityProbeResult probeGpuCapability()
     return result;
 }
 
+// Best-effort: join the memory-contained cgroup set up by the
+// atlantic-browser-memory boot service (see atlantic-engine deploy/). Launching
+// the UIProcess inside it means every spawned WebProcess/Network/GPU child
+// inherits the RAM+swap cap, so a runaway page (e.g. reddit) gets a WebProcess
+// OOM-killed inside the cgroup instead of the kernel OOM-killer taking down the
+// whole phone. Silent no-op when the cgroup is absent or unwritable (dev hosts,
+// other devices, or a sandbox that hides /sys/fs/cgroup) — the enlarged zram set
+// up by the same service still provides headroom regardless.
+static void joinBrowserMemoryCgroup()
+{
+    if (qEnvironmentVariableIsSet("ATLANTIC_NO_MEMORY_CGROUP"))
+        return;
+    QFile procs(QStringLiteral("/sys/fs/cgroup/memory/atlantic/cgroup.procs"));
+    if (!procs.open(QIODevice::WriteOnly | QIODevice::Append))
+        return;
+    procs.write(QByteArray::number(static_cast<qlonglong>(getpid())));
+    procs.write("\n");
+    procs.close();
+    fprintf(stderr, "[ATLANTIC] joined memory cgroup /sys/fs/cgroup/memory/atlantic (pid %d)\n",
+            static_cast<int>(getpid()));
+}
+
 static void configureGpuModeFromCapabilities()
 {
     const GpuCapabilityProbeResult probe = probeGpuCapability();
@@ -791,6 +813,10 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
 
     qInstallMessageHandler(qmlDebugMessageHandler);
     logStartupContext(argc, argv);
+
+    // Enter the memory-contained cgroup before spawning any child process, so
+    // WebProcess/Network/GPU children inherit the RAM+swap cap.
+    joinBrowserMemoryCgroup();
 
     g_restartArgv = argv;
     g_restartCount = restartCountFromEnvironment();
