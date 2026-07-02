@@ -63,6 +63,10 @@ static void sigAbrtHandler(int)
 static void qmlDebugMessageHandler(QtMsgType type, const QMessageLogContext &ctx, const QString &msg)
 {
     Q_UNUSED(ctx);
+    // Debug-level chatter is developer-only; ATLANTIC_DEBUG=1 re-enables it.
+    static const bool debugEnabled = qEnvironmentVariableIntValue("ATLANTIC_DEBUG") == 1;
+    if (type == QtDebugMsg && !debugEnabled)
+        return;
     const char *prefix = "";
     switch (type) {
     case QtDebugMsg: prefix = "[DBG]"; break;
@@ -70,6 +74,13 @@ static void qmlDebugMessageHandler(QtMsgType type, const QMessageLogContext &ctx
     case QtWarningMsg: prefix = "[WRN]"; break;
     case QtCriticalMsg: prefix = "[CRT]"; break;
     case QtFatalMsg: prefix = "[FAT]"; break;
+    }
+    // Cap message length so data-URI payloads (e.g. favicon base64) can't
+    // flood the journal.
+    if (!debugEnabled && msg.size() > 1024) {
+        fprintf(stderr, "%s %s… [truncated %d chars]\n", prefix,
+                qPrintable(msg.left(1024)), int(msg.size() - 1024));
+        return;
     }
     fprintf(stderr, "%s %s\n", prefix, qPrintable(msg));
 }
