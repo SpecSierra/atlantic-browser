@@ -35,6 +35,11 @@ qml.path = $$DEPLOYMENT_PATH
 qml.files = qml/*.qml qml/pages qml/cover
 INSTALLS += qml
 
+# Search engines shipped by the browser (beyond the mozembedlite system set)
+searchengines.path = $$DEPLOYMENT_PATH/searchEngines
+searchengines.files = ../../data/searchEngines/*.xml
+INSTALLS += searchengines
+
 # C++ sources
 SOURCES += main.cpp
 
