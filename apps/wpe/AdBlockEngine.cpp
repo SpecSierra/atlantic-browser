@@ -58,11 +58,22 @@ void AdBlockEngine::applyCosmetics(WPEWebPage* page)
     if (cr.hide_selectors && *cr.hide_selectors) {
         QString sel = QString::fromUtf8(cr.hide_selectors)
                           .replace('\\', "\\\\").replace('\'', "\\'");
+        // Insert each selector as its OWN rule via insertRule() with try/catch.
+        // The cosmetic list can contain a uBO procedural selector (e.g.
+        // ".rpl-bottom-sheet:has-text(Get the app)") which is NOT valid CSS.
+        // Joining every selector into one comma-separated group with a single
+        // {display:none} means that one invalid selector makes the WHOLE group
+        // rule invalid, and the CSS parser silently discards it — killing ALL
+        // cosmetic hiding on every site (device-verified: the injected sheet had
+        // 0 parsed rules on reddit). Per-rule insertion drops only the offending
+        // selector and keeps the rest (50 of 51 survived on reddit → ad hidden).
         scripts << QStringLiteral(
-            "(function(){var s=document.createElement('style');"
-            "s.id='__atl_adblock_hide';"
-            "s.textContent='%1{display:none!important}';"
-            "document.documentElement.appendChild(s);})()").arg(sel);
+            "(function(){var sels='%1'.split(',');"
+            "var s=document.createElement('style');s.id='__atl_adblock_hide';"
+            "document.documentElement.appendChild(s);var sh=s.sheet;"
+            "for(var i=0;i<sels.length;i++){var t=sels[i].trim();if(!t)continue;"
+            "try{sh.insertRule(t+'{display:none!important}',sh.cssRules.length);}catch(e){}}"
+            "})()").arg(sel);
     }
 
     if (cr.generated_css && *cr.generated_css) {
