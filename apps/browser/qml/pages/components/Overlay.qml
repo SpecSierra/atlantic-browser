@@ -16,6 +16,7 @@ import Sailfish.Policy 1.0
 import Sailfish.WebView.Controls 1.0
 import Sailfish.WebView.Popups 1.0
 import com.jolla.settings.system 1.0
+import Nemo.Configuration 1.0
 import "." as Browser
 import "../../shared" as Shared
 import "UrlUtils.js" as UrlUtils
@@ -59,8 +60,9 @@ Shared.Background {
         } else if (url == "about:settings") {
             pageStack.animatorPush(Qt.resolvedUrl("../SettingsPage.qml"))
         } else {
-            // WPE: search keywords -> search URL, bare host -> https:// (see UrlUtils.js)
-            var pageUrl = UrlUtils.normalize(url)
+            // WPE: search keywords -> search URL on the configured engine,
+            // bare host -> https:// (see UrlUtils.js)
+            var pageUrl = UrlUtils.normalize(url, SearchEngineModel.searchUrlTemplate(searchEngineConf.value))
             console.log("[QML-LOAD] resolved pageUrl=" + pageUrl)
             webView.load(pageUrl, "", openInNewTab)
         }
@@ -764,5 +766,11 @@ Shared.Background {
 
     WebShareAction {
         id: webShareAction
+    }
+
+    ConfigurationValue {
+        id: searchEngineConf
+        key: "/apps/atlantic-browser/settings/search_engine"
+        defaultValue: "Google"
     }
 }

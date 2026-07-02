@@ -107,6 +107,11 @@ void SearchEngineModel::add(const QString &title, const QString &url)
     // WPE: MDConfItem causes SIGSEGV — skip dconf persistence
 }
 
+QString SearchEngineModel::searchUrlTemplate(const QString &title) const
+{
+    return OpenSearchConfigs::getSearchUrlTemplate(title);
+}
+
 void SearchEngineModel::install(const QString &title)
 {
     for (int i = 0; i < m_searchEngines.count(); i++) {

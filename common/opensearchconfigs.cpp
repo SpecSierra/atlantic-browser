@@ -76,6 +76,51 @@ const StringMap OpenSearchConfigs::getAvailableOpenSearchConfigs()
     return getInstance()->parseOpenSearchConfigs();
 }
 
+const QString OpenSearchConfigs::getSearchUrlTemplate(const QString &engineName)
+{
+    const QString configFile = getAvailableOpenSearchConfigs().value(engineName);
+    if (configFile.isEmpty()) {
+        return QString();
+    }
+
+    QFile xmlFile(configFile);
+    if (!xmlFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return QString();
+    }
+
+    QXmlStreamReader xml(&xmlFile);
+    while (!xml.atEnd()) {
+        xml.readNext();
+        if (!xml.isStartElement() || xml.name() != QLatin1String("Url")
+                || xml.attributes().value("type") != QLatin1String("text/html")) {
+            continue;
+        }
+
+        QString url = xml.attributes().value("template").toString();
+        QStringList params;
+        while (!xml.atEnd() && !(xml.isEndElement() && xml.name() == QLatin1String("Url"))) {
+            xml.readNext();
+            // Plain <Param> only — <MozParam> entries and {moz:*} values
+            // are Gecko-conditional
+            if (xml.isStartElement() && xml.name() == QLatin1String("Param")) {
+                const QString value = xml.attributes().value("value").toString();
+                if (!value.contains(QLatin1String("{moz"))) {
+                    params << xml.attributes().value("name").toString()
+                              + QLatin1Char('=') + value;
+                }
+            }
+        }
+        if (!params.isEmpty()) {
+            url += (url.contains(QLatin1Char('?')) ? QLatin1Char('&') : QLatin1Char('?'))
+                    + params.join(QLatin1Char('&'));
+        }
+        if (url.contains(QLatin1String("{searchTerms}"))) {
+            return url;
+        }
+    }
+    return QString();
+}
+
 const QString OpenSearchConfigs::getOpenSearchConfigPath()
 {
     return QDir::homePath() + USER_OPENSEARCH_PATH;

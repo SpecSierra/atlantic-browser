@@ -21,12 +21,17 @@ function isUrl(text) {
     return false;
 }
 
-// Turn entered text into a loadable URL: a search query becomes a Google
-// search, a bare host gets an https:// scheme. Returns "" for empty input.
-function normalize(text) {
+// Turn entered text into a loadable URL: a search query becomes a search on
+// the configured engine (searchTemplate contains "{searchTerms}"; falls back
+// to Google when absent), a bare host gets an https:// scheme. Returns "" for
+// empty input.
+function normalize(text, searchTemplate) {
     var candidate = text.trim();
     if (!candidate.length) return "";
     if (!isUrl(candidate)) {
+        if (searchTemplate && searchTemplate.indexOf("{searchTerms}") !== -1) {
+            return searchTemplate.replace("{searchTerms}", encodeURIComponent(candidate));
+        }
         return "https://www.google.com/search?q=" + encodeURIComponent(candidate);
     }
     if (candidate.indexOf("://") === -1 && candidate.indexOf("about:") !== 0) {

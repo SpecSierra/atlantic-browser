@@ -41,6 +41,7 @@ public:
 
     QStringList searchEngines();
     Q_INVOKABLE void add(const QString &title, const QString &url);
+    Q_INVOKABLE QString searchUrlTemplate(const QString &title) const;
     Q_INVOKABLE void install(const QString &title);
     Q_INVOKABLE void remove(const QString &title);
 

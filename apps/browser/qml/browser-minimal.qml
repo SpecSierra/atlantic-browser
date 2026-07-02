@@ -1,6 +1,7 @@
 import QtQuick 2.2
 import QtQuick.Window 2.2
 import Sailfish.Browser 1.0
+import Nemo.Configuration 1.0
 import "pages/components/UrlUtils.js" as UrlUtils
 
 Rectangle {
@@ -19,7 +20,13 @@ Rectangle {
                                               : "Atlantic")
 
     function normalizedInput(text) {
-        return UrlUtils.normalize(text)
+        return UrlUtils.normalize(text, SearchEngineModel.searchUrlTemplate(searchEngineConf.value))
+    }
+
+    ConfigurationValue {
+        id: searchEngineConf
+        key: "/apps/atlantic-browser/settings/search_engine"
+        defaultValue: "Google"
     }
 
     function loadAddress(text) {
