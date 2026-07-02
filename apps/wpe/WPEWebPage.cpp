@@ -429,6 +429,23 @@ gboolean onDecidePolicy(WebKitWebView* webView, WebKitPolicyDecision* decision, 
         return FALSE;
     }
 
+    // Turn non-displayable responses into downloads. WebKit's default
+    // response handler only auto-downloads when the server marks the response
+    // as an attachment (Content-Disposition); an unsupported MIME type
+    // without that header is *ignored*, leaving the tab stuck at "Loading"
+    // and never starting a download.
+    if (type == WEBKIT_POLICY_DECISION_TYPE_RESPONSE) {
+        WebKitResponsePolicyDecision* responseDecision = WEBKIT_RESPONSE_POLICY_DECISION(decision);
+        WebKitURIResponse* response = webkit_response_policy_decision_get_response(responseDecision);
+        const guint statusCode = response ? webkit_uri_response_get_status_code(response) : 0;
+        if (!webkit_response_policy_decision_is_mime_type_supported(responseDecision)
+            && statusCode != 204 /* No Content */) {
+            webkit_policy_decision_download(decision);
+            return TRUE;
+        }
+        return FALSE;
+    }
+
     // Network ad/tracker blocking is handled per-request by the WebProcess
     // adblock extension (Brave/Rust engine), so this callback only routes
     // new-window navigations into the current view.

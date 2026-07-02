@@ -181,8 +181,11 @@ void DownloadManager::confirmDownload(int downloadId, const QString &destination
     // Make sure the chosen directory exists before handing the path to WebKit.
     BrowserPaths::createDirectory(QFileInfo(destinationPath).absolutePath());
 
-    const QByteArray destinationUri = QUrl::fromLocalFile(destinationPath).toEncoded();
-    webkit_download_set_destination(download, destinationUri.constData());
+    // WebKit built with the 2022 GLib API takes a plain absolute filesystem
+    // path here — a file:// URI trips g_path_is_absolute() and the destination
+    // is silently never set, leaving the download held forever.
+    const QByteArray destination = QFile::encodeName(destinationPath);
+    webkit_download_set_destination(download, destination.constData());
     // The user explicitly chose this path, so honour it even if it exists.
     webkit_download_set_allow_overwrite(download, TRUE);
 
