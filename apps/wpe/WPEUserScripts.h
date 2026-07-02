@@ -724,6 +724,46 @@ static const char* const kRedditPerf = R"JS(
         }
         sweep(document);
         document.addEventListener('DOMContentLoaded', function() { sweep(document); }, { once: true });
+
+        // Kill CSS blur. Reddit stacks blur(24px)-filtered copies of post media
+        // as decorative ambient backdrops (8x 1080x1080 device-px imgs on a
+        // single post page). WPE runs Gaussian blur in software on the
+        // WebProcess main thread (CSSFilterRenderer -> Skia raster blur), and
+        // gdb sampling during scroll showed it eating ~half the main thread:
+        // device A/B scroll fps 2.9 -> 6.6 with the filters removed. Tailwind
+        // blur/backdrop-blur utility classes cover all of Reddit's uses; a
+        // constructable sheet adopted by the document AND every shadow root
+        // (via the attachShadow hook) reaches the shadow-DOM components a
+        // document-level user stylesheet cannot.
+        try {
+            var blurKill = new CSSStyleSheet();
+            blurKill.replaceSync(
+                '.post-background-image-filter,[class*="blur"],[style*="blur("]{' +
+                'filter:none!important;' +
+                '-webkit-backdrop-filter:none!important;' +
+                'backdrop-filter:none!important}');
+            function adoptBlurKill(root) {
+                try { root.adoptedStyleSheets = root.adoptedStyleSheets.concat(blurKill); } catch (e) {}
+            }
+            adoptBlurKill(document);
+            var origAttachShadow = Element.prototype.attachShadow;
+            Element.prototype.attachShadow = function() {
+                var root = origAttachShadow.apply(this, arguments);
+                adoptBlurKill(root);
+                return root;
+            };
+            // Shadow roots that already exist at install time (none at
+            // DOCUMENT_START, but the script may be re-run on bfcache restore).
+            (function adoptExisting(root) {
+                if (!root || !root.querySelectorAll) return;
+                var all = root.querySelectorAll('*');
+                for (var i = 0; i < all.length; i++)
+                    if (all[i].shadowRoot) {
+                        adoptBlurKill(all[i].shadowRoot);
+                        adoptExisting(all[i].shadowRoot);
+                    }
+            })(document);
+        } catch (e) {}
     } catch (e) {}
 })();
 )JS";
