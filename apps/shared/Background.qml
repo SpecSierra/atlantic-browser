@@ -96,7 +96,7 @@ Item {
         // Light scheme needs a stronger tint: black text wants a near-white
         // surface, not a pastel wash of the wallpaper.
         property color tint: Theme.colorScheme === Theme.DarkOnLight
-                             ? Qt.rgba(1.0, 1.0, 1.0, 0.93)
+                             ? Qt.rgba(1.0, 1.0, 1.0, 0.82)
                              : Qt.rgba(0.0, 0.0, 0.0, 0.62)
 
         vertexShader: "

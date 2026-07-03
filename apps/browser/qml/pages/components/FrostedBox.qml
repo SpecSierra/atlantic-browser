@@ -64,7 +64,7 @@ Item {
             anchors.fill: parent
             // In the light scheme the tint is boosted toward opaque white so the
             // glass reads as a bright surface under black text.
-            color: box._lightScheme ? Qt.rgba(1, 1, 1, Math.min(1, box.tintAlpha + 0.38))
+            color: box._lightScheme ? Qt.rgba(1, 1, 1, Math.min(1, box.tintAlpha + 0.25))
                                     : Qt.rgba(0, 0, 0, box.tintAlpha)
         }
 
