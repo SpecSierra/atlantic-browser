@@ -203,7 +203,10 @@ SilicaControl {
                         y: Math.max(0, headerItem.y - menuFlickable.contentY)
                         z: -1
                         width: footerLoader.width
-                        height: footerLoader.y - y
+                        // Extend behind the footer to the bottom edge: the footer's
+                        // own glass wiring can miss, and the toolbar that used to
+                        // back this strip is hidden while the menu is open.
+                        height: menuFlickable.height - y
                     },
                     Item {
                         id: decoratorParent

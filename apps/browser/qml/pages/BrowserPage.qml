@@ -446,7 +446,10 @@ Page {
         height: parent.height
         // Match the start page's wallpaper crop (it scales to overlay.y, not full
         // screen) so the menu's frosted glass lines up with the backdrop behind it.
-        wallpaperHeight: Math.ceil(overlay.y)
+        // Crop the glass wallpaper to the full menu height: the menu reaches the
+        // bottom edge (the overlay/toolbar is hidden while it is open), so a crop
+        // at overlay.y would leave the bottom slice of the glass unsampled.
+        wallpaperHeight: height
 
         active: overlay.toolBar.secondaryToolsActive
         menuItem: Component {
