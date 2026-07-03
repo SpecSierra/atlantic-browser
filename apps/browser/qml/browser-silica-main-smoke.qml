@@ -22,9 +22,13 @@ ApplicationWindow {
             Rectangle {
                 anchors.fill: parent
                 gradient: Gradient {
-                    GradientStop { position: 0.0; color: Qt.rgba(0, 0, 0, 0.55) }
-                    GradientStop { position: 0.5; color: Qt.rgba(0, 0, 0, 0.4) }
-                    GradientStop { position: 1.0; color: Qt.rgba(0, 0, 0, 0.62) }
+                    id: splashScrim
+                    // Follows the ambience scheme: dark scrim under light text,
+                    // light scrim under black text (light/white ambiences).
+                    property real level: Theme.colorScheme === Theme.DarkOnLight ? 1 : 0
+                    GradientStop { position: 0.0; color: Qt.rgba(splashScrim.level, splashScrim.level, splashScrim.level, 0.55) }
+                    GradientStop { position: 0.5; color: Qt.rgba(splashScrim.level, splashScrim.level, splashScrim.level, 0.4) }
+                    GradientStop { position: 1.0; color: Qt.rgba(splashScrim.level, splashScrim.level, splashScrim.level, 0.62) }
                 }
             }
 
