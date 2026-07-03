@@ -18,6 +18,7 @@ import Sailfish.WebView.Popups 1.0 as Popups
 import Sailfish.WebView.Controls 1.0
 import Sailfish.Policy 1.0
 import Sailfish.TextLinking 1.0
+import Nemo.Configuration 1.0
 import "." as Browser
 
 WebContainer {
@@ -72,8 +73,26 @@ WebContainer {
 
     property var linkHandler: LinkHandler {}
 
-    property QtObject fixedToolbarConfig: QtObject {
-        property bool value: false
+    property QtObject fixedToolbarConfig: ConfigurationValue {
+        key: "/apps/atlantic-browser/settings/fixed_toolbar"
+        defaultValue: false
+
+        onValueChanged: {
+            // Re-show the toolbar if it was hidden when the setting got enabled.
+            if (value && webView.contentItem && !webView.contentItem.chrome) {
+                webView.contentItem.chrome = true
+            }
+        }
+    }
+
+    // Pages are created in C++ (WPEWebContainer::getOrCreatePage), not from
+    // webPageComponent, so bindings inside that component never apply. Push
+    // the fixed-toolbar setting onto whichever page is active.
+    Binding {
+        target: webView.contentItem
+        property: "fixedToolbar"
+        value: fixedToolbarConfig.value
+        when: webView.contentItem !== null
     }
 
     Connections {
