@@ -214,40 +214,42 @@ Page {
                 }
             }
 
-            TextSwitch {
-                checked: webEngineSettings.doNotTrack
+            // "Do not track" switch hidden for now — uncomment to bring it back
+            // TextSwitch {
+            //     checked: webEngineSettings.doNotTrack
+            //
+            //     //: Tell sites that I do not want to be tracked.
+            //     //% "Do not track"
+            //     text: qsTrId("settings_browser-la-tracking")
+            //     //: Tell sites that I do not want to be tracked.
+            //     //% "Tell sites that I do not want to be tracked"
+            //     description: qsTrId("settings_browser-la-tracking_description")
+            //     // Margins adjusted to align with other items on the page
+            //     leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
+            //     _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
+            //     automaticCheck: false
+            //
+            //     onClicked: doNotTrackConf.value = !webEngineSettings.doNotTrack
+            // }
 
-                //: Tell sites that I do not want to be tracked.
-                //% "Do not track"
-                text: qsTrId("settings_browser-la-tracking")
-                //: Tell sites that I do not want to be tracked.
-                //% "Tell sites that I do not want to be tracked"
-                description: qsTrId("settings_browser-la-tracking_description")
-                // Margins adjusted to align with other items on the page
-                leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
-                _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
-                automaticCheck: false
-
-                onClicked: doNotTrackConf.value = !webEngineSettings.doNotTrack
-            }
-
-            TextSwitch {
-                //: Label for text switch that enables JavaScript globally for all tabs
-                //% "Enable JavaScript"
-                text: qsTrId("settings_browser-la-enable_javascript")
-                description: webEngineSettings.javascriptEnabled ?
-                                 //% "Allowed (recommended)"
-                                 qsTrId("settings_browser-la-enabled_javascript_description") :
-                                 //% "Blocked, some sites may not work correctly"
-                                 qsTrId("settings_browser-la-disable_javascript_description")
-                checked: webEngineSettings.javascriptEnabled
-                // Margins adjusted to align with other items on the page
-                leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
-                _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
-                automaticCheck: false
-
-                onClicked: jsEnabledConf.value = !webEngineSettings.javascriptEnabled
-            }
+            // "Enable JavaScript" switch hidden for now — uncomment to bring it back
+            // TextSwitch {
+            //     //: Label for text switch that enables JavaScript globally for all tabs
+            //     //% "Enable JavaScript"
+            //     text: qsTrId("settings_browser-la-enable_javascript")
+            //     description: webEngineSettings.javascriptEnabled ?
+            //                      //% "Allowed (recommended)"
+            //                      qsTrId("settings_browser-la-enabled_javascript_description") :
+            //                      //% "Blocked, some sites may not work correctly"
+            //                      qsTrId("settings_browser-la-disable_javascript_description")
+            //     checked: webEngineSettings.javascriptEnabled
+            //     // Margins adjusted to align with other items on the page
+            //     leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
+            //     _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
+            //     automaticCheck: false
+            //
+            //     onClicked: jsEnabledConf.value = !webEngineSettings.javascriptEnabled
+            // }
 
             BackgroundItem {
                 width: parent.width
