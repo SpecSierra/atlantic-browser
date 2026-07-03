@@ -564,7 +564,9 @@ Shared.Background {
                 findText: searchField.text
                 bookmarked: bookmarkModel.activeUrlBookmarked
 
-                opacity: textSelectionToolbar.active ? 0.0 : crossfadeRatio
+                // Hide the toolbar under the popup menu (secondaryToolsActive): its
+                // dimmer is translucent, so the url bar would show through it.
+                opacity: (textSelectionToolbar.active || secondaryToolsActive) ? 0.0 : crossfadeRatio
                 Behavior on opacity {
                     enabled: overlayAnimator.atBottom
                     FadeAnimation {}
