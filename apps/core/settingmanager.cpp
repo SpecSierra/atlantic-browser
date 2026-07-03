@@ -11,6 +11,19 @@
 #include <MDConfItem>
 #include <QVariant>
 
+// Engine export (webkit-wpe-dark-mode-runtime.patch): sets the global WebKit
+// dark mode = what websites see as prefers-color-scheme, live pages included.
+extern "C" void wpe_sfos_set_dark_mode(int darkMode);
+
+namespace {
+// Values match the Preferred color scheme combo in SettingsPage.qml
+enum ColorScheme {
+    PrefersLightMode = 0,
+    PrefersDarkMode = 1,
+    FollowsAmbience = 2
+};
+}
+
 static SettingManager *gSingleton = 0;
 
 SettingManager::SettingManager(QObject *parent)
@@ -26,6 +39,25 @@ SettingManager::SettingManager(QObject *parent)
     m_toolbarLarge = new MDConfItem("/apps/atlantic-browser/settings/toolbar_large", this);
     connect(m_toolbarSmall, &MDConfItem::valueChanged, this, &SettingManager::toolbarSmallChanged);
     connect(m_toolbarLarge, &MDConfItem::valueChanged, this, &SettingManager::toolbarLargeChanged);
+
+    m_colorScheme = new MDConfItem("/apps/atlantic-browser/settings/color_scheme", this);
+    connect(m_colorScheme, &MDConfItem::valueChanged, this, &SettingManager::applyColorScheme);
+    applyColorScheme();
+}
+
+void SettingManager::setAmbienceDark(bool dark)
+{
+    if (m_ambienceDark == dark)
+        return;
+    m_ambienceDark = dark;
+    applyColorScheme();
+}
+
+void SettingManager::applyColorScheme()
+{
+    int scheme = m_colorScheme->value(FollowsAmbience).toInt();
+    bool dark = scheme == PrefersDarkMode || (scheme == FollowsAmbience && m_ambienceDark);
+    wpe_sfos_set_dark_mode(dark);
 }
 
 int SettingManager::toolbarSmall()

@@ -45,6 +45,11 @@ public:
     Q_INVOKABLE void setAdBlockEnabled(bool enabled);
     Q_INVOKABLE bool isAdBlockEnabled() const;
 
+    // Website prefers-color-scheme. The QML root keeps us posted on whether
+    // the current ambience is dark; the color_scheme dconf key selects
+    // light / dark / follow-ambience.
+    Q_INVOKABLE void setAmbienceDark(bool dark);
+
 signals:
     void toolbarSmallChanged();
     void toolbarLargeChanged();
@@ -56,9 +61,13 @@ private slots:
 private:
     explicit SettingManager(QObject *parent = 0);
 
+    void applyColorScheme();
+
     MDConfItem *m_searchEngineConfItem;
     MDConfItem *m_toolbarSmall;
     MDConfItem *m_toolbarLarge;
+    MDConfItem *m_colorScheme;
+    bool m_ambienceDark = false;
 
     bool m_searchEnginesInitialized;
 

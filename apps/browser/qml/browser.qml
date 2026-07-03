@@ -10,11 +10,18 @@
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import QtQuick 2.2
+import Sailfish.Silica 1.0
 import "pages"
 import "shared"
 
 BrowserWindow {
     id: window
+
+    // Websites' prefers-color-scheme follows the ambience (or the explicit
+    // light/dark choice in Settings — SettingManager combines both).
+    readonly property bool _ambienceDark: Theme.colorScheme === Theme.LightOnDark
+    on_AmbienceDarkChanged: Settings.setAmbienceDark(_ambienceDark)
+    Component.onCompleted: Settings.setAmbienceDark(_ambienceDark)
 
     function setBrowserCover(model) {
         if (!model || model.count === 0 || !WebUtils.firstUseDone) {

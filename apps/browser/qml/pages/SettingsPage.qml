@@ -38,13 +38,15 @@ Page {
         property bool javascriptEnabled: jsEnabledConf.value
         property bool useDownloadDir: useDownloadDirConf.value
         property string downloadDir: downloadDirConf.value || StandardPaths.download
-        property int colorScheme: 0
+        property alias colorScheme: colorSchemeConf.value
     }
     ConfigurationValue { id: doNotTrackConf; key: "/apps/atlantic-browser/settings/do_not_track"; defaultValue: false }
     ConfigurationValue { id: jsEnabledConf; key: "/apps/atlantic-browser/settings/javascript_enabled"; defaultValue: true }
     ConfigurationValue { id: useDownloadDirConf; key: "/apps/atlantic-browser/settings/use_download_dir"; defaultValue: false }
     ConfigurationValue { id: downloadDirConf; key: "/apps/atlantic-browser/settings/download_dir"; defaultValue: "" }
     ConfigurationValue { id: adBlockConf; key: "/apps/atlantic-browser/settings/adblock_enabled"; defaultValue: true }
+    // 0 = light, 1 = dark, 2 = follow ambience (applied by SettingManager)
+    ConfigurationValue { id: colorSchemeConf; key: "/apps/atlantic-browser/settings/color_scheme"; defaultValue: page._followsAmbience }
 
     readonly property int _textSwitchIconCenter: Math.round((Theme.iconSizeMedium - Theme.itemSizeExtraSmall) / 2.0)
 
