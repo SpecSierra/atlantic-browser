@@ -106,7 +106,10 @@ Page {
 
                     //% "Saved passwords"
                     text: qsTrId("settings_browser-la-clear_passwords")
-                    checked: true
+                    // Hidden: no password manager in the WPE port yet, so
+                    // there is nothing to clear.
+                    visible: false
+                    checked: false
                 }
 
                 TextSwitch {

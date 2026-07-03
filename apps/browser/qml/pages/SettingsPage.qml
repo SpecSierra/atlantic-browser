@@ -251,29 +251,32 @@ Page {
             //     onClicked: jsEnabledConf.value = !webEngineSettings.javascriptEnabled
             // }
 
-            BackgroundItem {
-                width: parent.width
-                contentHeight: Theme.itemSizeMedium
-                Row {
-                    width: parent.width - 2*Theme.horizontalPageMargin
-                    x: Theme.horizontalPageMargin
-                    spacing: Theme.paddingMedium
-                    anchors.verticalCenter: parent.verticalCenter
-
-                    Icon {
-                        id: loginsIcon
-                        source: "image://theme/icon-m-keys"
-                    }
-                    Label {
-                        width: parent.width - parent.spacing - loginsIcon.width
-                        //: The label for the button for accessing password management
-                        //% "Passwords"
-                        text: qsTrId("settings_browser-la-passwords")
-                        anchors.verticalCenter: loginsIcon.verticalCenter
-                    }
-                }
-                onClicked: pageStack.push("LoginsPage.qml")
-            }
+            // Passwords entry hidden: DeclarativeLoginModel is a stub (no WPE
+            // password manager yet), so LoginsPage is always empty. Restore
+            // once a real credential store + capture/autofill path exists.
+            // BackgroundItem {
+            //     width: parent.width
+            //     contentHeight: Theme.itemSizeMedium
+            //     Row {
+            //         width: parent.width - 2*Theme.horizontalPageMargin
+            //         x: Theme.horizontalPageMargin
+            //         spacing: Theme.paddingMedium
+            //         anchors.verticalCenter: parent.verticalCenter
+            //
+            //         Icon {
+            //             id: loginsIcon
+            //             source: "image://theme/icon-m-keys"
+            //         }
+            //         Label {
+            //             width: parent.width - parent.spacing - loginsIcon.width
+            //             //: The label for the button for accessing password management
+            //             //% "Passwords"
+            //             text: qsTrId("settings_browser-la-passwords")
+            //             anchors.verticalCenter: loginsIcon.verticalCenter
+            //         }
+            //     }
+            //     onClicked: pageStack.push("LoginsPage.qml")
+            // }
 
             BackgroundItem {
                 width: parent.width
