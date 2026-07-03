@@ -11,6 +11,8 @@
 #include <MDConfItem>
 #include <QVariant>
 
+#include <wpe/webkit.h>
+
 // Engine export (webkit-wpe-dark-mode-runtime.patch): sets the global WebKit
 // dark mode = what websites see as prefers-color-scheme, live pages included.
 extern "C" void wpe_sfos_set_dark_mode(int darkMode);
@@ -85,7 +87,29 @@ void SettingManager::clearHistory(int period)
 
 void SettingManager::clearCookiesAndSiteData()
 {
-    // WPE: cookies managed by WebKit internally; use webkit_website_data_manager if needed
+    WebKitWebsiteDataManager *manager =
+        webkit_network_session_get_website_data_manager(webkit_network_session_get_default());
+    // Everything except the HTTP caches (those are clearCache()'s job).
+    WebKitWebsiteDataTypes types = static_cast<WebKitWebsiteDataTypes>(
+        WEBKIT_WEBSITE_DATA_COOKIES
+        | WEBKIT_WEBSITE_DATA_SESSION_STORAGE
+        | WEBKIT_WEBSITE_DATA_LOCAL_STORAGE
+        | WEBKIT_WEBSITE_DATA_INDEXEDDB_DATABASES
+        | WEBKIT_WEBSITE_DATA_OFFLINE_APPLICATION_CACHE
+        | WEBKIT_WEBSITE_DATA_HSTS_CACHE
+        | WEBKIT_WEBSITE_DATA_ITP
+        | WEBKIT_WEBSITE_DATA_SERVICE_WORKER_REGISTRATIONS
+        | WEBKIT_WEBSITE_DATA_DOM_CACHE
+        | WEBKIT_WEBSITE_DATA_DEVICE_ID_HASH_SALT);
+    webkit_website_data_manager_clear(manager, types, 0, nullptr,
+        [](GObject *object, GAsyncResult *result, gpointer) {
+            GError *error = nullptr;
+            webkit_website_data_manager_clear_finish(WEBKIT_WEBSITE_DATA_MANAGER(object), result, &error);
+            if (error) {
+                qWarning("clearCookiesAndSiteData failed: %s", error->message);
+                g_error_free(error);
+            }
+        }, nullptr);
 }
 
 void SettingManager::clearPasswords()
@@ -95,7 +119,19 @@ void SettingManager::clearPasswords()
 
 void SettingManager::clearCache()
 {
-    // WPE: cache cleared via webkit_web_context_clear_cache
+    WebKitWebsiteDataManager *manager =
+        webkit_network_session_get_website_data_manager(webkit_network_session_get_default());
+    WebKitWebsiteDataTypes types = static_cast<WebKitWebsiteDataTypes>(
+        WEBKIT_WEBSITE_DATA_MEMORY_CACHE | WEBKIT_WEBSITE_DATA_DISK_CACHE);
+    webkit_website_data_manager_clear(manager, types, 0, nullptr,
+        [](GObject *object, GAsyncResult *result, gpointer) {
+            GError *error = nullptr;
+            webkit_website_data_manager_clear_finish(WEBKIT_WEBSITE_DATA_MANAGER(object), result, &error);
+            if (error) {
+                qWarning("clearCache failed: %s", error->message);
+                g_error_free(error);
+            }
+        }, nullptr);
 }
 
 void SettingManager::clearSitePermissions()
