@@ -666,6 +666,11 @@ void WPEWebContainer::applyContentOrientation(Qt::ScreenOrientation orientation)
     updateContentOrientation(orientation);
 }
 
+void WPEWebContainer::setAdBlockEnabled(bool enabled)
+{
+    WPEWebPage::applyAdBlockEnabledGlobally(enabled);
+}
+
 void WPEWebContainer::onActiveTabChanged(int activeTabId)
 {
     activatePage(activeTabId);

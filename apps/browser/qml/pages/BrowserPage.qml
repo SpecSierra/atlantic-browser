@@ -49,11 +49,16 @@ Page {
         id: adBlockEngine
         key: "/apps/atlantic-browser/settings/adblock_enabled"
         defaultValue: true
-        onValueChanged: {
-            if (webView.contentItem) {
-                webView.contentItem.adBlockEnabled = value
-            }
-        }
+        // webView.setAdBlockEnabled applies process-wide: every live tab plus
+        // the init state handed to future WebProcesses. The old binding wrote
+        // webView.contentItem.adBlockEnabled, which missed background tabs and
+        // silently did nothing when settings was opened with no tab open.
+        // C++ cannot read dconf itself (MDConfItem is a no-op stub in this
+        // build), so this binding is the single source of the persisted state:
+        // Component.onCompleted restores it on startup, onValueChanged covers
+        // the settings-page switch.
+        onValueChanged: webView.setAdBlockEnabled(value)
+        Component.onCompleted: webView.setAdBlockEnabled(value)
     }
 
     function load(url, title) {

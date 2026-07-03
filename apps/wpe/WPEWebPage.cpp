@@ -37,7 +37,6 @@
 #include <QStringList>
 #include <QUrl>
 #include <QVector>
-#include <MDConfItem>
 #include <array>
 #include <memory>
 
@@ -1344,13 +1343,15 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                 static bool engineInitialized = false;
                 if (!engineInitialized) {
                     engineInitialized = true;
-                    // Restore the persisted toggle BEFORE the first content
-                    // blocker install. AdBlockEngine::s_enabled defaults to
-                    // true, and the dconf binding in BrowserPage.qml only
-                    // fires on *changes* — so without this read a disabled
-                    // ad blocker came back on after every browser restart.
-                    MDConfItem adBlockConf(QStringLiteral("/apps/atlantic-browser/settings/adblock_enabled"));
-                    AdBlockEngine::setEnabled(adBlockConf.value(true).toBool());
+                    // The persisted toggle is pushed by BrowserPage.qml's
+                    // ConfigurationValue (Component.onCompleted fires during
+                    // QML load, well before the first web view exists) via
+                    // webView.setAdBlockEnabled → applyAdBlockEnabledGlobally.
+                    // Do NOT read it here with MDConfItem: the in-tree
+                    // MDConfItem is a no-op stub (apps/core/mdconfitem.h,
+                    // real mlite5 SIGSEGVs in this app), so value() always
+                    // returns the default and would stomp the QML-pushed
+                    // state back to enabled on every start.
                     qInfo() << "[ADBLOCK] enabled (persisted):" << AdBlockEngine::isEnabled();
                     QString cachePath = QStringLiteral("/usr/share/atlantic-browser/engine.dat");
                     if (!QFileInfo::exists(cachePath)) {
@@ -3075,21 +3076,28 @@ bool WPEWebPage::adBlockEnabled() const
 
 void WPEWebPage::setAdBlockEnabled(bool enabled)
 {
+    applyAdBlockEnabledGlobally(enabled);
+}
+
+void WPEWebPage::applyAdBlockEnabledGlobally(bool enabled)
+{
     if (AdBlockEngine::isEnabled() == enabled)
         return;
     AdBlockEngine::setEnabled(enabled);
 
-    // Network blocking lives in the WebProcess adblock extension; tell it the
-    // new state so it takes effect on live pages without a reload. New
-    // WebProcesses pick up the state via the extension's init user-data. The
-    // AdBlockEngine flag still gates cosmetic injection in the UI process.
-    if (WebKitWebView *wv = webView()) {
-        webkit_web_view_send_message_to_page(
-            wv, webkit_user_message_new("atlantic-adblock-set-enabled",
-                                        g_variant_new_boolean(enabled)),
-            nullptr, nullptr, nullptr);
+    // Network blocking lives in the WebProcess adblock extension; tell every
+    // live page so the change takes effect in all tabs — and all WebProcesses —
+    // without a reload. New WebProcesses pick up the state via the extension's
+    // init user-data. The AdBlockEngine flag still gates cosmetic injection in
+    // the UI process.
+    for (WPEWebPage *page : liveInstances()) {
+        if (WebKitWebView *wv = page->webView()) {
+            webkit_web_view_send_message_to_page(
+                wv, webkit_user_message_new("atlantic-adblock-set-enabled",
+                                            g_variant_new_boolean(enabled)),
+                nullptr, nullptr, nullptr);
+        }
+        emit page->adBlockEnabledChanged();
     }
     qDebug() << "[WPE-BLOCKER] ad block toggled" << (enabled ? "ON" : "OFF");
-
-    emit adBlockEnabledChanged();
 }

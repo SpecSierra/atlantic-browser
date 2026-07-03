@@ -97,6 +97,10 @@ public:
     Q_INVOKABLE void releaseActiveTabOwnership();
     Q_INVOKABLE void updateContentOrientation(Qt::ScreenOrientation orientation);
     Q_INVOKABLE void applyContentOrientation(Qt::ScreenOrientation orientation);
+    // Ad-block toggle, applied process-wide (every live page + future
+    // WebProcesses). Called from BrowserPage.qml's dconf binding — C++ can't
+    // read dconf itself (MDConfItem is a no-op stub in this build).
+    Q_INVOKABLE void setAdBlockEnabled(bool enabled);
 
     // QQmlParserStatus
     void classBegin() override;

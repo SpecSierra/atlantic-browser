@@ -192,6 +192,12 @@ public:
     // cannot discover them — the render-recovery code must use this instead.
     static const QList<WPEWebPage *> &liveInstances();
 
+    // Apply the ad-block toggle process-wide: flips the UI-process cosmetic
+    // gate and notifies every live page's WebProcess extension. Driven by the
+    // dconf binding in BrowserPage.qml (via WPEWebContainer::setAdBlockEnabled),
+    // so it works with any number of tabs (or none) open.
+    static void applyAdBlockEnabledGlobally(bool enabled);
+
     bool throttlePainting() const;
     void setThrottlePainting(bool throttle);
 
