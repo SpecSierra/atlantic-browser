@@ -139,7 +139,8 @@ SilicaControl {
             width: popUpMenu.width
             height: popUpMenu.height
 
-            color: Theme.rgba("black", Theme.opacityLow * (1 - percentageClosed))
+            color: Theme.rgba(Theme.colorScheme === Theme.DarkOnLight ? "white" : "black",
+                              Theme.opacityLow * (1 - percentageClosed))
 
             Flickable {
                 id: menuFlickable

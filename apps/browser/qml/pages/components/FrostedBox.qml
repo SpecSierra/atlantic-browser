@@ -21,6 +21,9 @@ Item {
     property Item alignParent
     property real radius: Theme.paddingMedium
     property real tintAlpha: 0.5
+    // Light ambiences flip text to black, so the glass tint (and the edge
+    // highlight/press flash) must flip to white/black accordingly.
+    readonly property bool _lightScheme: Theme.colorScheme === Theme.DarkOnLight
     property bool pressed: false
     // Extra offset (px) applied to the sampled region, to line the blur up with a
     // differently-cropped backdrop (e.g. the popup menu vs the start page).
@@ -59,22 +62,28 @@ Item {
 
         Rectangle {
             anchors.fill: parent
-            color: Qt.rgba(0, 0, 0, box.tintAlpha)
+            // In the light scheme the tint is boosted toward opaque white so the
+            // glass reads as a bright surface under black text.
+            color: box._lightScheme ? Qt.rgba(1, 1, 1, Math.min(1, box.tintAlpha + 0.38))
+                                    : Qt.rgba(0, 0, 0, box.tintAlpha)
         }
 
         Image {
             anchors.fill: parent
             source: "image://theme/graphic-shader-texture"
             fillMode: Image.Tile
-            opacity: 0.12
+            opacity: box._lightScheme ? 0.05 : 0.12
         }
     }
 
     Rectangle {
         anchors.fill: parent
         radius: box.radius
-        color: box.pressed ? Qt.rgba(1, 1, 1, 0.14) : "transparent"
-        border.color: Qt.rgba(1, 1, 1, 0.18)
+        color: box.pressed ? (box._lightScheme ? Qt.rgba(0, 0, 0, 0.14)
+                                               : Qt.rgba(1, 1, 1, 0.14))
+                           : "transparent"
+        border.color: box._lightScheme ? Qt.rgba(0, 0, 0, 0.18)
+                                       : Qt.rgba(1, 1, 1, 0.18)
         border.width: 1
     }
 

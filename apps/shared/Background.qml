@@ -91,8 +91,13 @@ Item {
         }
         property size screenSize: Qt.size(Screen.width, Screen.height)
 
-        // Dark tint applied over the blurred wallpaper (rgb mixed by alpha).
-        property color tint: Qt.rgba(0.0, 0.0, 0.0, 0.62)
+        // Tint applied over the blurred wallpaper (rgb mixed by alpha) — dark on
+        // dark ambiences, light on light ambiences so black text stays readable.
+        // Light scheme needs a stronger tint: black text wants a near-white
+        // surface, not a pastel wash of the wallpaper.
+        property color tint: Theme.colorScheme === Theme.DarkOnLight
+                             ? Qt.rgba(1.0, 1.0, 1.0, 0.93)
+                             : Qt.rgba(0.0, 0.0, 0.0, 0.62)
 
         vertexShader: "
             uniform highp mat4 qt_Matrix;
@@ -123,6 +128,7 @@ Item {
         anchors.fill: parent
         source: "image://theme/graphic-shader-texture"
         fillMode: Image.Tile
-        opacity: 0.15
+        // The grain darkens white surfaces, so fade it in the light scheme.
+        opacity: Theme.colorScheme === Theme.DarkOnLight ? 0.06 : 0.15
     }
 }

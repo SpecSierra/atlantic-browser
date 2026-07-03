@@ -75,9 +75,13 @@ Item {
     Rectangle {
         anchors.fill: parent
         gradient: Gradient {
-            GradientStop { position: 0.0; color: Qt.rgba(0, 0, 0, 0.6) }
-            GradientStop { position: 0.45; color: Qt.rgba(0, 0, 0, 0.3) }
-            GradientStop { position: 1.0; color: Qt.rgba(0, 0, 0, 0.65) }
+            id: scrimGradient
+            // Scrim brightness follows the ambience scheme: dark under light
+            // text, light under black text (light/white ambiences).
+            property real level: Theme.colorScheme === Theme.DarkOnLight ? 1 : 0
+            GradientStop { position: 0.0; color: Qt.rgba(scrimGradient.level, scrimGradient.level, scrimGradient.level, 0.6) }
+            GradientStop { position: 0.45; color: Qt.rgba(scrimGradient.level, scrimGradient.level, scrimGradient.level, 0.3) }
+            GradientStop { position: 1.0; color: Qt.rgba(scrimGradient.level, scrimGradient.level, scrimGradient.level, 0.65) }
         }
     }
 

@@ -60,7 +60,8 @@ BackgroundItem {
                 // Translucent so the tab page's frosted glass background shows
                 // through the title strip (and empty-thumbnail placeholders),
                 // keeping tabs consistent with the rest of the chrome.
-                color: Qt.rgba(0, 0, 0, 0.45)
+                color: Theme.colorScheme === Theme.DarkOnLight
+                       ? Qt.rgba(1, 1, 1, 0.45) : Qt.rgba(0, 0, 0, 0.45)
 
                 Image {
                     anchors.fill: parent
@@ -153,7 +154,8 @@ BackgroundItem {
                     bottom: parent.bottom
                 }
                 height: domainLabel.implicitHeight + Theme.paddingSmall * 2
-                color: Qt.rgba(0, 0, 0, 0.55)
+                color: Theme.colorScheme === Theme.DarkOnLight
+                       ? Qt.rgba(1, 1, 1, 0.55) : Qt.rgba(0, 0, 0, 0.55)
                 visible: url !== ""
 
                 Label {
