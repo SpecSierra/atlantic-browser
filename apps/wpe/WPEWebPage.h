@@ -250,6 +250,7 @@ public:
     // Editable focus reported from cross-origin subframes (editableFocus bridge)
     void handleSubframeEditableFocus(bool focused);
     bool subframeEditableFocused() const { return m_subframeEditableFocus; }
+    void sendNativeTextViaKeys(const QString& text, int replaceBefore);
 
     // Find-in-page
     Q_INVOKABLE void findText(const QString &text, bool backwards = false);

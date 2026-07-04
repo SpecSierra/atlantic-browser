@@ -911,15 +911,20 @@ bool dispatchTextToFocusedElement(WPEWebPage* page, const QString& text, int rep
         "    }"
         "  }"
         "  var el=document.activeElement;"
+        "  while(el && el.tagName==='IFRAME'){"
+        "    try{ var d=el.contentDocument; if(!d){ el=null; break; } el=d.activeElement; }catch(_e){ el=null; break; }"
+        "  }"
         "  if(!isEditable(el)) return false;"
+        "  var doc=el.ownerDocument||document;"
+        "  var win=doc.defaultView||window;"
         "  if(el.isContentEditable){"
-        "    var sel=window.getSelection();"
+        "    var sel=win.getSelection();"
         "    if(!sel || !sel.rangeCount) return false;"
-        "    if(document.queryCommandSupported && document.queryCommandSupported('insertText')){"
+        "    if(doc.queryCommandSupported && doc.queryCommandSupported('insertText')){"
         "      if(replaceBefore>0){"
-        "        for(var i=0;i<replaceBefore;i++) document.execCommand('delete', false, null);"
+        "        for(var i=0;i<replaceBefore;i++) doc.execCommand('delete', false, null);"
         "      }"
-        "      if(t.length) document.execCommand('insertText', false, t);"
+        "      if(t.length) doc.execCommand('insertText', false, t);"
         "      return true;"
         "    }"
         "    var r=sel.getRangeAt(0);"
@@ -929,7 +934,7 @@ bool dispatchTextToFocusedElement(WPEWebPage* page, const QString& text, int rep
         "    }"
         "    r.deleteContents();"
         "    if(t.length){"
-        "      var node=document.createTextNode(t);"
+        "      var node=doc.createTextNode(t);"
         "      r.insertNode(node);"
         "      r.setStartAfter(node);"
         "    }"
@@ -1000,12 +1005,17 @@ bool dispatchBackspaceToFocusedElement(WPEWebPage* page)
         "    }"
         "  }"
         "  var el=document.activeElement;"
+        "  while(el && el.tagName==='IFRAME'){"
+        "    try{ var d=el.contentDocument; if(!d){ el=null; break; } el=d.activeElement; }catch(_e){ el=null; break; }"
+        "  }"
         "  if(!isEditable(el)) return false;"
+        "  var doc=el.ownerDocument||document;"
+        "  var win=doc.defaultView||window;"
         "  if(el.isContentEditable){"
-        "    var sel=window.getSelection();"
+        "    var sel=win.getSelection();"
         "    if(!sel || !sel.rangeCount) return false;"
-        "    if(document.queryCommandSupported && document.queryCommandSupported('delete')){"
-        "      document.execCommand('delete', false, null);"
+        "    if(doc.queryCommandSupported && doc.queryCommandSupported('delete')){"
+        "      doc.execCommand('delete', false, null);"
         "      return true;"
         "    }"
         "    var r=sel.getRangeAt(0);"
@@ -2437,17 +2447,33 @@ void WPEWebPage::inputMethodEvent(QInputMethodEvent *event)
 
         if (!duplicateOfRecentSoftKey) {
             const int replaceBefore = m_lastPreeditText.size();
-            handled = dispatchTextToFocusedElement(this, committed, replaceBefore) || handled;
+            if (m_subframeEditableFocus) {
+                // JS dispatch can't reach a cross-origin subframe; type natively.
+                sendNativeTextViaKeys(committed, replaceBefore);
+                handled = true;
+            } else {
+                handled = dispatchTextToFocusedElement(this, committed, replaceBefore) || handled;
+            }
         }
 
         m_lastSoftKeyboardText.clear();
         m_lastSoftKeyboardTextTimeMs = 0;
         m_lastPreeditText.clear();
     } else if (!preedit.isEmpty()) {
-        handled = dispatchTextToFocusedElement(this, preedit, m_lastPreeditText.size()) || handled;
+        if (m_subframeEditableFocus) {
+            sendNativeTextViaKeys(preedit, m_lastPreeditText.size());
+            handled = true;
+        } else {
+            handled = dispatchTextToFocusedElement(this, preedit, m_lastPreeditText.size()) || handled;
+        }
         m_lastPreeditText = preedit;
     } else if (!m_lastPreeditText.isEmpty()) {
-        handled = dispatchTextToFocusedElement(this, QString(), m_lastPreeditText.size()) || handled;
+        if (m_subframeEditableFocus) {
+            sendNativeTextViaKeys(QString(), m_lastPreeditText.size());
+            handled = true;
+        } else {
+            handled = dispatchTextToFocusedElement(this, QString(), m_lastPreeditText.size()) || handled;
+        }
         m_lastPreeditText.clear();
     }
 
@@ -2458,8 +2484,13 @@ void WPEWebPage::inputMethodEvent(QInputMethodEvent *event)
             (nowMs - m_lastSoftBackspaceTimeMs >= 0) &&
             (nowMs - m_lastSoftBackspaceTimeMs < 200);
         if (!duplicateOfRecentSoftBackspace) {
-            for (int i = 0; i < deleteCount; ++i) {
-                handled = dispatchBackspaceToFocusedElement(this) || handled;
+            if (m_subframeEditableFocus) {
+                sendNativeTextViaKeys(QString(), deleteCount);
+                handled = true;
+            } else {
+                for (int i = 0; i < deleteCount; ++i) {
+                    handled = dispatchBackspaceToFocusedElement(this) || handled;
+                }
             }
         }
         m_lastSoftBackspaceTimeMs = 0;
@@ -2485,6 +2516,31 @@ void WPEWebPage::sendNativeEnterKey()
     WPEQtView::keyReleaseEvent(&release);
 }
 
+// Type text through the native WPE key path, one code point per press/release
+// (preceded by backspaces to retract a pending preedit). This is the only way
+// to reach an input focused inside a CROSS-ORIGIN iframe: the JS dispatch runs
+// in the main frame and cannot touch the subframe's document, while native key
+// events are routed by WebKit to the focused frame regardless of origin.
+void WPEWebPage::sendNativeTextViaKeys(const QString& text, int replaceBefore)
+{
+    for (int i = 0; i < replaceBefore; ++i) {
+        QKeyEvent press(QEvent::KeyPress, Qt::Key_Backspace, Qt::NoModifier);
+        WPEQtView::keyPressEvent(&press);
+        QKeyEvent release(QEvent::KeyRelease, Qt::Key_Backspace, Qt::NoModifier);
+        WPEQtView::keyReleaseEvent(&release);
+    }
+    for (int i = 0; i < text.size(); ++i) {
+        const bool pair = text.at(i).isHighSurrogate() && i + 1 < text.size();
+        const QString ch = text.mid(i, pair ? 2 : 1);
+        if (pair)
+            ++i;
+        QKeyEvent press(QEvent::KeyPress, 0, Qt::NoModifier, ch);
+        WPEQtView::keyPressEvent(&press);
+        QKeyEvent release(QEvent::KeyRelease, 0, Qt::NoModifier, ch);
+        WPEQtView::keyReleaseEvent(&release);
+    }
+}
+
 void WPEWebPage::keyPressEvent(QKeyEvent *event)
 {
     if (!event) {
@@ -2501,6 +2557,20 @@ void WPEWebPage::keyPressEvent(QKeyEvent *event)
             // search, newline in textareas).
             m_lastSoftEnterTimeMs = QDateTime::currentMSecsSinceEpoch();
             m_lastPreeditText.clear();
+            WPEQtView::keyPressEvent(event);
+            event->accept();
+            return;
+        }
+        if (m_subframeEditableFocus) {
+            // Cross-origin subframe focused: the JS dispatch can't reach it,
+            // but the native key path can — forward the event unmodified.
+            if (event->key() == Qt::Key_Backspace) {
+                m_lastSoftBackspaceTimeMs = QDateTime::currentMSecsSinceEpoch();
+            } else if (!event->text().isEmpty()) {
+                m_lastSoftKeyboardText = event->text();
+                m_lastSoftKeyboardTextTimeMs = QDateTime::currentMSecsSinceEpoch();
+                m_lastPreeditText.clear();
+            }
             WPEQtView::keyPressEvent(event);
             event->accept();
             return;
@@ -2528,8 +2598,9 @@ void WPEWebPage::keyReleaseEvent(QKeyEvent *event)
     }
 
     if (shouldInterceptSoftKeyboardEvent(event)) {
-        if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)
-            WPEQtView::keyReleaseEvent(event); // complete the native Enter press/release pair
+        if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter
+            || m_subframeEditableFocus)
+            WPEQtView::keyReleaseEvent(event); // complete the native press/release pair
         event->accept();
         return;
     }
