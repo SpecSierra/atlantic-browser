@@ -372,7 +372,9 @@ void onKeyboardProbeEvaluated(GObject* object, GAsyncResult* result, gpointer us
 
     if (editable) {
         inputMethod->show();
-    } else if (inputMethod->isVisible()) {
+    } else if (inputMethod->isVisible() && !data->page->subframeEditableFocused()) {
+        // The probe can't see into cross-origin subframes; while one reports
+        // an editable focused (editableFocus bridge), keep the keyboard up.
         inputMethod->hide();
     }
 }
@@ -525,11 +527,38 @@ static void onSelectionBridgeMessage(WebKitUserContentManager*, JSCValue* value,
     }
 }
 
+static void onEditableFocusMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
+{
+    WPEWebPage* page = static_cast<WPEWebPage*>(userData);
+    if (!page || !value)
+        return;
+
+    bool focused = false;
+    if (jsc_value_is_number(value))
+        focused = jsc_value_to_int32(value) != 0;
+    else if (jsc_value_is_boolean(value))
+        focused = jsc_value_to_boolean(value);
+
+    page->handleSubframeEditableFocus(focused);
+}
+
 static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page)
 {
     g_signal_connect(ucm, "script-message-received::selectionBridge",
                      G_CALLBACK(onSelectionBridgeMessage), page);
     webkit_user_content_manager_register_script_message_handler(ucm, "selectionBridge", nullptr);
+
+    g_signal_connect(ucm, "script-message-received::editableFocus",
+                     G_CALLBACK(onEditableFocusMessage), page);
+    webkit_user_content_manager_register_script_message_handler(ucm, "editableFocus", nullptr);
+
+    WebKitUserScript* editableFocusScript = webkit_user_script_new(
+        WPEUserScripts::kEditableFocusBridge,
+        WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+        nullptr, nullptr);
+    webkit_user_content_manager_add_script(ucm, editableFocusScript);
+    webkit_user_script_unref(editableFocusScript);
 
     const gchar* selectionBridgeJs = WPEUserScripts::kSelectionBridge;
 
@@ -2107,6 +2136,22 @@ void WPEWebPage::handleJsSelectionUpdate(const QString &text, qreal startX, qrea
     emit recvAsyncMessage(QStringLiteral("Content:SelectionRange"), data);
 }
 
+void WPEWebPage::handleSubframeEditableFocus(bool focused)
+{
+    m_subframeEditableFocus = focused;
+
+    if (!focused)
+        return;
+
+    // Only pop the keyboard for the visible tab — a background tab's iframe
+    // grabbing focus must not yank the keyboard from under the user.
+    if (!isVisible())
+        return;
+
+    if (QInputMethod* inputMethod = QGuiApplication::inputMethod())
+        inputMethod->show();
+}
+
 void WPEWebPage::moveSelectionStart(qreal cssX, qreal cssY)
 {
     const qreal displayScale = selectionDisplayScale();
@@ -2187,6 +2232,7 @@ void WPEWebPage::onLoadingChanged(WPEQtViewLoadRequest *loadRequest)
             }
         }
         clearFileChooserRequest(true);
+        m_subframeEditableFocus = false;
         m_domContentLoaded = false;
         m_loaded = false;
         m_favicon.clear();

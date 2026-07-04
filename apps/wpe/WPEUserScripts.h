@@ -274,6 +274,46 @@ static const char* const kSelectionBridge = R"JS(
 })();
 )JS";
 
+// Cross-origin iframes are invisible to the main-frame editable probe that
+// drives the virtual keyboard (contentDocument access throws), so inputs in
+// e.g. embedded payment/comment widgets never raised the keyboard. This
+// bridge runs inside every cross-origin subframe and reports editable
+// focus/blur to the UI process, which shows the keyboard and keeps the
+// probe from hiding it while the subframe field stays focused.
+static const char* const kEditableFocusBridge = R"JS(
+(function() {
+    if (window === window.top) return;
+    try { void window.top.document; return; } catch (e) {}
+    if (window.__wpeEditableFocusBridgeInstalled) return;
+    window.__wpeEditableFocusBridgeInstalled = true;
+    function isEditable(e) {
+        if (!e) return false;
+        if (e.isContentEditable) return true;
+        var tag = (e.tagName || '').toLowerCase();
+        if (tag === 'textarea') return !e.readOnly && !e.disabled;
+        if (tag === 'input') {
+            var t = (e.type || 'text').toLowerCase();
+            var blocked = {button:1,submit:1,reset:1,checkbox:1,radio:1,file:1,image:1,range:1,color:1,hidden:1};
+            return !blocked[t] && !e.readOnly && !e.disabled;
+        }
+        return false;
+    }
+    var focused = false;
+    function post(v) {
+        if (focused === v) return;
+        focused = v;
+        try { window.webkit.messageHandlers.editableFocus.postMessage(v ? 1 : 0); } catch (e) {}
+    }
+    document.addEventListener('focusin', function(ev) {
+        if (isEditable(ev.target)) post(true);
+    }, true);
+    document.addEventListener('focusout', function(ev) {
+        if (isEditable(ev.target)) post(false);
+    }, true);
+    window.addEventListener('pagehide', function() { post(false); }, true);
+})();
+)JS";
+
 static const char* const kPerfCss = R"JS(
 (function() {
     if (document.getElementById('__wpe_perf_style')) return;

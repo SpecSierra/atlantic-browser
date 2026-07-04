@@ -247,6 +247,10 @@ public:
     Q_INVOKABLE void handleJsSelectionClear();
     Q_INVOKABLE void handleJsSelectionUpdate(const QString &text, qreal startX, qreal startY, qreal endX, qreal endY);
 
+    // Editable focus reported from cross-origin subframes (editableFocus bridge)
+    void handleSubframeEditableFocus(bool focused);
+    bool subframeEditableFocused() const { return m_subframeEditableFocus; }
+
     // Find-in-page
     Q_INVOKABLE void findText(const QString &text, bool backwards = false);
     Q_INVOKABLE void findFinish();
@@ -385,6 +389,7 @@ private:
     int m_tabId = 0;
     bool m_painted = false;
     bool m_domContentLoaded = false;
+    bool m_subframeEditableFocus = false;
     bool m_chrome = true;
     bool m_forcedChrome = false;
     bool m_fullscreen = false;
