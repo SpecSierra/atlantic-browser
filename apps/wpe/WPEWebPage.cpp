@@ -2176,6 +2176,16 @@ void WPEWebPage::onLoadingChanged(WPEQtViewLoadRequest *loadRequest)
 
     switch (loadRequest->status()) {
     case WPEQtView::LoadStartedStatus:
+        // A top-level navigation defocuses whatever field the user was typing
+        // in — dismiss the virtual keyboard like other mobile browsers do
+        // (e.g. after submitting a search). Only for the visible tab, so a
+        // background tab load doesn't yank the keyboard mid-typing.
+        if (isVisible()) {
+            if (QInputMethod* inputMethod = QGuiApplication::inputMethod()) {
+                if (inputMethod->isVisible())
+                    inputMethod->hide();
+            }
+        }
         clearFileChooserRequest(true);
         m_domContentLoaded = false;
         m_loaded = false;
