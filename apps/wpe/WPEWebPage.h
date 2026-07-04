@@ -354,6 +354,7 @@ protected:
     void itemChange(ItemChange change, const ItemChangeData &value) override;
     void keyPressEvent(QKeyEvent *event) override;
     void keyReleaseEvent(QKeyEvent *event) override;
+    void sendNativeEnterKey();
     void mousePressEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
     void hoverEnterEvent(QHoverEvent *event) override;
@@ -446,6 +447,7 @@ private:
     QString m_lastPreeditText;
     qint64 m_lastSoftKeyboardTextTimeMs = 0;
     qint64 m_lastSoftBackspaceTimeMs = 0;
+    qint64 m_lastSoftEnterTimeMs = 0;
 
     bool m_selectMenuActive = false;
     QStringList m_selectMenuOptions;

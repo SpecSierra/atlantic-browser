@@ -2355,7 +2355,24 @@ void WPEWebPage::inputMethodEvent(QInputMethodEvent *event)
     bool handled = false;
     const QString committed = event->commitString();
     const QString preedit = event->preeditString();
-    if (!committed.isEmpty()) {
+    const bool committedIsNewlineOnly = !committed.isEmpty()
+        && (committed == QLatin1String("\n") || committed == QLatin1String("\r") || committed == QLatin1String("\r\n"));
+    if (committedIsNewlineOnly) {
+        // Maliit can deliver the Enter key as an IM commit of a bare newline
+        // (instead of, or in addition to, a Key_Return event). Route it through
+        // the Enter dispatcher, skipping duplicates of a just-handled key event.
+        const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+        const bool duplicateOfRecentEnter =
+            (nowMs - m_lastSoftEnterTimeMs >= 0) && (nowMs - m_lastSoftEnterTimeMs < 200);
+        if (!duplicateOfRecentEnter) {
+            sendNativeEnterKey();
+            handled = true;
+            m_lastSoftEnterTimeMs = nowMs;
+        }
+        m_lastSoftKeyboardText.clear();
+        m_lastSoftKeyboardTextTimeMs = 0;
+        m_lastPreeditText.clear();
+    } else if (!committed.isEmpty()) {
         const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
         const bool duplicateOfRecentSoftKey =
             (committed == m_lastSoftKeyboardText) &&
@@ -2400,6 +2417,18 @@ void WPEWebPage::inputMethodEvent(QInputMethodEvent *event)
     QQuickItem::inputMethodEvent(event);
 }
 
+// Synthesize a native Enter press/release through the WPE key path. Used when
+// Maliit delivers Enter as an IM commit of a bare newline (no QKeyEvent): only
+// the native path produces trusted key events and WebKit's real default action
+// (implicit form submission / newline).
+void WPEWebPage::sendNativeEnterKey()
+{
+    QKeyEvent press(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r"));
+    WPEQtView::keyPressEvent(&press);
+    QKeyEvent release(QEvent::KeyRelease, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r"));
+    WPEQtView::keyReleaseEvent(&release);
+}
+
 void WPEWebPage::keyPressEvent(QKeyEvent *event)
 {
     if (!event) {
@@ -2407,6 +2436,19 @@ void WPEWebPage::keyPressEvent(QKeyEvent *event)
     }
 
     if (shouldInterceptSoftKeyboardEvent(event)) {
+        if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+            // The VKB Enter arrives with text "\n"/"\r", which the generic soft-key
+            // path would insert as a literal character — a no-op in single-line
+            // inputs, and sites ignore synthetic (untrusted) JS key events. Forward
+            // it through the native WPE key path instead so WebKit fires trusted
+            // keydown/keypress and performs the real default action (form submit /
+            // search, newline in textareas).
+            m_lastSoftEnterTimeMs = QDateTime::currentMSecsSinceEpoch();
+            m_lastPreeditText.clear();
+            WPEQtView::keyPressEvent(event);
+            event->accept();
+            return;
+        }
         if (event->key() == Qt::Key_Backspace) {
             dispatchBackspaceToFocusedElement(this);
             m_lastSoftBackspaceTimeMs = QDateTime::currentMSecsSinceEpoch();
@@ -2430,6 +2472,8 @@ void WPEWebPage::keyReleaseEvent(QKeyEvent *event)
     }
 
     if (shouldInterceptSoftKeyboardEvent(event)) {
+        if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)
+            WPEQtView::keyReleaseEvent(event); // complete the native Enter press/release pair
         event->accept();
         return;
     }
