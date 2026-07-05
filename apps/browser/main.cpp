@@ -235,11 +235,12 @@ static void configureBrowserProcessEnvironment()
     // Upstream's friction=4 (desktop trackpad tuning) makes a hard touch flick coast
     // only ~half a screen then stop dead — felt as "no momentum". Total coast =
     // velocity/friction and fling time-constant = 1/friction, so a lower value gives
-    // the longer, smoother glide phone flicking expects. 3.0 was dialled in on-device
-    // (a bit grippier / less coast than the earlier 2.0; 1.5 felt slightly too
-    // slippery). Tunable on-device via WEBKIT_KINETIC_DECEL_FRICTION.
+    // the longer, smoother glide phone flicking expects — but after living with it,
+    // upstream's 4.0 was dialled back in on-device (3.0/3.5 coasted too far; the
+    // earlier 2.0 and 1.5 were slipperier still). Kept env-overridable rather than
+    // reverting the patch so it stays tunable via WEBKIT_KINETIC_DECEL_FRICTION.
     if (qgetenv("WEBKIT_KINETIC_DECEL_FRICTION").isEmpty())
-        qputenv("WEBKIT_KINETIC_DECEL_FRICTION", "3.0");
+        qputenv("WEBKIT_KINETIC_DECEL_FRICTION", "4.0");
     if (qgetenv("LIBGL_DRIVERS_PATH").isEmpty()) {
         const QByteArray driverPath = firstExistingDirectory({
             QString::fromUtf8(WPERuntimePaths::kLibGLDriversDir),
