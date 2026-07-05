@@ -1378,6 +1378,20 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                 }
             }
             g_signal_connect(wv, "decide-policy", G_CALLBACK(onDecidePolicy), this);
+            // TLS certificate failures (self-signed, expired, ...): WebKit blocks the
+            // load. Surface the failure to QML so the user can accept the certificate
+            // for this host and retry. Return FALSE so "load-failed" still fires and
+            // the normal failed-load path resets the loading state.
+            g_signal_connect(
+                wv, "load-failed-with-tls-errors",
+                G_CALLBACK(+[](WebKitWebView*, const gchar* failingURI, GTlsCertificate* cert,
+                               GTlsCertificateFlags flags, gpointer userData) -> gboolean {
+                    auto *page = static_cast<WPEWebPage*>(userData);
+                    if (page)
+                        page->handleTlsErrorLoadFailed(QString::fromUtf8(failingURI), cert, (unsigned)flags);
+                    return FALSE;
+                }),
+                this);
             {
                 static bool engineInitialized = false;
                 if (!engineInitialized) {
@@ -2265,6 +2279,17 @@ void WPEWebPage::onLoadingChanged(WPEQtViewLoadRequest *loadRequest)
         // Reset security on new navigation
         static_cast<WPESecurityInfo*>(m_security)->reset();
         emit securityChanged();
+        // Dismiss a pending TLS-error banner on new navigation
+        if (m_tlsErrorPending) {
+            m_tlsErrorPending = false;
+            m_tlsErrorHost.clear();
+            m_tlsErrorMessage.clear();
+            if (m_tlsErrorCert) {
+                g_object_unref(m_tlsErrorCert);
+                m_tlsErrorCert = nullptr;
+            }
+            emit tlsErrorChanged();
+        }
         // Reset visual pinch zoom so new page starts at 1:1
         if (!qFuzzyCompare(m_visualScale, 1.0)) {
             m_visualScale = 1.0;
@@ -2983,6 +3008,44 @@ void WPEWebPage::findFinish()
 }
 
 // --- TLS / Security info ---
+
+void WPEWebPage::handleTlsErrorLoadFailed(const QString &failingUri, void *certificate, unsigned flags)
+{
+    if (m_tlsErrorCert)
+        g_object_unref(m_tlsErrorCert);
+    m_tlsErrorCert = certificate ? g_object_ref(certificate) : nullptr;
+    m_tlsErrorHost = QUrl(failingUri).host();
+
+    QStringList errors;
+    if (flags & G_TLS_CERTIFICATE_UNKNOWN_CA) errors << QStringLiteral("the certificate is not signed by a trusted authority (self-signed?)");
+    if (flags & G_TLS_CERTIFICATE_BAD_IDENTITY) errors << QStringLiteral("the certificate does not match this site");
+    if (flags & G_TLS_CERTIFICATE_NOT_ACTIVATED) errors << QStringLiteral("the certificate is not yet valid");
+    if (flags & G_TLS_CERTIFICATE_EXPIRED) errors << QStringLiteral("the certificate has expired");
+    if (flags & G_TLS_CERTIFICATE_REVOKED) errors << QStringLiteral("the certificate has been revoked");
+    if (flags & G_TLS_CERTIFICATE_INSECURE) errors << QStringLiteral("the certificate uses an insecure algorithm");
+    if (flags & G_TLS_CERTIFICATE_GENERIC_ERROR) errors << QStringLiteral("the certificate could not be validated");
+    m_tlsErrorMessage = errors.join(QStringLiteral("; "));
+
+    m_tlsErrorPending = true;
+    qWarning("[WPE-SEC] TLS error for host '%s': %s",
+             m_tlsErrorHost.toUtf8().constData(), m_tlsErrorMessage.toUtf8().constData());
+    emit tlsErrorChanged();
+}
+
+void WPEWebPage::acceptTlsCertificate()
+{
+    WebKitWebView *wv = webView();
+    if (!wv || !m_tlsErrorPending || !m_tlsErrorCert || m_tlsErrorHost.isEmpty())
+        return;
+    if (WebKitNetworkSession *session = webkit_web_view_get_network_session(wv)) {
+        webkit_network_session_allow_tls_certificate_for_host(
+            session, G_TLS_CERTIFICATE(m_tlsErrorCert), m_tlsErrorHost.toUtf8().constData());
+        qWarning("[WPE-SEC] user accepted certificate for host '%s' — reloading",
+                 m_tlsErrorHost.toUtf8().constData());
+        webkit_web_view_reload(wv);
+    }
+    // Pending state (and the cert ref) is cleared by the LoadStarted reset.
+}
 
 void WPEWebPage::updateSecurityInfo()
 {

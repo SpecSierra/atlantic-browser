@@ -189,8 +189,12 @@ Column {
             id: padlockIcon
 
             readonly property var sec: webView.contentItem ? webView.contentItem.security : null
+            // https with certificate errors (self-signed, expired, bad identity, ...)
             readonly property bool danger: sec && sec.validState && !sec.allGood
-            readonly property bool active: sec && sec.validState && !findInPageActive
+            // plain http: no TLS at all
+            readonly property bool insecure: !webView.loading && !(sec && sec.validState)
+                    && webView.url.toString().indexOf("http://") === 0
+            readonly property bool active: ((sec && sec.validState) || insecure) && !findInPageActive
                     && !(webView.url.indexOf("about:") === 0)
                     && (!webView.contentItem || !webView.contentItem.textSelectionActive)
             property real glow
@@ -204,8 +208,9 @@ Column {
                 Behavior on opacity { FadeAnimation {} }
 
                 icon.source: padlockIcon.danger ? "image://theme/icon-s-filled-warning"
-                                                : "image://theme/icon-s-outline-secure"
-                icon.color: padlockIcon.danger
+                             : padlockIcon.insecure ? "image://theme/icon-s-warning"
+                                                    : "image://theme/icon-s-outline-secure"
+                icon.color: (padlockIcon.danger || padlockIcon.insecure)
                     ? Qt.tint(Theme.primaryColor,
                               Qt.rgba(Theme.errorColor.r, Theme.errorColor.g,
                                       Theme.errorColor.b, padlockIcon.glow))
@@ -236,11 +241,12 @@ Column {
             }
 
             onDangerChanged: warn()
+            onInsecureChanged: if (insecure) warn()
 
             Connections {
                 target: webView
                 onLoadingChanged: {
-                    if (!webView.loading && padlockIcon.danger) {
+                    if (!webView.loading && (padlockIcon.danger || padlockIcon.insecure)) {
                         padlockIcon.warn()
                     }
                 }

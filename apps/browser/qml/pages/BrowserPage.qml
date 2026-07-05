@@ -598,6 +598,9 @@ Page {
     // extracted into their own components (kept this page from sprawling).
     Browser.CrashBanner { webView: webView }
 
+    // TLS certificate failure banner — accept-and-retry for self-signed sites.
+    Browser.TlsErrorBanner { webView: webView }
+
     Browser.SelectMenuOverlay { webView: webView }
 
     Browser.ImageActionPanel { webView: webView }

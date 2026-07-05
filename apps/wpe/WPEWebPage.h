@@ -123,6 +123,12 @@ class WPEWebPage : public WPEQtView
     // Security / TLS certificate info
     Q_PROPERTY(QObject* security READ security NOTIFY securityChanged FINAL)
 
+    // TLS certificate failure (self-signed, expired, ...) — the load is blocked;
+    // QML shows a banner and may call acceptTlsCertificate() to proceed.
+    Q_PROPERTY(bool tlsErrorPending READ tlsErrorPending NOTIFY tlsErrorChanged FINAL)
+    Q_PROPERTY(QString tlsErrorHost READ tlsErrorHost NOTIFY tlsErrorChanged FINAL)
+    Q_PROPERTY(QString tlsErrorMessage READ tlsErrorMessage NOTIFY tlsErrorChanged FINAL)
+
     // Find-in-page
     Q_PROPERTY(bool findInPageHasResult READ findInPageHasResult NOTIFY findInPageHasResultChanged FINAL)
 
@@ -261,6 +267,13 @@ public:
     // Security
     QObject* security() const { return m_security; }
 
+    // TLS certificate failure
+    bool tlsErrorPending() const { return m_tlsErrorPending; }
+    QString tlsErrorHost() const { return m_tlsErrorHost; }
+    QString tlsErrorMessage() const { return m_tlsErrorMessage; }
+    Q_INVOKABLE void acceptTlsCertificate();
+    void handleTlsErrorLoadFailed(const QString &failingUri, void *certificate, unsigned flags);
+
     // Save page as PDF
 
     // HTML <select> dropdown
@@ -333,6 +346,7 @@ signals:
     void selectionHandlesUpdated();
 
     void securityChanged();
+    void tlsErrorChanged();
     void findInPageHasResultChanged();
 
     void recvAsyncMessage(const QString &message, const QVariant &data);
@@ -464,6 +478,12 @@ private:
     QStringList m_fileChooserNameFilters;
     bool m_fileChooserSelectMultiple = false;
     bool m_crashed = false;
+
+    // TLS certificate failure state (cert kept alive until accepted or next load)
+    bool m_tlsErrorPending = false;
+    QString m_tlsErrorHost;
+    QString m_tlsErrorMessage;
+    void *m_tlsErrorCert = nullptr; // GTlsCertificate*, ref-held
     // Guards the one-shot WebProcess auto-reload (see web-process-terminated
     // handler). Set when an auto-reload is issued; cleared on a successful load
     // so a later, unrelated crash can recover once too. Prevents a reload loop
