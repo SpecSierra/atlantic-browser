@@ -46,6 +46,19 @@ Page {
     property alias inputRegion: inputRegion
 
     ConfigurationValue {
+        id: homePageConf
+        key: "/apps/atlantic-browser/settings/home_page"
+        defaultValue: "http://jolla.com"
+        // WebUtils.homePage used to read this key via MDConfItem, a no-op
+        // stub in this build — so a custom home page never took effect and
+        // the browser always opened jolla.com. This binding is the single
+        // dconf source: Component.onCompleted restores it on startup,
+        // onValueChanged covers the settings-page edit.
+        onValueChanged: WebUtils.setHomePage(value)
+        Component.onCompleted: WebUtils.setHomePage(value)
+    }
+
+    ConfigurationValue {
         id: adBlockEngine
         key: "/apps/atlantic-browser/settings/adblock_enabled"
         defaultValue: true

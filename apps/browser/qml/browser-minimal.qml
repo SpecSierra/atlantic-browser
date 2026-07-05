@@ -29,6 +29,15 @@ Rectangle {
         defaultValue: "Google"
     }
 
+    ConfigurationValue {
+        key: "/apps/atlantic-browser/settings/home_page"
+        defaultValue: "http://jolla.com"
+        // C++ can't read dconf (MDConfItem is a no-op stub); push the
+        // persisted home page into WebUtils, same as BrowserPage.qml.
+        onValueChanged: WebUtils.setHomePage(value)
+        Component.onCompleted: WebUtils.setHomePage(value)
+    }
+
     function loadAddress(text) {
         var target = normalizedInput(text)
         if (!target.length) {

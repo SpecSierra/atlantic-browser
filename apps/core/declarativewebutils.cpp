@@ -29,9 +29,6 @@
 #include <QtGui/QGuiApplication>
 #include <QtGui/QScreen>
 
-#include <MDConfItem>
-
-
 #include <math.h>
 #include "declarativewebutils.h"
 #include "browserpaths.h"
@@ -48,13 +45,10 @@ static bool fileExists(QString fileName)
 
 DeclarativeWebUtils::DeclarativeWebUtils()
     : QObject()
-    , m_homePage(new MDConfItem("/apps/atlantic-browser/settings/home_page", this))
+    , m_homePage(QStringLiteral("http://jolla.com"))
 {
     QString path = BrowserPaths::dataLocation() + QStringLiteral("/.firstUseDone");
     m_firstUseDone = fileExists(path);
-
-    connect(m_homePage, &MDConfItem::valueChanged,
-            this, &DeclarativeWebUtils::homePageChanged);
 }
 
 DeclarativeWebUtils::~DeclarativeWebUtils()
@@ -132,7 +126,19 @@ bool DeclarativeWebUtils::firstUseDone() const
 
 QString DeclarativeWebUtils::homePage() const
 {
-    return m_homePage->value("http://jolla.com").value<QString>();
+    return m_homePage;
+}
+
+void DeclarativeWebUtils::setHomePage(const QString &homePage)
+{
+    // The persisted value lives in dconf, but MDConfItem is a no-op stub in
+    // this build (value() always returns the default — the setting appeared
+    // to stick but the browser kept opening jolla.com). BrowserPage.qml's
+    // ConfigurationValue is the single dconf source and pushes it here.
+    if (m_homePage == homePage)
+        return;
+    m_homePage = homePage;
+    emit homePageChanged();
 }
 
 DeclarativeWebUtils *DeclarativeWebUtils::instance()

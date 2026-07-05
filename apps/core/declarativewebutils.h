@@ -17,7 +17,6 @@
 #include <QUrl>
 #include <QColor>
 #include <QVariant>
-class MDConfItem;
 
 class DeclarativeWebUtils : public QObject
 {
@@ -35,6 +34,9 @@ public:
 
     Q_INVOKABLE QString displayableUrl(const QString &fullUrl) const;
     Q_INVOKABLE QString pageName(const QString &fullUrl) const;
+    // Pushed from BrowserPage.qml's home_page ConfigurationValue — C++ can't
+    // read dconf itself (MDConfItem is a no-op stub in this build).
+    Q_INVOKABLE void setHomePage(const QString &homePage);
 
 public slots:
     QString homePage() const;
@@ -64,7 +66,7 @@ private:
     ~DeclarativeWebUtils();
     void setRenderingPreferences();
 
-    MDConfItem *m_homePage;
+    QString m_homePage;
     bool m_firstUseDone;
 };
 #endif // DECLARATIVEWEBUTILS_H
