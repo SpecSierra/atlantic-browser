@@ -2282,6 +2282,7 @@ void WPEWebPage::onLoadingChanged(WPEQtViewLoadRequest *loadRequest)
         // Dismiss a pending TLS-error banner on new navigation
         if (m_tlsErrorPending) {
             m_tlsErrorPending = false;
+            m_tlsErrorFailingUri.clear();
             m_tlsErrorHost.clear();
             m_tlsErrorMessage.clear();
             if (m_tlsErrorCert) {
@@ -3014,6 +3015,7 @@ void WPEWebPage::handleTlsErrorLoadFailed(const QString &failingUri, void *certi
     if (m_tlsErrorCert)
         g_object_unref(m_tlsErrorCert);
     m_tlsErrorCert = certificate ? g_object_ref(certificate) : nullptr;
+    m_tlsErrorFailingUri = failingUri;
     m_tlsErrorHost = QUrl(failingUri).host();
 
     QStringList errors;
@@ -3040,9 +3042,12 @@ void WPEWebPage::acceptTlsCertificate()
     if (WebKitNetworkSession *session = webkit_web_view_get_network_session(wv)) {
         webkit_network_session_allow_tls_certificate_for_host(
             session, G_TLS_CERTIFICATE(m_tlsErrorCert), m_tlsErrorHost.toUtf8().constData());
-        qWarning("[WPE-SEC] user accepted certificate for host '%s' — reloading",
-                 m_tlsErrorHost.toUtf8().constData());
-        webkit_web_view_reload(wv);
+        qWarning("[WPE-SEC] user accepted certificate for host '%s' — retrying %s",
+                 m_tlsErrorHost.toUtf8().constData(), m_tlsErrorFailingUri.toUtf8().constData());
+        // NOT webkit_web_view_reload(): the TLS failure aborted the provisional
+        // load, so there is no committed page to reload — reload() is a no-op
+        // (device-proven: 34 accepts, 0 retries). Re-request the failing URI.
+        webkit_web_view_load_uri(wv, m_tlsErrorFailingUri.toUtf8().constData());
     }
     // Pending state (and the cert ref) is cleared by the LoadStarted reset.
 }

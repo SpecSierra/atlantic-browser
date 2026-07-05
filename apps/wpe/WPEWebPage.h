@@ -481,6 +481,7 @@ private:
 
     // TLS certificate failure state (cert kept alive until accepted or next load)
     bool m_tlsErrorPending = false;
+    QString m_tlsErrorFailingUri;
     QString m_tlsErrorHost;
     QString m_tlsErrorMessage;
     void *m_tlsErrorCert = nullptr; // GTlsCertificate*, ref-held
