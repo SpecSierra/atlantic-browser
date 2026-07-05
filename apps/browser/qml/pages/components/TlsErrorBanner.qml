@@ -15,7 +15,17 @@ Rectangle {
     property var webView
     readonly property var page: webView ? webView.contentItem : null
 
-    visible: page !== null && page.tlsErrorPending
+    // Local dismiss: hides the banner without accepting; resets on the next
+    // TLS failure (tlsErrorPending toggles via a new load) or tab switch.
+    property bool dismissed
+
+    onPageChanged: dismissed = false
+    Connections {
+        target: tlsErrorBanner.page
+        onTlsErrorChanged: tlsErrorBanner.dismissed = false
+    }
+
+    visible: page !== null && page.tlsErrorPending && !dismissed
     anchors {
         left: parent.left
         right: parent.right
@@ -62,6 +72,11 @@ Rectangle {
             anchors.horizontalCenter: parent.horizontalCenter
             text: qsTr("Accept and continue anyway")
             onClicked: if (tlsErrorBanner.page) tlsErrorBanner.page.acceptTlsCertificate()
+        }
+        Button {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: qsTr("Dismiss")
+            onClicked: tlsErrorBanner.dismissed = true
         }
     }
 }
