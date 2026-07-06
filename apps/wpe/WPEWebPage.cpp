@@ -80,6 +80,12 @@ bool envVarEnabled(const QByteArray &value)
 //  - Version/26.0: Safari's feature-version token, matching the WebKit 2.52.x
 //    era — this is what "is this a modern Safari?" sniffers read.
 //  - Mobile ... Mobile Safari: standard mobile-detection tokens.
+//  - Android 14 in the platform slot: many mobile-detection sniffers only
+//    match the literal "Android" or "iPhone" tokens ("Mobile" alone is not
+//    enough) and serve the desktop site otherwise. We cannot claim both
+//    platforms in one string, so claim Android there while the Safari-shaped
+//    tail (Version/x ... Mobile Safari) keeps satisfying iPhone-style
+//    sniffers — the "pretend to be everyone" chimera.
 //  - SailfishOS in the platform comment slot: honest, ignored by sniffers.
 //  - Atlantic/1.0 placed Chrome-style before "Mobile Safari" (the
 //    "<Brand>/<ver> Mobile Safari/..." shape every UA parser handles).
@@ -102,7 +108,7 @@ QString atlanticUserAgent(bool desktopMode)
             "Version/26.0 Atlantic/1.0 Safari/605.1.15");
     }
     return QStringLiteral(
-        "Mozilla/5.0 (Linux; Mobile; SailfishOS 5.1) "
+        "Mozilla/5.0 (Linux; Android 14; Mobile; SailfishOS 5.1) "
         "AppleWebKit/605.1.15 (KHTML, like Gecko) "
         "Version/26.0 Atlantic/1.0 Mobile Safari/605.1.15");
 }
