@@ -129,6 +129,12 @@ class WPEWebPage : public WPEQtView
     Q_PROPERTY(QString tlsErrorHost READ tlsErrorHost NOTIFY tlsErrorChanged FINAL)
     Q_PROPERTY(QString tlsErrorMessage READ tlsErrorMessage NOTIFY tlsErrorChanged FINAL)
 
+    // Geolocation permission request — QML shows a banner and resolves it
+    // via resolveGeoPermission(). Decisions are remembered per host for the
+    // session.
+    Q_PROPERTY(bool geoPermissionPending READ geoPermissionPending NOTIFY geoPermissionChanged FINAL)
+    Q_PROPERTY(QString geoPermissionHost READ geoPermissionHost NOTIFY geoPermissionChanged FINAL)
+
     // Find-in-page
     Q_PROPERTY(bool findInPageHasResult READ findInPageHasResult NOTIFY findInPageHasResultChanged FINAL)
 
@@ -274,6 +280,12 @@ public:
     Q_INVOKABLE void acceptTlsCertificate();
     void handleTlsErrorLoadFailed(const QString &failingUri, void *certificate, unsigned flags);
 
+    // Geolocation permission prompt
+    bool geoPermissionPending() const { return m_pendingGeoPermission != nullptr; }
+    QString geoPermissionHost() const { return m_geoPermissionHost; }
+    Q_INVOKABLE void resolveGeoPermission(bool allow);
+    void handleGeoPermissionRequest(void *request); // WebKitPermissionRequest*, takes a ref
+
     // Save page as PDF
 
     // HTML <select> dropdown
@@ -347,6 +359,7 @@ signals:
 
     void securityChanged();
     void tlsErrorChanged();
+    void geoPermissionChanged();
     void findInPageHasResultChanged();
 
     void recvAsyncMessage(const QString &message, const QVariant &data);
@@ -485,6 +498,10 @@ private:
     QString m_tlsErrorHost;
     QString m_tlsErrorMessage;
     void *m_tlsErrorCert = nullptr; // GTlsCertificate*, ref-held
+    // Geolocation permission prompt state
+    void *m_pendingGeoPermission = nullptr; // WebKitPermissionRequest*, ref-held
+    QString m_geoPermissionHost;
+    QHash<QString, bool> m_geoPermissionDecisions; // per-host, session-only
     // Guards the one-shot WebProcess auto-reload (see web-process-terminated
     // handler). Set when an auto-reload is issued; cleared on a successful load
     // so a later, unrelated crash can recover once too. Prevents a reload loop

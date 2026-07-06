@@ -1378,6 +1378,17 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                 }
             }
             g_signal_connect(wv, "decide-policy", G_CALLBACK(onDecidePolicy), this);
+            // Geolocation permission: prompt the user via a QML banner (the
+            // qt5 plugin auto-allows camera/mic but leaves geolocation to us).
+            g_signal_connect(
+                wv, "permission-request",
+                G_CALLBACK(+[](WebKitWebView*, WebKitPermissionRequest* request, gpointer userData) -> gboolean {
+                    if (!WEBKIT_IS_GEOLOCATION_PERMISSION_REQUEST(request))
+                        return FALSE;
+                    static_cast<WPEWebPage*>(userData)->handleGeoPermissionRequest(request);
+                    return TRUE;
+                }),
+                this);
             // TLS certificate failures (self-signed, expired, ...): WebKit blocks the
             // load. Surface the failure to QML so the user can accept the certificate
             // for this host and retry. Return FALSE so "load-failed" still fires and
@@ -1514,6 +1525,11 @@ const QList<WPEWebPage *> &WPEWebPage::liveInstances()
 
 WPEWebPage::~WPEWebPage()
 {
+    if (m_pendingGeoPermission) {
+        webkit_permission_request_deny(WEBKIT_PERMISSION_REQUEST(m_pendingGeoPermission));
+        g_object_unref(m_pendingGeoPermission);
+        m_pendingGeoPermission = nullptr;
+    }
     liveWebPages().removeAll(this);
     clearFileChooserRequest(true);
 }
@@ -3050,6 +3066,52 @@ void WPEWebPage::acceptTlsCertificate()
         webkit_web_view_load_uri(wv, m_tlsErrorFailingUri.toUtf8().constData());
     }
     // Pending state (and the cert ref) is cleared by the LoadStarted reset.
+}
+
+void WPEWebPage::handleGeoPermissionRequest(void *request)
+{
+    const QString host = url().host();
+
+    // Session-remembered decision for this host: resolve silently.
+    auto it = m_geoPermissionDecisions.constFind(host);
+    if (it != m_geoPermissionDecisions.constEnd()) {
+        auto *req = WEBKIT_PERMISSION_REQUEST(request);
+        if (it.value())
+            webkit_permission_request_allow(req);
+        else
+            webkit_permission_request_deny(req);
+        return;
+    }
+
+    // A second request while one is pending (e.g. another frame): deny the
+    // newcomer rather than dropping the one the user is looking at.
+    if (m_pendingGeoPermission) {
+        webkit_permission_request_deny(WEBKIT_PERMISSION_REQUEST(request));
+        return;
+    }
+
+    m_pendingGeoPermission = g_object_ref(request);
+    m_geoPermissionHost = host;
+    qWarning("[WPE-GEO] geolocation permission requested by '%s'", host.toUtf8().constData());
+    emit geoPermissionChanged();
+}
+
+void WPEWebPage::resolveGeoPermission(bool allow)
+{
+    if (!m_pendingGeoPermission)
+        return;
+    auto *req = WEBKIT_PERMISSION_REQUEST(m_pendingGeoPermission);
+    if (allow)
+        webkit_permission_request_allow(req);
+    else
+        webkit_permission_request_deny(req);
+    m_geoPermissionDecisions.insert(m_geoPermissionHost, allow);
+    qWarning("[WPE-GEO] geolocation %s for '%s'", allow ? "allowed" : "denied",
+             m_geoPermissionHost.toUtf8().constData());
+    g_object_unref(m_pendingGeoPermission);
+    m_pendingGeoPermission = nullptr;
+    m_geoPermissionHost.clear();
+    emit geoPermissionChanged();
 }
 
 void WPEWebPage::updateSecurityInfo()
