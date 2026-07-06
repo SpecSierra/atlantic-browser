@@ -127,348 +127,424 @@ Column {
         }
     }
 
-    Row {
-        id: toolsRow
+    // Horizontal swipe on the toolbar navigates history: swipe right = back,
+    // swipe left = forward. drag.filterChildren keeps the buttons fully
+    // functional — taps and vertical overlay drags pass through, the swipe
+    // only steals the grab once the finger travels horizontally. The row
+    // follows the finger and springs back on release; an arrow fades in at
+    // the edge and highlights once the swipe is past the trigger distance.
+    MouseArea {
+        id: navSwipeArea
 
-        property int biggestCorner: Math.max(Screen.topLeftCorner.radius,
-                                             Screen.topRightCorner.radius,
-                                             Screen.bottomLeftCorner.radius,
-                                             Screen.bottomRightCorner.radius)
-        // items have some padding of their own so don't mind a little overlap with the rounding
-        x: Math.round(biggestCorner * 0.4)
-        width: parent.width - 2*x
-        height: browserPage.isPortrait ? scaledPortraitHeight : scaledLandscapeHeight
+        readonly property real triggerDistance: width / 6
+        readonly property bool backArmed: navDragTarget.x > triggerDistance && webView.canGoBack
+        readonly property bool forwardArmed: navDragTarget.x < -triggerDistance && webView.canGoForward
 
-        Shared.ExpandingButton {
-            id: backIcon
+        width: parent.width
+        height: toolsRow.height
+        enabled: overlayAnimator.atBottom && !findInPageActive
+                 && !certOverlayActive && !secondaryToolsActive
 
-            readonly property bool isHome: !webView.canGoBack
-                                           && !(webView.contentItem && webView.contentItem.parentId > 0)
-                                           && !!webView.contentItem
+        drag.target: navDragTarget
+        drag.axis: Drag.XAxis
+        drag.filterChildren: true
+        // Keep a short leash in directions with no history to go to.
+        drag.minimumX: webView.canGoForward ? -width / 3 : -Theme.paddingLarge
+        drag.maximumX: webView.canGoBack ? width / 3 : Theme.paddingLarge
 
-            height: parent.height
-            expandedWidth: toolBarRow.iconWidth
-            icon {
-                // Native home glyph is a wide house; render it a bit narrower.
-                width: backIcon.isHome ? Math.round(Theme.iconSizeMedium * 0.9) : Theme.iconSizeMedium
-                height: Theme.iconSizeMedium
-                source: {
+        drag.onActiveChanged: {
+            if (drag.active) {
+                return
+            }
+            if (backArmed) {
+                webView.goBack()
+            } else if (forwardArmed) {
+                webView.goForward()
+            }
+            navDragTarget.x = 0
+        }
+
+        // The auto-hide timer only sees touches on the web view; keep the
+        // toolbar from vanishing under the user's finger mid-swipe.
+        onPressed: chromeAutoHideTimer.restart()
+
+        Item {
+            id: navDragTarget
+
+            Behavior on x {
+                enabled: !navSwipeArea.drag.active
+                NumberAnimation { duration: 200; easing.type: Easing.OutQuad }
+            }
+        }
+
+        Image {
+            anchors {
+                left: parent.left
+                leftMargin: Theme.paddingLarge
+                verticalCenter: parent.verticalCenter
+            }
+            source: "image://theme/icon-m-back?"
+                    + (navSwipeArea.backArmed ? Theme.highlightColor : Theme.primaryColor)
+            opacity: webView.canGoBack ? Math.min(navDragTarget.x / navSwipeArea.triggerDistance, 1.0) : 0.0
+        }
+
+        Image {
+            anchors {
+                right: parent.right
+                rightMargin: Theme.paddingLarge
+                verticalCenter: parent.verticalCenter
+            }
+            source: "image://theme/icon-m-forward?"
+                    + (navSwipeArea.forwardArmed ? Theme.highlightColor : Theme.primaryColor)
+            opacity: webView.canGoForward ? Math.min(-navDragTarget.x / navSwipeArea.triggerDistance, 1.0) : 0.0
+        }
+
+
+        Row {
+            id: toolsRow
+
+            property int biggestCorner: Math.max(Screen.topLeftCorner.radius,
+                                                 Screen.topRightCorner.radius,
+                                                 Screen.bottomLeftCorner.radius,
+                                                 Screen.bottomRightCorner.radius)
+            // items have some padding of their own so don't mind a little overlap with the rounding
+            x: Math.round(biggestCorner * 0.4)
+            width: parent.width - 2*x
+            height: browserPage.isPortrait ? scaledPortraitHeight : scaledLandscapeHeight
+
+            transform: Translate { x: navDragTarget.x }
+
+            Shared.ExpandingButton {
+                id: backIcon
+
+                readonly property bool isHome: !webView.canGoBack
+                                               && !(webView.contentItem && webView.contentItem.parentId > 0)
+                                               && !!webView.contentItem
+
+                height: parent.height
+                expandedWidth: toolBarRow.iconWidth
+                icon {
+                    // Native home glyph is a wide house; render it a bit narrower.
+                    width: backIcon.isHome ? Math.round(Theme.iconSizeMedium * 0.9) : Theme.iconSizeMedium
+                    height: Theme.iconSizeMedium
+                    source: {
+                        if (webView.canGoBack) {
+                            return "image://theme/icon-m-back"
+                        } else if (webView.contentItem && webView.contentItem.parentId > 0) {
+                            return "image://theme/icon-m-back-tab"
+                        } else if (webView.contentItem) {
+                            return "image://theme/icon-m-home"
+                        }
+                        return ""
+                    }
+
+                    onStatusChanged: {
+                        // Use icon-m-back as a fallback. The icon-m-back-tab
+                        // is a new icon and may not exist.
+                        if (icon.status == Image.Error && icon.source == "image://theme/icon-m-back-tab") {
+                            icon.source = "image://theme/icon-m-back"
+                        }
+                    }
+                }
+
+                active: (webView.canGoBack || (webView.contentItem && webView.contentItem.parentId > 0)
+                         || webView.contentItem) && !findInPageActive
+                onTapped: {
                     if (webView.canGoBack) {
-                        return "image://theme/icon-m-back"
+                        webView.goBack()
                     } else if (webView.contentItem && webView.contentItem.parentId > 0) {
-                        return "image://theme/icon-m-back-tab"
-                    } else if (webView.contentItem) {
-                        return "image://theme/icon-m-home"
-                    }
-                    return ""
-                }
-
-                onStatusChanged: {
-                    // Use icon-m-back as a fallback. The icon-m-back-tab
-                    // is a new icon and may not exist.
-                    if (icon.status == Image.Error && icon.source == "image://theme/icon-m-back-tab") {
-                        icon.source = "image://theme/icon-m-back"
-                    }
-                }
-            }
-
-            active: (webView.canGoBack || (webView.contentItem && webView.contentItem.parentId > 0)
-                     || webView.contentItem) && !findInPageActive
-            onTapped: {
-                if (webView.canGoBack) {
-                    webView.goBack()
-                } else if (webView.contentItem && webView.contentItem.parentId > 0) {
-                    webView.tabModel.closeActiveTab()
-                } else {
-                    toolBarRow.loadPage(WebUtils.homePage)
-                }
-            }
-        }
-
-        Item {
-            id: padlockIcon
-
-            readonly property var sec: webView.contentItem ? webView.contentItem.security : null
-            // https with certificate errors (self-signed, expired, bad identity, ...)
-            readonly property bool danger: sec && sec.validState && !sec.allGood
-            // plain http: no TLS at all
-            readonly property bool insecure: !webView.loading && !(sec && sec.validState)
-                    && webView.url.toString().indexOf("http://") === 0
-            readonly property bool active: ((sec && sec.validState) || insecure) && !findInPageActive
-                    && !(webView.url.indexOf("about:") === 0)
-                    && (!webView.contentItem || !webView.contentItem.textSelectionActive)
-            property real glow
-
-            height: parent.height
-            width: toolBarRow.smallIconWidth
-
-            Shared.IconButton {
-                anchors.fill: parent
-                opacity: padlockIcon.active ? 1.0 : 0.0
-                Behavior on opacity { FadeAnimation {} }
-
-                icon.source: padlockIcon.danger ? "image://theme/icon-s-filled-warning"
-                             : padlockIcon.insecure ? "image://theme/icon-s-warning"
-                                                    : "image://theme/icon-s-outline-secure"
-                icon.color: (padlockIcon.danger || padlockIcon.insecure)
-                    ? Qt.tint(Theme.primaryColor,
-                              Qt.rgba(Theme.errorColor.r, Theme.errorColor.g,
-                                      Theme.errorColor.b, padlockIcon.glow))
-                    : Theme.primaryColor
-                enabled: !!padlockIcon.sec && padlockIcon.active
-                onTapped: {
-                    if (certOverlayActive) {
-                        showChrome()
+                        webView.tabModel.closeActiveTab()
                     } else {
-                        certOverlayLoader.active = true
+                        toolBarRow.loadPage(WebUtils.homePage)
                     }
                 }
             }
 
-            SequentialAnimation {
-                id: securityAnimation
+            Item {
+                id: padlockIcon
 
-                PauseAnimation { duration: 2000 }
-                NumberAnimation {
-                    target: padlockIcon; property: "glow";
-                    to: 0.0; duration: 1000; easing.type: Easing.OutCubic
-                }
-            }
+                readonly property var sec: webView.contentItem ? webView.contentItem.security : null
+                // https with certificate errors (self-signed, expired, bad identity, ...)
+                readonly property bool danger: sec && sec.validState && !sec.allGood
+                // plain http: no TLS at all
+                readonly property bool insecure: !webView.loading && !(sec && sec.validState)
+                        && webView.url.toString().indexOf("http://") === 0
+                readonly property bool active: ((sec && sec.validState) || insecure) && !findInPageActive
+                        && !(webView.url.indexOf("about:") === 0)
+                        && (!webView.contentItem || !webView.contentItem.textSelectionActive)
+                property real glow
 
-            function warn() {
-                glow = 1.0
-                securityAnimation.start()
-            }
-
-            onDangerChanged: warn()
-            onInsecureChanged: if (insecure) warn()
-
-            Connections {
-                target: webView
-                onLoadingChanged: {
-                    if (!webView.loading && (padlockIcon.danger || padlockIcon.insecure)) {
-                        padlockIcon.warn()
-                    }
-                }
-            }
-        }
-
-        BackgroundItem {
-            id: touchArea
-
-            readonly property bool down: pressed && containsMouse
-
-            height: parent.height
-            width: toolsRow.width - (tabButton.width + stopButton.width + padlockIcon.width + backIcon.width + menuButton.width)
-            enabled: !showFindButtons
-            _showPress: false
-
-            onClicked: {
-                if (findInPageActive) {
-                    findInPage()
-                } else {
-                    toolBarRow.showOverlay()
-                }
-            }
-
-            onPressAndHold: {
-                var url = webView.url
-                if (url) {
-                    // encode the string if it looks like it has query or fragment parts
-                    // FIXME: could be improved with *proper* matching.
-                    Clipboard.text = ( (url.indexOf('?') > -1) || (url.indexOf('#') > -1) ) ? encodeURI(url) : url
-                    urlCopyNotice.show()
-                }
-            }
-
-            Notice {
-                id: urlCopyNotice
-
-                duration: Notice.Short
-                verticalOffset: -Theme.itemSizeMedium
-                //: Url copied to clipboard from toolbar (long press).
-                //% "Url copied to clipboard"
-                text: qsTrId("sailfish_browser-la-url_copied_to_clipboard")
-            }
-
-            Label {
-                anchors.verticalCenter: parent.verticalCenter
-                width: parent.width + Theme.paddingMedium
-                color: touchArea.highlighted ? Theme.highlightColor : Theme.primaryColor
-
-                text: {
-                    if (findInPageActive) {
-                        //: No text search results were found from the page.
-                        //% "No results"
-                        return qsTrId("sailfish_browser-la-no_results")
-                    } else if (url == "about:blank" || (webView.completed && webView.tabModel.count === 0)) {
-                        //: Placeholder text for url typing and searching
-                        //% "Type URL or search"
-                        return qsTrId("sailfish_browser-ph-type_url_or_search")
-                    } else if (url) {
-                        return WebUtils.displayableUrl(url)
-                    } else {
-                        //: Loading text that is visible when url is not yet resolved.
-                        //% "Loading"
-                        return qsTrId("sailfish_browser-la-loading")
-                    }
-                }
-
-                truncationMode: TruncationMode.Fade
-
-                // Hide the address while the popup menu is open — it would otherwise
-                // show at the bottom, under/beside the menu.
-                opacity: (showFindButtons || secondaryToolsActive) ? 0.0 : 1.0
-                Behavior on opacity { FadeAnimation {} }
-            }
-
-            Shared.ExpandingButton {
-                id: previousFindResult
-
-                active: showFindButtons
                 height: parent.height
-                expandedWidth: (toolsRow.width - menuButton.width - tabButton.width) / 2
-                icon {
-                    source: "image://theme/icon-m-left"
-                    anchors.horizontalCenterOffset: Theme.paddingLarge
-                }
+                width: toolBarRow.smallIconWidth
 
-                onTapped: {
-                    if (webView.contentItem) webView.contentItem.findText(findText, true)
-                }
-            }
+                Shared.IconButton {
+                    anchors.fill: parent
+                    opacity: padlockIcon.active ? 1.0 : 0.0
+                    Behavior on opacity { FadeAnimation {} }
 
-            Shared.ExpandingButton {
-                active: showFindButtons
-                height: parent.height
-                expandedWidth: previousFindResult.width
-                anchors.left: previousFindResult.right
-                icon {
-                    source: "image://theme/icon-m-right"
-                    anchors.horizontalCenterOffset: -Theme.paddingLarge
-                }
-
-                onTapped: {
-                    if (webView.contentItem) webView.contentItem.findText(findText, false)
-                }
-            }
-        }
-
-        Shared.ExpandingButton {
-            id: stopButton
-
-            height: parent.height
-            expandedWidth: toolBarRow.iconWidth
-            icon.source: webView.loading ? "image://theme/icon-m-reset" : "image://theme/icon-m-refresh"
-            active: webView.contentItem && !findInPageActive
-
-            Behavior on opacity { FadeAnimation {} }
-
-            onTapped: {
-                if (webView.loading) {
-                    webView.stop()
-                } else {
-                    webView.reload()
-                }
-                toolBarRow.showChrome()
-            }
-        }
-
-        // Container item for cross fading tabs, close, find in page button (and keep Row's width still).
-        Item {
-            id: tabButton
-
-            width: toolBarRow.iconWidth + toolBarRow.horizontalOffset
-            height: parent.height
-
-            Browser.TabButton {
-                id: tabs
-
-                width: parent.width
-                height: parent.height
-                icon.source: {
-                    if (webView.privateMode) {
-                        return webView.tabModel.count > 0 ? "image://theme/icon-m-incognito-selected"
-                                                          : "image://theme/icon-m-incognito"
+                    icon.source: padlockIcon.danger ? "image://theme/icon-s-filled-warning"
+                                 : padlockIcon.insecure ? "image://theme/icon-s-warning"
+                                                        : "image://theme/icon-s-outline-secure"
+                    icon.color: (padlockIcon.danger || padlockIcon.insecure)
+                        ? Qt.tint(Theme.primaryColor,
+                                  Qt.rgba(Theme.errorColor.r, Theme.errorColor.g,
+                                          Theme.errorColor.b, padlockIcon.glow))
+                        : Theme.primaryColor
+                    enabled: !!padlockIcon.sec && padlockIcon.active
+                    onTapped: {
+                        if (certOverlayActive) {
+                            showChrome()
+                        } else {
+                            certOverlayLoader.active = true
+                        }
                     }
-
-                    return "image://theme/icon-m-tabs"
                 }
 
-                label.color: {
-                    if (webView.privateMode) {
-                        return Theme.overlayBackgroundColor ? Theme.overlayBackgroundColor : "black"
+                SequentialAnimation {
+                    id: securityAnimation
+
+                    PauseAnimation { duration: 2000 }
+                    NumberAnimation {
+                        target: padlockIcon; property: "glow";
+                        to: 0.0; duration: 1000; easing.type: Easing.OutCubic
                     }
-
-                    return highlighted ? Theme.highlightColor : Theme.primaryColor
                 }
 
-                opacity: findInPageActive ? 0.0 : 1.0
-                horizontalOffset: -toolBarRow.horizontalOffset
-                label.text: webView.privateMode && (webView.tabModel.count === 0) ? "" : webView.tabModel.count
-                onTapped: toolBarRow.showTabs()
-
-                RotationAnimator {
-                    id: rotationAnimator
-
-                    target: tabs.icon
-                    duration: 1500
-                    alwaysRunToEnd: true
+                function warn() {
+                    glow = 1.0
+                    securityAnimation.start()
                 }
+
+                onDangerChanged: warn()
+                onInsecureChanged: if (insecure) warn()
 
                 Connections {
-                    target: webView.tabModel
-                    onNewTabRequested: {
-                        rotationAnimator.from = 0
-                        rotationAnimator.to = 360
-                        rotationAnimator.restart()
-                    }
-
-                    onTabClosed: {
-                        rotationAnimator.from = 0
-                        rotationAnimator.to = -360
-                        rotationAnimator.restart()
+                    target: webView
+                    onLoadingChanged: {
+                        if (!webView.loading && (padlockIcon.danger || padlockIcon.insecure)) {
+                            padlockIcon.warn()
+                        }
                     }
                 }
             }
 
-            Shared.IconButton {
-                width: parent.width
+            BackgroundItem {
+                id: touchArea
+
+                readonly property bool down: pressed && containsMouse
+
                 height: parent.height
-                opacity: !secondaryToolsActive && findInPageActive ? 1.0 : 0.0
-                icon.source: "image://theme/icon-m-search"
-                icon.anchors.horizontalCenterOffset: -toolBarRow.horizontalOffset
-                onTapped: {
-                    findInPageActive = true
-                    findInPage()
+                width: toolsRow.width - (tabButton.width + stopButton.width + padlockIcon.width + backIcon.width + menuButton.width)
+                enabled: !showFindButtons
+                _showPress: false
+
+                onClicked: {
+                    if (findInPageActive) {
+                        findInPage()
+                    } else {
+                        toolBarRow.showOverlay()
+                    }
+                }
+
+                onPressAndHold: {
+                    var url = webView.url
+                    if (url) {
+                        // encode the string if it looks like it has query or fragment parts
+                        // FIXME: could be improved with *proper* matching.
+                        Clipboard.text = ( (url.indexOf('?') > -1) || (url.indexOf('#') > -1) ) ? encodeURI(url) : url
+                        urlCopyNotice.show()
+                    }
+                }
+
+                Notice {
+                    id: urlCopyNotice
+
+                    duration: Notice.Short
+                    verticalOffset: -Theme.itemSizeMedium
+                    //: Url copied to clipboard from toolbar (long press).
+                    //% "Url copied to clipboard"
+                    text: qsTrId("sailfish_browser-la-url_copied_to_clipboard")
+                }
+
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width + Theme.paddingMedium
+                    color: touchArea.highlighted ? Theme.highlightColor : Theme.primaryColor
+
+                    text: {
+                        if (findInPageActive) {
+                            //: No text search results were found from the page.
+                            //% "No results"
+                            return qsTrId("sailfish_browser-la-no_results")
+                        } else if (url == "about:blank" || (webView.completed && webView.tabModel.count === 0)) {
+                            //: Placeholder text for url typing and searching
+                            //% "Type URL or search"
+                            return qsTrId("sailfish_browser-ph-type_url_or_search")
+                        } else if (url) {
+                            return WebUtils.displayableUrl(url)
+                        } else {
+                            //: Loading text that is visible when url is not yet resolved.
+                            //% "Loading"
+                            return qsTrId("sailfish_browser-la-loading")
+                        }
+                    }
+
+                    truncationMode: TruncationMode.Fade
+
+                    // Hide the address while the popup menu is open — it would otherwise
+                    // show at the bottom, under/beside the menu.
+                    opacity: (showFindButtons || secondaryToolsActive) ? 0.0 : 1.0
+                    Behavior on opacity { FadeAnimation {} }
+                }
+
+                Shared.ExpandingButton {
+                    id: previousFindResult
+
+                    active: showFindButtons
+                    height: parent.height
+                    expandedWidth: (toolsRow.width - menuButton.width - tabButton.width) / 2
+                    icon {
+                        source: "image://theme/icon-m-left"
+                        anchors.horizontalCenterOffset: Theme.paddingLarge
+                    }
+
+                    onTapped: {
+                        if (webView.contentItem) webView.contentItem.findText(findText, true)
+                    }
+                }
+
+                Shared.ExpandingButton {
+                    active: showFindButtons
+                    height: parent.height
+                    expandedWidth: previousFindResult.width
+                    anchors.left: previousFindResult.right
+                    icon {
+                        source: "image://theme/icon-m-right"
+                        anchors.horizontalCenterOffset: -Theme.paddingLarge
+                    }
+
+                    onTapped: {
+                        if (webView.contentItem) webView.contentItem.findText(findText, false)
+                    }
                 }
             }
-        }
 
-        Item {
-            id: menuButton
+            Shared.ExpandingButton {
+                id: stopButton
 
-            width: toolBarRow.iconWidth + toolBarRow.horizontalOffset
-            height: parent.height
-
-            Shared.IconButton {
-                icon.source: "image://theme/icon-m-menu"
-                icon.anchors.horizontalCenterOffset: - toolBarRow.horizontalOffset
                 height: parent.height
-                width: parent.width
-                opacity: findInPageActive ? 0.0 : 1.0
-                onTapped: showSecondaryTools()
+                expandedWidth: toolBarRow.iconWidth
+                icon.source: webView.loading ? "image://theme/icon-m-reset" : "image://theme/icon-m-refresh"
+                active: webView.contentItem && !findInPageActive
+
+                Behavior on opacity { FadeAnimation {} }
+
+                onTapped: {
+                    if (webView.loading) {
+                        webView.stop()
+                    } else {
+                        webView.reload()
+                    }
+                    toolBarRow.showChrome()
+                }
             }
 
-            Shared.IconButton {
-                icon.source: "image://theme/icon-m-reset"
-                icon.anchors.horizontalCenterOffset: - toolBarRow.horizontalOffset
+            // Container item for cross fading tabs, close, find in page button (and keep Row's width still).
+            Item {
+                id: tabButton
+
+                width: toolBarRow.iconWidth + toolBarRow.horizontalOffset
                 height: parent.height
-                width: parent.width
-                opacity: findInPageActive ? 1.0 : 0.0
-                onTapped: {
-                    resetFind()
-                    showChrome()
+
+                Browser.TabButton {
+                    id: tabs
+
+                    width: parent.width
+                    height: parent.height
+                    icon.source: {
+                        if (webView.privateMode) {
+                            return webView.tabModel.count > 0 ? "image://theme/icon-m-incognito-selected"
+                                                              : "image://theme/icon-m-incognito"
+                        }
+
+                        return "image://theme/icon-m-tabs"
+                    }
+
+                    label.color: {
+                        if (webView.privateMode) {
+                            return Theme.overlayBackgroundColor ? Theme.overlayBackgroundColor : "black"
+                        }
+
+                        return highlighted ? Theme.highlightColor : Theme.primaryColor
+                    }
+
+                    opacity: findInPageActive ? 0.0 : 1.0
+                    horizontalOffset: -toolBarRow.horizontalOffset
+                    label.text: webView.privateMode && (webView.tabModel.count === 0) ? "" : webView.tabModel.count
+                    onTapped: toolBarRow.showTabs()
+
+                    RotationAnimator {
+                        id: rotationAnimator
+
+                        target: tabs.icon
+                        duration: 1500
+                        alwaysRunToEnd: true
+                    }
+
+                    Connections {
+                        target: webView.tabModel
+                        onNewTabRequested: {
+                            rotationAnimator.from = 0
+                            rotationAnimator.to = 360
+                            rotationAnimator.restart()
+                        }
+
+                        onTabClosed: {
+                            rotationAnimator.from = 0
+                            rotationAnimator.to = -360
+                            rotationAnimator.restart()
+                        }
+                    }
+                }
+
+                Shared.IconButton {
+                    width: parent.width
+                    height: parent.height
+                    opacity: !secondaryToolsActive && findInPageActive ? 1.0 : 0.0
+                    icon.source: "image://theme/icon-m-search"
+                    icon.anchors.horizontalCenterOffset: -toolBarRow.horizontalOffset
+                    onTapped: {
+                        findInPageActive = true
+                        findInPage()
+                    }
+                }
+            }
+
+            Item {
+                id: menuButton
+
+                width: toolBarRow.iconWidth + toolBarRow.horizontalOffset
+                height: parent.height
+
+                Shared.IconButton {
+                    icon.source: "image://theme/icon-m-menu"
+                    icon.anchors.horizontalCenterOffset: - toolBarRow.horizontalOffset
+                    height: parent.height
+                    width: parent.width
+                    opacity: findInPageActive ? 0.0 : 1.0
+                    onTapped: showSecondaryTools()
+                }
+
+                Shared.IconButton {
+                    icon.source: "image://theme/icon-m-reset"
+                    icon.anchors.horizontalCenterOffset: - toolBarRow.horizontalOffset
+                    height: parent.height
+                    width: parent.width
+                    opacity: findInPageActive ? 1.0 : 0.0
+                    onTapped: {
+                        resetFind()
+                        showChrome()
+                    }
                 }
             }
         }
