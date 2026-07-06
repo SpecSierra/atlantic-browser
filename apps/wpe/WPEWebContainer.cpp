@@ -799,6 +799,10 @@ void WPEWebContainer::connectPage(WPEWebPage *page)
         if (m_tabModel)
             m_tabModel->updateThumbnailPath(page->tabId(), filePath);
     });
+    connect(page, &WPEWebPage::touched, this, [this, page]() {
+        if (page == m_contentItem)
+            emit touched();
+    });
     connect(page, &WPEWebPage::crashedChanged, this, [page]() {
         if (page->crashed())
             qWarning() << "[WPE] WebProcess crashed for tab" << page->tabId()

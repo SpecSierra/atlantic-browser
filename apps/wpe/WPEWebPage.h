@@ -355,6 +355,10 @@ signals:
     void resurrectedContentRectChanged();
     void draggingChanged();
     void desktopModeChanged();
+    // Fired on every new touch sequence (TouchBegin); forwarded by
+    // WPEWebContainer::touched() for the active page so QML can track
+    // user activity (fullscreen close button, toolbar auto-hide).
+    void touched();
 
     void textSelectionActiveChanged();
     void selectionTextChanged();

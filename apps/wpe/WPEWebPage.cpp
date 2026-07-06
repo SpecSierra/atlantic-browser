@@ -2703,6 +2703,10 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
         return;
     }
 
+    if (event->type() == QEvent::TouchBegin) {
+        emit touched();
+    }
+
     forceActiveFocus();
 
     const QList<QTouchEvent::TouchPoint> activePoints = mergeTrackedTouchPoints(

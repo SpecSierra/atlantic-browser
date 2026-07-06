@@ -35,6 +35,9 @@ Page {
     property Component tabPageComponent
     property string pendingOpenUrl: ""
     property bool _filePickerOpen: false
+    // True while the toolbar is hidden by the inactivity timer (as opposed to
+    // page-driven fullscreen / scroll-hide) — the next touch brings it back.
+    property bool _chromeAutoHidden
 
     property alias overlay: overlay
     property alias tabs: webView.tabModel
@@ -228,10 +231,20 @@ Page {
             if (contentFullscreen) {
                 fullscreenCloseVisibleTimer.restart()
             }
+            if (browserPage._chromeAutoHidden && !contentFullscreen) {
+                browserPage._chromeAutoHidden = false
+                overlay.animator.showChrome()
+            } else if (overlay.animator.atBottom) {
+                chromeAutoHideTimer.restart()
+            }
         }
 
         onNeedChromeChanged: {
+            // Only a page-driven "show chrome" clears the auto-hidden flag:
+            // hiding via showFullscreen() echoes back here as needChrome=false
+            // (the animator writes contentItem.chrome), which must not clear it.
             if (needChrome) {
+                browserPage._chromeAutoHidden = false
                 overlay.animator.showChrome()
             } else {
                 overlay.animator.showFullscreen()
@@ -265,6 +278,29 @@ Page {
             if (webView.completed && (!webView.tabModel || webView.tabModel.count === 0)) {
                 overlay.startPage(openOverlayImmediately ? PageStackAction.Immediate
                                                          : PageStackAction.Animated)
+            }
+        }
+    }
+
+    // Hide the toolbar after 15 s without any touch on the page; the next
+    // touch (webView.touched) brings it back. Only fires from the plain
+    // chrome-visible state — never over the URL entry, popup menu, cert
+    // panel, start page, video fullscreen or an open keyboard — and is
+    // disabled entirely when the fixed-toolbar setting is on.
+    Timer {
+        id: chromeAutoHideTimer
+
+        interval: 15000
+        onTriggered: {
+            if (overlay.animator.state === "chromeVisible"
+                    && browserPage.active
+                    && !browserPage.tabPageActive
+                    && webView.tabModel.count > 0
+                    && !webView.contentFullscreen
+                    && !virtualKeyboardObserver.opened
+                    && !webView.fixedToolbarConfig.value) {
+                browserPage._chromeAutoHidden = true
+                overlay.animator.showFullscreen()
             }
         }
     }
@@ -433,6 +469,10 @@ Page {
         animator.onAtBottomChanged: {
             if (!animator.atBottom) {
                 webView.clearSelection()
+                chromeAutoHideTimer.stop()
+            } else {
+                browserPage._chromeAutoHidden = false
+                chromeAutoHideTimer.restart()
             }
         }
 
@@ -610,6 +650,7 @@ Page {
     Browser.ImageActionPanel { webView: webView }
 
     Component.onCompleted: {
+        chromeAutoHideTimer.restart()
         window.setBrowserCover(webView.tabModel)
         if (Qt.application.arguments.indexOf("-debugMode") > 0) {
             var component = Qt.createComponent(Qt.resolvedUrl("components/DebugOverlay.qml"))
