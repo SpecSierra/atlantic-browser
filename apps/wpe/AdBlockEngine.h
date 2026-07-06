@@ -21,6 +21,10 @@ extern "C" {
     void                   atlantic_adblock_destroy(AtlanticAdblockEngine*);
     CosmeticResult         atlantic_adblock_get_cosmetic(AtlanticAdblockEngine*, const char* url);
     void                   atlantic_adblock_free_cosmetic(CosmeticResult);
+    bool                   atlantic_adblock_use_resources_json(AtlanticAdblockEngine*, const uint8_t*, size_t);
+    char*                  atlantic_adblock_get_generic_hides(AtlanticAdblockEngine*, const char* url,
+                                                              const char* classes, const char* ids);
+    void                   atlantic_adblock_free_string(char*);
 }
 
 class WPEWebPage;
@@ -32,6 +36,9 @@ public:
     static AdBlockEngine& instance();
 
     bool loadFromCache(const QString& path);
+    // uBO scriptlet/redirect resources (Brave adblock-resources JSON); not part
+    // of the engine cache, load after loadFromCache. Enables ##+js(...) rules.
+    bool loadResources(const QString& path);
     bool isLoaded() const { return m_engine != nullptr; }
 
     // Pre-paint cosmetic hiding: install the hide selectors for url's host as
@@ -42,9 +49,10 @@ public:
     // Remove all installed cosmetic sheets (adblock toggled off).
     static void resetCosmetics(WebKitUserContentManager* ucm);
 
-    // Post-load scriptlet injection (injected_script only; hide CSS is handled
-    // by installCosmetics above).
-    void applyCosmetics(WPEWebPage* page);
+    // Generic cosmetic filtering: given the class/id names present in the DOM
+    // (newline-separated), return the newline-separated generic hide selectors
+    // that apply on url (site exceptions honoured). Empty result = nothing new.
+    QString genericHides(const QUrl& url, const QByteArray& classes, const QByteArray& ids);
 
     static bool isEnabled();
     static void setEnabled(bool enabled);

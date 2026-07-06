@@ -533,6 +533,63 @@ static void onSelectionBridgeMessage(WebKitUserContentManager*, JSCValue* value,
     }
 }
 
+// Generic cosmetic filtering, UI-process side: kAdblockClassIdCollector posts
+// the class/id names newly seen in the DOM; the engine maps them to generic
+// hide rules (##.ad-banner style — a different lookup than the site-specific
+// selectors installed pre-paint at load-committed). Matches are appended to a
+// dedicated style element so dynamically inserted ads get hidden too.
+static void onAdblockClassIdMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
+{
+    WPEWebPage* page = static_cast<WPEWebPage*>(userData);
+    if (!page || !value)
+        return;
+    if (!AdBlockEngine::isEnabled() || !AdBlockEngine::instance().isLoaded())
+        return;
+
+    gchar* json = jsc_value_to_json(value, 0);
+    if (!json)
+        return;
+    QByteArray jsonBytes(json);
+    g_free(json);
+
+    QJsonDocument doc = QJsonDocument::fromJson(jsonBytes);
+    if (!doc.isObject())
+        return;
+    const QJsonObject obj = doc.object();
+
+    QByteArray classes, ids;
+    for (const QJsonValue& v : obj.value(QStringLiteral("c")).toArray()) {
+        classes += v.toString().toUtf8();
+        classes += '\n';
+    }
+    for (const QJsonValue& v : obj.value(QStringLiteral("i")).toArray()) {
+        ids += v.toString().toUtf8();
+        ids += '\n';
+    }
+
+    const QString sels = AdBlockEngine::instance().genericHides(page->url(), classes, ids);
+    if (sels.isEmpty())
+        return;
+
+    // Generic selectors are plain .class/#id — valid CSS — but insert one rule
+    // at a time under try/catch anyway, consistent with the specific-selector
+    // sheet. Selectors are passed as a JSON array so no manual escaping.
+    QJsonArray selArray;
+    for (const QString& s : sels.split(QLatin1Char('\n'), QString::SkipEmptyParts))
+        selArray.append(s);
+    const QString js = QStringLiteral(
+        "(function(){var sels=%1;"
+        "var s=document.getElementById('__atl_adblock_gen_hide');"
+        "if(!s){s=document.createElement('style');s.id='__atl_adblock_gen_hide';"
+        "document.documentElement.appendChild(s);}"
+        "var sh=s.sheet;if(!sh)return;"
+        "for(var i=0;i<sels.length;i++){"
+        "try{sh.insertRule(sels[i]+'{display:none!important}',sh.cssRules.length);}catch(e){}}"
+        "})()").arg(QString::fromUtf8(QJsonDocument(selArray).toJson(QJsonDocument::Compact)));
+    page->runJavaScript(js);
+    qDebug() << "[ADBLOCK] generic hides applied:" << selArray.size() << "selectors on" << page->url().host();
+}
+
 static void onEditableFocusMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
 {
     WPEWebPage* page = static_cast<WPEWebPage*>(userData);
@@ -1431,6 +1488,11 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                     }
                     if (!AdBlockEngine::instance().loadFromCache(cachePath)) {
                         qWarning() << "[ADBLOCK] engine not available — falling back to content blocker only";
+                    } else {
+                        // Scriptlet resources live next to the engine cache;
+                        // without them every ##+js(...) rule is a no-op.
+                        AdBlockEngine::instance().loadResources(
+                            QFileInfo(cachePath).path() + QStringLiteral("/adblock-resources.json"));
                     }
                 }
             }
@@ -1470,6 +1532,22 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                         QUrl(QString::fromUtf8(uri)));
                 }),
                 nullptr);
+
+            // Generic cosmetic rules need the class/id names present in the
+            // DOM: install the collector (document-start, batched) and its
+            // message handler. Cheap when adblock is off (handler no-ops).
+            g_signal_connect(ucm, "script-message-received::adblockClassId",
+                             G_CALLBACK(onAdblockClassIdMessage), this);
+            webkit_user_content_manager_register_script_message_handler(ucm, "adblockClassId", nullptr);
+            {
+                WebKitUserScript* collector = webkit_user_script_new(
+                    WPEUserScripts::kAdblockClassIdCollector,
+                    WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+                    WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+                    nullptr, nullptr);
+                webkit_user_content_manager_add_script(ucm, collector);
+                webkit_user_script_unref(collector);
+            }
 
             // Tab-level crash isolation: catch WebProcess termination before it
             // propagates up and kills the UI, surface the crash state to QML,
@@ -2351,11 +2429,6 @@ void WPEWebPage::onLoadingChanged(WPEQtViewLoadRequest *loadRequest)
         updateSecurityInfo();
         emit domContentLoadedChanged();
         emit loadedChanged();
-        if (AdBlockEngine::instance().isLoaded()) {
-            QTimer::singleShot(300, this, [this]() {
-                AdBlockEngine::instance().applyCosmetics(this);
-            });
-        }
         break;
 
     case WPEQtView::LoadStoppedStatus:
@@ -3472,6 +3545,10 @@ void WPEWebPage::applyAdBlockEnabledGlobally(bool enabled)
             WebKitUserContentManager* ucm = webkit_web_view_get_user_content_manager(wv);
             if (!enabled) {
                 AdBlockEngine::resetCosmetics(ucm);
+                // Also drop the generic-hide rules already injected in the page.
+                page->runJavaScript(QStringLiteral(
+                    "(function(){var s=document.getElementById('__atl_adblock_gen_hide');"
+                    "if(s)s.parentNode.removeChild(s);})()"));
             } else if (const gchar* uri = webkit_web_view_get_uri(wv)) {
                 AdBlockEngine::instance().installCosmetics(ucm, QUrl(QString::fromUtf8(uri)));
             }

@@ -1338,4 +1338,68 @@ static const char* const kSelectBridge = R"JS(
 })();
 )JS";
 
+// Generic cosmetic ad blocking: the adblock engine's generic rules
+// (##.ad-banner and friends) are keyed by the class/id names actually present
+// in the DOM (Engine::hidden_class_id_selectors). This collector reports each
+// class/id name once to the UI process ("adblockClassId" handler), batched via
+// MutationObserver so infinite-scroll / SPA-inserted ads are covered too. The
+// UI process answers by injecting the matching hide rules (see
+// onAdblockClassIdMessage). Batching (150ms) + send-once dedup + a hard cap
+// keep the observer cheap on mutation-heavy pages.
+static const char* const kAdblockClassIdCollector = R"JS(
+(function() {
+    if (window.__atlAdblockClassId) return;
+    window.__atlAdblockClassId = true;
+    var sent = Object.create(null), qc = [], qi = [], timer = null;
+    var total = 0, MAX = 50000;
+    function one(e) {
+        if (total > MAX || !e || !e.getAttribute) return;
+        var id = e.id;
+        if (id && typeof id === 'string' && !sent['#' + id]) {
+            sent['#' + id] = 1; qi.push(id); total++;
+        }
+        var cl = e.classList;
+        if (cl) for (var j = 0; j < cl.length; j++) {
+            var c = cl[j];
+            if (!sent['.' + c]) { sent['.' + c] = 1; qc.push(c); total++; }
+        }
+    }
+    function walk(root) {
+        if (!root || root.nodeType !== 1) return;
+        one(root);
+        if (!root.querySelectorAll) return;
+        var els = root.querySelectorAll('[class],[id]');
+        for (var i = 0; i < els.length; i++) one(els[i]);
+    }
+    function flush() {
+        timer = null;
+        if (!qc.length && !qi.length) return;
+        var msg = { c: qc, i: qi };
+        qc = []; qi = [];
+        try { window.webkit.messageHandlers.adblockClassId.postMessage(msg); } catch (e) {}
+    }
+    function sched() { if (!timer) timer = setTimeout(flush, 150); }
+    var mo = new MutationObserver(function(muts) {
+        for (var i = 0; i < muts.length; i++) {
+            var m = muts[i];
+            if (m.type === 'attributes') one(m.target);
+            else for (var j = 0; j < m.addedNodes.length; j++) walk(m.addedNodes[j]);
+        }
+        if (qc.length || qi.length) sched();
+    });
+    function start() {
+        walk(document.documentElement);
+        mo.observe(document.documentElement, {
+            childList: true, subtree: true,
+            attributes: true, attributeFilter: ['class', 'id']
+        });
+        sched();
+    }
+    if (document.readyState === 'loading')
+        document.addEventListener('DOMContentLoaded', start);
+    else
+        start();
+})();
+)JS";
+
 } // namespace WPEUserScripts
