@@ -223,6 +223,12 @@ Column {
 
                 height: parent.height
                 expandedWidth: toolBarRow.iconWidth
+                // Crossfade with the swipe hint arrow: while swiping right the
+                // hint fades in at the left edge, so fade this back button out
+                // to avoid showing two back icons at once. Fade fully within the
+                // first ~third of the trigger distance so the two icons barely
+                // coexist.
+                opacity: 1.0 - Math.min(Math.max(navDragTarget.x, 0) / (navSwipeArea.triggerDistance * 0.35), 1.0)
                 icon {
                     // Native home glyph is a wide house; render it a bit narrower.
                     width: backIcon.isHome ? Math.round(Theme.iconSizeMedium * 0.9) : Theme.iconSizeMedium
