@@ -601,8 +601,9 @@ Page {
     // TLS certificate failure banner — accept-and-retry for self-signed sites.
     Browser.TlsErrorBanner { webView: webView }
 
-    // Geolocation permission prompt (allow/deny, remembered per host for the session).
-    Browser.GeoPermissionBanner { webView: webView }
+    // Permission prompt: geolocation / camera / microphone (allow/deny,
+    // remembered per host+type for the session).
+    Browser.PermissionBanner { webView: webView }
 
     Browser.SelectMenuOverlay { webView: webView }
 

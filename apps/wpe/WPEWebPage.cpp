@@ -1378,14 +1378,15 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                 }
             }
             g_signal_connect(wv, "decide-policy", G_CALLBACK(onDecidePolicy), this);
-            // Geolocation permission: prompt the user via a QML banner (the
-            // qt5 plugin auto-allows camera/mic but leaves geolocation to us).
+            // Geolocation and camera/microphone permissions: prompt the user
+            // via a QML banner (the qt5 plugin only auto-allows device-info).
             g_signal_connect(
                 wv, "permission-request",
                 G_CALLBACK(+[](WebKitWebView*, WebKitPermissionRequest* request, gpointer userData) -> gboolean {
-                    if (!WEBKIT_IS_GEOLOCATION_PERMISSION_REQUEST(request))
+                    if (!WEBKIT_IS_GEOLOCATION_PERMISSION_REQUEST(request)
+                        && !WEBKIT_IS_USER_MEDIA_PERMISSION_REQUEST(request))
                         return FALSE;
-                    static_cast<WPEWebPage*>(userData)->handleGeoPermissionRequest(request);
+                    static_cast<WPEWebPage*>(userData)->handlePermissionRequest(request);
                     return TRUE;
                 }),
                 this);
@@ -1525,10 +1526,10 @@ const QList<WPEWebPage *> &WPEWebPage::liveInstances()
 
 WPEWebPage::~WPEWebPage()
 {
-    if (m_pendingGeoPermission) {
-        webkit_permission_request_deny(WEBKIT_PERMISSION_REQUEST(m_pendingGeoPermission));
-        g_object_unref(m_pendingGeoPermission);
-        m_pendingGeoPermission = nullptr;
+    if (m_pendingPermission) {
+        webkit_permission_request_deny(WEBKIT_PERMISSION_REQUEST(m_pendingPermission));
+        g_object_unref(m_pendingPermission);
+        m_pendingPermission = nullptr;
     }
     liveWebPages().removeAll(this);
     clearFileChooserRequest(true);
@@ -3068,14 +3069,27 @@ void WPEWebPage::acceptTlsCertificate()
     // Pending state (and the cert ref) is cleared by the LoadStarted reset.
 }
 
-void WPEWebPage::handleGeoPermissionRequest(void *request)
+static QString permissionRequestType(WebKitPermissionRequest *req)
 {
-    const QString host = url().host();
+    if (WEBKIT_IS_GEOLOCATION_PERMISSION_REQUEST(req))
+        return QStringLiteral("geolocation");
+    auto *media = WEBKIT_USER_MEDIA_PERMISSION_REQUEST(req);
+    const bool video = webkit_user_media_permission_is_for_video_device(media);
+    const bool audio = webkit_user_media_permission_is_for_audio_device(media);
+    if (video && audio)
+        return QStringLiteral("camera+microphone");
+    return video ? QStringLiteral("camera") : QStringLiteral("microphone");
+}
 
-    // Session-remembered decision for this host: resolve silently.
-    auto it = m_geoPermissionDecisions.constFind(host);
-    if (it != m_geoPermissionDecisions.constEnd()) {
-        auto *req = WEBKIT_PERMISSION_REQUEST(request);
+void WPEWebPage::handlePermissionRequest(void *request)
+{
+    auto *req = WEBKIT_PERMISSION_REQUEST(request);
+    const QString host = url().host();
+    const QString type = permissionRequestType(req);
+
+    // Session-remembered decision for this host+type: resolve silently.
+    auto it = m_permissionDecisions.constFind(host + QLatin1Char('|') + type);
+    if (it != m_permissionDecisions.constEnd()) {
         if (it.value())
             webkit_permission_request_allow(req);
         else
@@ -3085,33 +3099,36 @@ void WPEWebPage::handleGeoPermissionRequest(void *request)
 
     // A second request while one is pending (e.g. another frame): deny the
     // newcomer rather than dropping the one the user is looking at.
-    if (m_pendingGeoPermission) {
-        webkit_permission_request_deny(WEBKIT_PERMISSION_REQUEST(request));
+    if (m_pendingPermission) {
+        webkit_permission_request_deny(req);
         return;
     }
 
-    m_pendingGeoPermission = g_object_ref(request);
-    m_geoPermissionHost = host;
-    qWarning("[WPE-GEO] geolocation permission requested by '%s'", host.toUtf8().constData());
-    emit geoPermissionChanged();
+    m_pendingPermission = g_object_ref(request);
+    m_permissionHost = host;
+    m_permissionType = type;
+    qWarning("[WPE-PERM] %s permission requested by '%s'",
+             type.toUtf8().constData(), host.toUtf8().constData());
+    emit permissionChanged();
 }
 
-void WPEWebPage::resolveGeoPermission(bool allow)
+void WPEWebPage::resolvePermission(bool allow)
 {
-    if (!m_pendingGeoPermission)
+    if (!m_pendingPermission)
         return;
-    auto *req = WEBKIT_PERMISSION_REQUEST(m_pendingGeoPermission);
+    auto *req = WEBKIT_PERMISSION_REQUEST(m_pendingPermission);
     if (allow)
         webkit_permission_request_allow(req);
     else
         webkit_permission_request_deny(req);
-    m_geoPermissionDecisions.insert(m_geoPermissionHost, allow);
-    qWarning("[WPE-GEO] geolocation %s for '%s'", allow ? "allowed" : "denied",
-             m_geoPermissionHost.toUtf8().constData());
-    g_object_unref(m_pendingGeoPermission);
-    m_pendingGeoPermission = nullptr;
-    m_geoPermissionHost.clear();
-    emit geoPermissionChanged();
+    m_permissionDecisions.insert(m_permissionHost + QLatin1Char('|') + m_permissionType, allow);
+    qWarning("[WPE-PERM] %s %s for '%s'", m_permissionType.toUtf8().constData(),
+             allow ? "allowed" : "denied", m_permissionHost.toUtf8().constData());
+    g_object_unref(m_pendingPermission);
+    m_pendingPermission = nullptr;
+    m_permissionHost.clear();
+    m_permissionType.clear();
+    emit permissionChanged();
 }
 
 void WPEWebPage::updateSecurityInfo()
