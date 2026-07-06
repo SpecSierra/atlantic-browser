@@ -24,6 +24,8 @@ extern "C" {
 }
 
 class WPEWebPage;
+class QUrl;
+typedef struct _WebKitUserContentManager WebKitUserContentManager;
 
 class AdBlockEngine {
 public:
@@ -32,6 +34,16 @@ public:
     bool loadFromCache(const QString& path);
     bool isLoaded() const { return m_engine != nullptr; }
 
+    // Pre-paint cosmetic hiding: install the hide selectors for url's host as
+    // a document-start user style sheet on the view's content manager (once
+    // per host per manager). Call at load-committed so the CSS is present
+    // before the document first paints — no ad flash / layout shift.
+    void installCosmetics(WebKitUserContentManager* ucm, const QUrl& url);
+    // Remove all installed cosmetic sheets (adblock toggled off).
+    static void resetCosmetics(WebKitUserContentManager* ucm);
+
+    // Post-load scriptlet injection (injected_script only; hide CSS is handled
+    // by installCosmetics above).
     void applyCosmetics(WPEWebPage* page);
 
     static bool isEnabled();

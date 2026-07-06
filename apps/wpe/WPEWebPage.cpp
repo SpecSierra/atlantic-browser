@@ -1451,6 +1451,26 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             // --- HTML <select> via JS bridge ---
             WebKitUserContentManager* ucm = webkit_web_view_get_user_content_manager(wv);
 
+            // Pre-paint cosmetic ad hiding: at load-committed the URL is final
+            // but nothing has been parsed or painted yet, so a user style
+            // sheet installed here hides ads before their first layout —
+            // no render-then-remove flash (the old path injected the CSS via
+            // runJavaScript 300ms AFTER LoadSucceeded, i.e. two layout shifts
+            // per server-rendered ad, e.g. reddit's shreddit-ad-post).
+            g_signal_connect(
+                wv, "load-changed",
+                G_CALLBACK(+[](WebKitWebView* view, WebKitLoadEvent event, gpointer) {
+                    if (event != WEBKIT_LOAD_COMMITTED)
+                        return;
+                    const gchar* uri = webkit_web_view_get_uri(view);
+                    if (!uri)
+                        return;
+                    AdBlockEngine::instance().installCosmetics(
+                        webkit_web_view_get_user_content_manager(view),
+                        QUrl(QString::fromUtf8(uri)));
+                }),
+                nullptr);
+
             // Tab-level crash isolation: catch WebProcess termination before it
             // propagates up and kills the UI, surface the crash state to QML,
             // and self-heal transient deaths with a single auto-reload.
@@ -3446,6 +3466,15 @@ void WPEWebPage::applyAdBlockEnabledGlobally(bool enabled)
                 wv, webkit_user_message_new("atlantic-adblock-set-enabled",
                                             g_variant_new_boolean(enabled)),
                 nullptr, nullptr, nullptr);
+            // Cosmetic sheets: tear down on disable so hidden ads reappear
+            // without a reload; on enable, reinstall for the current page
+            // (future navigations install at load-committed as usual).
+            WebKitUserContentManager* ucm = webkit_web_view_get_user_content_manager(wv);
+            if (!enabled) {
+                AdBlockEngine::resetCosmetics(ucm);
+            } else if (const gchar* uri = webkit_web_view_get_uri(wv)) {
+                AdBlockEngine::instance().installCosmetics(ucm, QUrl(QString::fromUtf8(uri)));
+            }
         }
         emit page->adBlockEnabledChanged();
     }
