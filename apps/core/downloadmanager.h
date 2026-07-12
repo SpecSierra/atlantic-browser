@@ -15,6 +15,7 @@
 #include "downloadstatus.h"
 
 #include <QObject>
+#include <QElapsedTimer>
 #include <QHash>
 #include <QString>
 #include <QVariant>
@@ -97,6 +98,18 @@ private:
     QHash<int, QVariantMap> m_downloadInfoCache;
     QHash<int, PendingFinal> m_pendingFinal;
     QHash<int, double> m_pendingProgress;
+
+    // Last progress state reported to the transfer engine, used to throttle
+    // updates: sent unthrottled, the per-network-chunk received-data signal
+    // floods the session bus (a 1 GB download queues ~65k calls, each a
+    // synchronous SQLite write on the transfer-engine side), wedging D-Bus for
+    // everything — progress display, the cancel callback, even openUrl.
+    struct ProgressSent {
+        qint64 elapsedMs;
+        double progress;
+    };
+    QHash<int, ProgressSent> m_progressSent;
+    QElapsedTimer m_progressClock;
 
     TransferEngineInterface *m_transferClient;
 

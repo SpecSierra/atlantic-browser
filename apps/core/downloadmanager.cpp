@@ -282,6 +282,23 @@ void DownloadManager::updateDownload(WebKitDownload *download)
         m_pendingProgress.insert(downloadId, progress);
         return;
     }
+
+    // Throttle: received-data fires for every network chunk, and each
+    // updateTransferProgress is a synchronous SQLite write on the
+    // transfer-engine side. Report at most on a 1% step or once per second,
+    // or the queued backlog wedges the session bus for minutes.
+    if (!m_progressClock.isValid())
+        m_progressClock.start();
+    const qint64 nowMs = m_progressClock.elapsed();
+    const auto it = m_progressSent.constFind(downloadId);
+    if (it != m_progressSent.constEnd()
+            && (progress - it->progress) < 0.01
+            && (nowMs - it->elapsedMs) < 1000) {
+        // The 100% state is reported by finishTransfer, so no special case for
+        // the final chunk is needed here.
+        return;
+    }
+    m_progressSent.insert(downloadId, { nowMs, progress });
     m_transferClient->updateTransferProgress(transferId, progress);
 }
 
@@ -391,6 +408,7 @@ void DownloadManager::releaseDownload(int downloadId)
     m_downloadInfoCache.remove(downloadId);
     m_pendingProgress.remove(downloadId);
     m_pendingFinal.remove(downloadId);
+    m_progressSent.remove(downloadId);
 }
 
 void DownloadManager::checkAllTransfers()
