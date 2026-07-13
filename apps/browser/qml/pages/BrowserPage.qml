@@ -77,6 +77,16 @@ Page {
         Component.onCompleted: webView.setAdBlockEnabled(value)
     }
 
+    ConfigurationValue {
+        id: cookieBannerBlocking
+        key: "/apps/atlantic-browser/settings/cookie_banner_blocking"
+        defaultValue: true
+        // Same shape as adblock_enabled above: dconf is the single source of
+        // truth, applied process-wide (autoconsent user script on every tab).
+        onValueChanged: webView.setCookieBannerBlockingEnabled(value)
+        Component.onCompleted: webView.setCookieBannerBlockingEnabled(value)
+    }
+
     function load(url, title) {
         overlay.dismiss(true)
         webView.load(url, title)

@@ -162,6 +162,8 @@ class WPEWebPage : public WPEQtView
 
     Q_PROPERTY(bool adBlockEnabled READ adBlockEnabled WRITE setAdBlockEnabled NOTIFY adBlockEnabledChanged FINAL)
 
+    Q_PROPERTY(bool cookieBannerBlockingEnabled READ cookieBannerBlockingEnabled WRITE setCookieBannerBlockingEnabled NOTIFY cookieBannerBlockingEnabledChanged FINAL)
+
 public:
     explicit WPEWebPage(QQuickItem *parent = nullptr);
     ~WPEWebPage() override;
@@ -211,6 +213,7 @@ public:
     // dconf binding in BrowserPage.qml (via WPEWebContainer::setAdBlockEnabled),
     // so it works with any number of tabs (or none) open.
     static void applyAdBlockEnabledGlobally(bool enabled);
+    static void applyCookieBannerBlockingGlobally(bool enabled);
 
     bool throttlePainting() const;
     void setThrottlePainting(bool throttle);
@@ -323,6 +326,9 @@ public:
     bool adBlockEnabled() const;
     void setAdBlockEnabled(bool enabled);
 
+    bool cookieBannerBlockingEnabled() const;
+    void setCookieBannerBlockingEnabled(bool enabled);
+
     bool textSelectionActive() const;
     QObject* textSelectionController();
     QString selectedText() const;
@@ -388,6 +394,7 @@ signals:
     void pinchCenterChanged();
     void crashedChanged();
     void adBlockEnabledChanged();
+    void cookieBannerBlockingEnabledChanged();
 
 protected:
     QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;

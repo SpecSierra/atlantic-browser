@@ -670,6 +670,64 @@ static void onEditableFocusMessage(WebKitUserContentManager*, JSCValue* value, g
     page->handleSubframeEditableFocus(focused);
 }
 
+// --- Cookie-banner blocking (DuckDuckGo autoconsent) ---
+// The standalone autoconsent bundle self-initializes with autoAction=optOut
+// and its embedded CMP rules: it detects the site's consent dialog (Didomi,
+// OneTrust, Quantcast, ...) and answers "reject all" programmatically, so the
+// banner closes itself AND consent is recorded as refused — unlike the
+// cosmetic hide rules, which only mask the dialog. Installed per content
+// manager as a document-start all-frames user script (CMPs often live in
+// iframes). The hide-rule layer in engine.dat remains the fallback for dumb
+// non-CMP banners autoconsent does not know.
+static bool s_cookieBannerBlocking = true;
+static const char* kAutoconsentScriptKey = "atlantic-autoconsent-script";
+
+static const QByteArray& autoconsentScriptSource()
+{
+    static const QByteArray source = [] {
+        QFile f(QString::fromLatin1(WPERuntimePaths::kAtlanticShareDir)
+                + QStringLiteral("/autoconsent.js"));
+        QByteArray data;
+        if (f.open(QIODevice::ReadOnly))
+            data = f.readAll();
+        if (data.isEmpty())
+            qWarning() << "[COOKIE-BANNER] autoconsent.js missing or empty at" << f.fileName();
+        else
+            qInfo() << "[COOKIE-BANNER] autoconsent loaded," << data.size() / 1024 << "KB";
+        return data;
+    }();
+    return source;
+}
+
+static void installAutoconsent(WebKitUserContentManager* ucm)
+{
+    if (g_object_get_data(G_OBJECT(ucm), kAutoconsentScriptKey))
+        return;
+    const QByteArray& src = autoconsentScriptSource();
+    if (src.isEmpty())
+        return;
+    WebKitUserScript* script = webkit_user_script_new(
+        src.constData(),
+        WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+        nullptr, nullptr);
+    webkit_user_content_manager_add_script(ucm, script);
+    // Keep the ref so a later toggle-off can remove exactly this script
+    // (never remove_all_scripts here — the ucm carries the bridge scripts).
+    g_object_set_data_full(G_OBJECT(ucm), kAutoconsentScriptKey, script,
+                           reinterpret_cast<GDestroyNotify>(webkit_user_script_unref));
+}
+
+static void removeAutoconsent(WebKitUserContentManager* ucm)
+{
+    auto* script = static_cast<WebKitUserScript*>(
+        g_object_get_data(G_OBJECT(ucm), kAutoconsentScriptKey));
+    if (!script)
+        return;
+    webkit_user_content_manager_remove_script(ucm, script);
+    g_object_set_data(G_OBJECT(ucm), kAutoconsentScriptKey, nullptr);
+}
+
 static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page)
 {
     g_signal_connect(ucm, "script-message-received::selectionBridge",
@@ -1705,6 +1763,8 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             webkit_user_script_unref(script);
 
             onSelectionBridgeInstall(ucm, this);
+            if (s_cookieBannerBlocking)
+                installAutoconsent(ucm);
             onImageLongPressBridgeInstall(ucm, this);
             onScrollBridgeInstall(ucm, this);
             onMediaBridgeInstall(ucm, this);
@@ -3635,6 +3695,38 @@ bool WPEWebPage::adBlockEnabled() const
 void WPEWebPage::setAdBlockEnabled(bool enabled)
 {
     applyAdBlockEnabledGlobally(enabled);
+}
+
+bool WPEWebPage::cookieBannerBlockingEnabled() const
+{
+    return s_cookieBannerBlocking;
+}
+
+void WPEWebPage::setCookieBannerBlockingEnabled(bool enabled)
+{
+    applyCookieBannerBlockingGlobally(enabled);
+}
+
+void WPEWebPage::applyCookieBannerBlockingGlobally(bool enabled)
+{
+    if (s_cookieBannerBlocking == enabled)
+        return;
+    s_cookieBannerBlocking = enabled;
+
+    // Add/remove the autoconsent user script on every live content manager.
+    // User scripts only run at document start, so the change takes effect on
+    // the next (re)load of each tab — a banner already answered stays answered.
+    for (WPEWebPage* page : liveInstances()) {
+        if (WebKitWebView* wv = page->webView()) {
+            WebKitUserContentManager* ucm = webkit_web_view_get_user_content_manager(wv);
+            if (enabled)
+                installAutoconsent(ucm);
+            else
+                removeAutoconsent(ucm);
+        }
+        emit page->cookieBannerBlockingEnabledChanged();
+    }
+    qInfo() << "[COOKIE-BANNER] blocking toggled" << (enabled ? "ON" : "OFF");
 }
 
 void WPEWebPage::applyAdBlockEnabledGlobally(bool enabled)

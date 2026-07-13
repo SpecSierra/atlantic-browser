@@ -671,6 +671,11 @@ void WPEWebContainer::setAdBlockEnabled(bool enabled)
     WPEWebPage::applyAdBlockEnabledGlobally(enabled);
 }
 
+void WPEWebContainer::setCookieBannerBlockingEnabled(bool enabled)
+{
+    WPEWebPage::applyCookieBannerBlockingGlobally(enabled);
+}
+
 void WPEWebContainer::onActiveTabChanged(int activeTabId)
 {
     activatePage(activeTabId);

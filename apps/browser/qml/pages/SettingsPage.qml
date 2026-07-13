@@ -45,6 +45,7 @@ Page {
     ConfigurationValue { id: useDownloadDirConf; key: "/apps/atlantic-browser/settings/use_download_dir"; defaultValue: false }
     ConfigurationValue { id: downloadDirConf; key: "/apps/atlantic-browser/settings/download_dir"; defaultValue: "" }
     ConfigurationValue { id: adBlockConf; key: "/apps/atlantic-browser/settings/adblock_enabled"; defaultValue: true }
+    ConfigurationValue { id: cookieBannerConf; key: "/apps/atlantic-browser/settings/cookie_banner_blocking"; defaultValue: true }
     // 0 = light, 1 = dark, 2 = follow ambience (applied by SettingManager)
     ConfigurationValue { id: colorSchemeConf; key: "/apps/atlantic-browser/settings/color_scheme"; defaultValue: page._followsAmbience }
 
@@ -212,6 +213,20 @@ Page {
                     // to the INVERSE of the visible switch state.
                     adBlockConf.value = !adBlockConf.value
                 }
+            }
+
+            TextSwitch {
+                //% "Block cookie banners"
+                text: qsTrId("atlantic-la-cookie_banner_blocking")
+                //% "Automatically refuse cookie consent pop-ups"
+                description: qsTrId("atlantic-la-cookie_banner_blocking_description")
+                checked: cookieBannerConf.value
+                automaticCheck: false
+                leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
+                _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
+                // dconf is the single source of truth; BrowserPage's
+                // ConfigurationValue pushes the change process-wide.
+                onClicked: cookieBannerConf.value = !cookieBannerConf.value
             }
 
             // "Do not track" switch hidden for now — uncomment to bring it back
