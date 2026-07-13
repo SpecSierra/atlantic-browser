@@ -804,6 +804,29 @@ static const char* const kRedditPerf = R"JS(
                     }
             })(document);
         } catch (e) {}
+
+        // Kill the "Get the app to keep using Reddit" xpromo bottom sheet.
+        // uBO's rule for it is a :has-text() procedural selector adblock-rust
+        // can't honor, and the cosmetic hide alone is not enough anyway: the
+        // sheet also stamps body.rpl-scroll-lock (overflow:hidden), freezing
+        // the page behind an invisible modal. Remove the sheet (light-DOM
+        // child of shreddit-app, class .configured-xpromo, device-verified)
+        // and lift the scroll lock whenever it (re)appears. The pre-paint
+        // hide rule in atlantic-extra.txt prevents the first-paint flash.
+        try {
+            function killXpromo(root) {
+                var nags = root.querySelectorAll('.configured-xpromo');
+                for (var i = 0; i < nags.length; i++) {
+                    try { nags[i].remove(); } catch (e) {}
+                }
+                if (nags.length && document.body)
+                    document.body.classList.remove('rpl-scroll-lock');
+            }
+            new MutationObserver(function() { killXpromo(document); })
+                .observe(document.documentElement, { childList: true, subtree: true });
+            document.addEventListener('DOMContentLoaded',
+                function() { killXpromo(document); }, { once: true });
+        } catch (e) {}
     } catch (e) {}
 })();
 )JS";
