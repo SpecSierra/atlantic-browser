@@ -15,6 +15,7 @@
 #include <QClipboard>
 #include <QDateTime>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QImage>
@@ -94,6 +95,56 @@ bool envVarEnabled(const QByteArray &value)
 // of reacting to the rare "Linux + Safari" combination.
 // ATLANTIC_USER_AGENT / ATLANTIC_USER_AGENT_DESKTOP override for testing
 // without a rebuild.
+
+// The OS version in the platform comment slot comes from /etc/os-release
+// (VERSION_ID), trimmed to major.minor to keep the token shape stable.
+static QString sailfishOsVersion()
+{
+    static const QString version = [] {
+        QFile osRelease(QStringLiteral("/etc/os-release"));
+        if (osRelease.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            while (!osRelease.atEnd()) {
+                QString line = QString::fromUtf8(osRelease.readLine()).trimmed();
+                if (!line.startsWith(QStringLiteral("VERSION_ID=")))
+                    continue;
+                QString value = line.mid(11);
+                if (value.startsWith(QLatin1Char('"')) && value.endsWith(QLatin1Char('"')) && value.size() >= 2)
+                    value = value.mid(1, value.size() - 2);
+                const QStringList parts = value.split(QLatin1Char('.'));
+                if (parts.size() >= 2)
+                    return parts[0] + QLatin1Char('.') + parts[1];
+                if (!value.isEmpty())
+                    return value;
+            }
+        }
+        return QStringLiteral("5.1");
+    }();
+    return version;
+}
+
+// iPhone-Safari UA — the exact shape verified on device to load the full
+// Google Maps app; also what Cloudflare-challenged hosts get (see below).
+static QString iphoneMobileUserAgent()
+{
+    return QStringLiteral(
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+        "Version/18.0 Mobile/15E148 Safari/604.1");
+}
+
+// Hosts where a Cloudflare managed challenge was observed this session.
+// Cloudflare's bot heuristics reject the "pretend to be everyone" chimera UA
+// (Android platform token + Safari-shaped tail — no real browser sends that
+// combination), so those hosts get the plain iPhone UA instead. Populated at
+// runtime by the resource-load-started watcher: the challenge interstitial is
+// unmistakable — it loads /cdn-cgi/challenge-platform/ scripts from the page's
+// own host. Cannot be a static list: any site may sit behind Cloudflare.
+static QSet<QString> &cloudflareChallengedHosts()
+{
+    static QSet<QString> hosts;
+    return hosts;
+}
+
 QString atlanticUserAgent(bool desktopMode)
 {
     const QByteArray envOverride =
@@ -108,9 +159,9 @@ QString atlanticUserAgent(bool desktopMode)
             "Version/26.0 Atlantic/1.0 Safari/605.1.15");
     }
     return QStringLiteral(
-        "Mozilla/5.0 (Linux; Android 14; Mobile; SailfishOS 5.1) "
+        "Mozilla/5.0 (Linux; Android 14; Mobile; SailfishOS %1) "
         "AppleWebKit/605.1.15 (KHTML, like Gecko) "
-        "Version/26.0 Atlantic/1.0 Mobile Safari/605.1.15");
+        "Version/26.0 Atlantic/1.0 Mobile Safari/605.1.15").arg(sailfishOsVersion());
 }
 
 // Google Maps lives at maps.google.<tld> and at google.<tld>/maps (the bare
@@ -159,12 +210,10 @@ static bool urlIsTwitch(const QUrl &url)
 // is left alone.
 QString atlanticUserAgentForUrl(const QUrl &url, bool desktopMode)
 {
-    if (!desktopMode && urlIsGoogleMaps(url)) {
-        return QStringLiteral(
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) "
-            "AppleWebKit/605.1.15 (KHTML, like Gecko) "
-            "Version/18.0 Mobile/15E148 Safari/604.1");
-    }
+    if (!desktopMode && urlIsGoogleMaps(url))
+        return iphoneMobileUserAgent();
+    if (!desktopMode && cloudflareChallengedHosts().contains(url.host().toLower()))
+        return iphoneMobileUserAgent();
     if (!desktopMode && urlIsTwitch(url)) {
         return QStringLiteral(
             "Mozilla/5.0 (Linux; Android 14; Pixel 7) "
@@ -1441,6 +1490,36 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                 }
             }
             g_signal_connect(wv, "decide-policy", G_CALLBACK(onDecidePolicy), this);
+            // Cloudflare managed-challenge detection: the interstitial loads
+            // its scripts from /cdn-cgi/challenge-platform/ on the page's own
+            // host (unlike an embedded Turnstile widget, which loads from
+            // challenges.cloudflare.com — deliberately NOT matched, or any
+            // page with a captcha widget would reload out from under the
+            // user). First sighting on a host: remember it, switch to the
+            // iPhone UA and reload so Cloudflare sees a UA it accepts.
+            // Cross-checking navigator.userAgent against the header is part
+            // of the challenge, so a header-only rewrite would not pass.
+            g_signal_connect(
+                wv, "resource-load-started",
+                G_CALLBACK(+[](WebKitWebView* view, WebKitWebResource*, WebKitURIRequest* request,
+                               gpointer userData) {
+                    auto *page = static_cast<WPEWebPage*>(userData);
+                    const gchar* uri = request ? webkit_uri_request_get_uri(request) : nullptr;
+                    if (!page || page->desktopMode() || !uri)
+                        return;
+                    const QUrl resourceUrl(QString::fromUtf8(uri));
+                    if (!resourceUrl.path().startsWith(QStringLiteral("/cdn-cgi/challenge-platform/")))
+                        return;
+                    const QString pageHost = QUrl(QString::fromUtf8(webkit_web_view_get_uri(view))).host().toLower();
+                    if (pageHost.isEmpty() || resourceUrl.host().toLower() != pageHost
+                        || cloudflareChallengedHosts().contains(pageHost))
+                        return;
+                    cloudflareChallengedHosts().insert(pageHost);
+                    qInfo("[Atlantic] Cloudflare challenge on %s — retrying with iPhone UA", qPrintable(pageHost));
+                    page->applyUserAgentForUrl(page->url());
+                    webkit_web_view_reload(view);
+                }),
+                this);
             // Geolocation and camera/microphone permissions: prompt the user
             // via a QML banner (the qt5 plugin only auto-allows device-info).
             g_signal_connect(
