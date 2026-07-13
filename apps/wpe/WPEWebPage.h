@@ -236,6 +236,8 @@ public:
     // Pick and apply the UA for a destination URL (handles per-site quirks
     // such as Google Maps); called from the navigation policy handler.
     void applyUserAgentForUrl(const QUrl &url);
+    // True when the URL gets a per-site UA quirk (Maps, Cloudflare hosts).
+    bool urlHasUaQuirk(const QUrl &url) const;
     void applyInitialDeviceScale(qreal scale);
     void setFullscreenState(bool fullscreen);
     void setNativeFullscreenRequested(bool fullscreen);

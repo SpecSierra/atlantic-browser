@@ -470,17 +470,33 @@ void onNetworkSessionDownloadStarted(WebKitNetworkSession*, WebKitDownload* down
 gboolean onDecidePolicy(WebKitWebView* webView, WebKitPolicyDecision* decision, WebKitPolicyDecisionType type, gpointer userData)
 {
     // Before a top-level navigation commits, choose the UA for the destination
-    // so per-site quirks (Google Maps) take effect for the main document and
-    // all of its subresources. Returning FALSE lets WebKit proceed with the
-    // default decision — now carrying the corrected UA.
+    // so per-site quirks (Google Maps, Cloudflare-challenged hosts) take effect
+    // for the main document and all of its subresources. Returning FALSE lets
+    // WebKit proceed with the default decision — now carrying the corrected UA.
+    //
+    // GOTCHA (device-proven with gdb on build 502): this callback also fires
+    // for SUBFRAME navigations, and the glib API offers no way to tell them
+    // apart. An iframe URL must never downgrade a quirked main-document UA —
+    // the Cloudflare interstitial embeds a challenges.cloudflare.com iframe
+    // and Maps embeds google.com subframes, and each one flipped the UA back
+    // to the default mid-load, which is why the quirks never stuck. So only
+    // apply here when the destination is itself quirked or the current main
+    // document is not; the LOAD_COMMITTED handler re-syncs the UA to the real
+    // main-frame URL afterwards (covers navigating AWAY from a quirked site,
+    // where this heuristic keeps the quirk one request too long).
     if (type == WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION) {
         if (WPEWebPage* page = static_cast<WPEWebPage*>(userData)) {
             WebKitNavigationPolicyDecision* navDecision = WEBKIT_NAVIGATION_POLICY_DECISION(decision);
             WebKitNavigationAction* action = webkit_navigation_policy_decision_get_navigation_action(navDecision);
             WebKitURIRequest* request = action ? webkit_navigation_action_get_request(action) : nullptr;
             const gchar* uri = request ? webkit_uri_request_get_uri(request) : nullptr;
-            if (uri && *uri)
-                page->applyUserAgentForUrl(QUrl(QString::fromUtf8(uri)));
+            if (uri && *uri) {
+                const QUrl dest(QString::fromUtf8(uri));
+                const gchar* mainUri = webkit_web_view_get_uri(webView);
+                const QUrl mainUrl(mainUri ? QString::fromUtf8(mainUri) : QString());
+                if (page->urlHasUaQuirk(dest) || !page->urlHasUaQuirk(mainUrl))
+                    page->applyUserAgentForUrl(dest);
+            }
         }
         return FALSE;
     }
@@ -1520,6 +1536,21 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                     webkit_web_view_reload(view);
                 }),
                 this);
+            // Authoritative UA re-sync: load-changed only fires for the main
+            // frame, so at commit webkit_web_view_get_uri IS the main document
+            // URL. Corrects the one case the decide-policy heuristic above
+            // gets wrong (leaving a quirked site keeps the quirk UA for that
+            // first request) so it never lingers past the commit.
+            g_signal_connect(
+                wv, "load-changed",
+                G_CALLBACK(+[](WebKitWebView* view, WebKitLoadEvent event, gpointer userData) {
+                    if (event != WEBKIT_LOAD_COMMITTED)
+                        return;
+                    const gchar* uri = webkit_web_view_get_uri(view);
+                    if (uri && *uri)
+                        static_cast<WPEWebPage*>(userData)->applyUserAgentForUrl(QUrl(QString::fromUtf8(uri)));
+                }),
+                this);
             // Geolocation and camera/microphone permissions: prompt the user
             // via a QML banner (the qt5 plugin only auto-allows device-info).
             g_signal_connect(
@@ -2014,6 +2045,11 @@ void WPEWebPage::setDesktopMode(bool desktop)
 void WPEWebPage::applyUserAgentForUrl(const QUrl &url)
 {
     setUserAgent(atlanticUserAgentForUrl(url, m_desktopMode));
+}
+
+bool WPEWebPage::urlHasUaQuirk(const QUrl &url) const
+{
+    return atlanticUserAgentForUrl(url, m_desktopMode) != atlanticUserAgent(m_desktopMode);
 }
 
 void WPEWebPage::applyInitialDeviceScale(qreal scale)
