@@ -654,7 +654,18 @@ static const char* const kIconHeal = R"JS(
     document.addEventListener('fullscreenchange', pass, true);
     document.addEventListener('webkitfullscreenchange', pass, true);
     var lastInteractionPass = 0;
-    document.addEventListener('pointerup', function() {
+    var downX = 0, downY = 0;
+    document.addEventListener('pointerdown', function(e) {
+        downX = e.clientX; downY = e.clientY;
+    }, { capture: true, passive: true });
+    document.addEventListener('pointerup', function(e) {
+        // Only heal on a genuine tap, never on a scroll/flick. A drag moves the
+        // pointer; healing walks every stylesheet + querySelectorAll(maskSelectors)
+        // + getComputedStyle (~145ms on heavy pages like franceinfo). Firing it on
+        // every swipe-end (~1/sec) is a measured contributor to the scroll freeze -
+        // the main thread was 92% busy during scroll, this being ~25% of it. Icons
+        // that appear on interaction (player chrome) still heal on a real tap.
+        if (Math.abs(e.clientX - downX) > 10 || Math.abs(e.clientY - downY) > 10) return;
         var now = Date.now();
         if (now - lastInteractionPass < 1000 || !maskSelectors.length) return;
         lastInteractionPass = now;
