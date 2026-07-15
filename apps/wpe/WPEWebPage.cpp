@@ -1773,7 +1773,12 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             if (!session) {
                 session = webkit_network_session_get_default();
             }
-            WebKitCookieManager* cookieManager = session ? webkit_network_session_get_cookie_manager(session) : nullptr;
+            // Private tabs run on an ephemeral session: never bind it to on-disk
+            // cookie storage — that would defeat the point of private browsing
+            // (and persistent storage is invalid on an ephemeral session).
+            WebKitCookieManager* cookieManager =
+                (session && !privateBrowsing())
+                    ? webkit_network_session_get_cookie_manager(session) : nullptr;
             if (cookieManager) {
                 const QString dataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
                 const QString cookieDir = dataDir.isEmpty()

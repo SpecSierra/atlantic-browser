@@ -722,6 +722,7 @@ void WPEWebContainer::onTabClosed(int tabId)
 {
     m_mruTabs.removeAll(tabId);
     WPEWebPage *page = m_pages.take(tabId);
+    const bool wasPrivate = page && page->privateBrowsing();
     if (page) {
         page->setVisible(false);
         page->deleteLater();
@@ -731,6 +732,11 @@ void WPEWebContainer::onTabClosed(int tabId)
             emit needChromeChanged();
         }
     }
+    // Closing the last private tab wipes the shared ephemeral session, so
+    // re-entering private mode later in the same run starts with no cookies or
+    // storage. (Everything was in-memory only; this just drops it eagerly.)
+    if (wasPrivate && m_privateTabModel && m_privateTabModel->count() == 0)
+        WPEQtView::clearPrivateBrowsingData();
 }
 
 void WPEWebContainer::activatePage(int tabId)
@@ -887,6 +893,11 @@ WPEWebPage *WPEWebContainer::getOrCreatePage(int tabId)
     // then reparent via setParentItem() to trigger configureWindow() correctly.
     WPEWebPage *page = new WPEWebPage(nullptr);
     page->setTabId(tabId);
+    // Tag the page with the mode it was born into, BEFORE it is parented (which
+    // triggers web-view creation): private pages must be constructed against the
+    // ephemeral network session. A page keeps this for its whole life — the two
+    // tab models use disjoint id ranges, so a page never switches modes.
+    page->setPrivateBrowsing(m_privateMode);
     page->setVisible(false);
     page->setActive(false);
     page->setAppForeground(m_foreground);
@@ -966,8 +977,9 @@ void WPEWebContainer::onPageUrlChanged()
 
     // Update tab model
     if (m_tabModel) {
-        // The tab model tracks URL via its own signals; here we record history
-        if (m_historyModel && !newUrl.isEmpty()) {
+        // The tab model tracks URL via its own signals; here we record history.
+        // Private tabs never touch the history store.
+        if (m_historyModel && !newUrl.isEmpty() && !page->privateBrowsing()) {
             m_historyModel->add(newUrl, page->title());
         }
     }
@@ -979,10 +991,11 @@ void WPEWebContainer::onPageTitleChanged()
     if (!page || page != m_contentItem) return;
     m_waitingForFreshTitle = page->title().isEmpty();
     emit titleChanged();
-    // Update history entry once title is known
+    // Update history entry once title is known. Private tabs are never recorded.
     QString url = page->url().toString();
     QString title = page->title();
-    if (m_historyModel && !url.isEmpty() && url != QStringLiteral("about:blank") && !title.isEmpty()) {
+    if (m_historyModel && !url.isEmpty() && url != QStringLiteral("about:blank")
+            && !title.isEmpty() && !page->privateBrowsing()) {
         m_historyModel->add(url, title);
     }
 }
