@@ -802,6 +802,12 @@ void WPEWebContainer::discardPage(int tabId)
     // its WebProcess go away. activatePage() recreates + reloads it on return.
     page->setActive(false);
     page->setVisible(false);
+    // Destroying the WPEWebPage alone does NOT reliably terminate its
+    // WebProcess (it lingers at ~200MB, device-observed), so explicitly kill
+    // it first. One WebProcess per view (no related views), so this only
+    // affects this tab. The web-process-terminated signal just logs.
+    if (WebKitWebView *view = page->webView())
+        webkit_web_view_terminate_web_process(view);
     page->deleteLater();
     qInfo() << "[WPE-DISCARD] discarded tab" << tabId
             << "livePages=" << m_pages.size();
