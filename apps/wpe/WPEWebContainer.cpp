@@ -18,6 +18,7 @@
 
 #include <QGuiApplication>
 #include <QTimer>
+#include <QFile>
 #include <QScreen>
 #include <QDebug>
 #include <QFileInfo>
@@ -90,6 +91,32 @@ WPEWebContainer::WPEWebContainer(QQuickItem *parent)
 {
     setAcceptedMouseButtons(Qt::AllButtons);
     setFiltersChildMouseEvents(false);
+
+    // --- Tab discarding config (Lever 2) ---
+    // A backgrounded tab keeps its whole WebProcess resident (~250MB RSS +
+    // up to ~1GB pinned GPU tiles, measured on franceinfo/revolut). Keep only
+    // the active tab + a small MRU set live; discard the rest (their tab-model
+    // entry survives, so activatePage() recreates + reloads them on return).
+    if (qEnvironmentVariableIsSet("ATLANTIC_TAB_DISCARD"))
+        m_tabDiscardEnabled = qgetenv("ATLANTIC_TAB_DISCARD").trimmed() != "0";
+    if (qEnvironmentVariableIsSet("ATLANTIC_MAX_LIVE_TABS"))
+        m_maxLiveTabCount = qMax(1, qEnvironmentVariableIntValue("ATLANTIC_MAX_LIVE_TABS"));
+    if (qEnvironmentVariableIsSet("ATLANTIC_TAB_DISCARD_KEEP_MIN"))
+        m_pressureKeepMin = qMax(1, qEnvironmentVariableIntValue("ATLANTIC_TAB_DISCARD_KEEP_MIN"));
+    if (qEnvironmentVariableIsSet("ATLANTIC_TAB_DISCARD_MEMFREE_MB"))
+        m_memFreeThresholdMb = qMax(0, qEnvironmentVariableIntValue("ATLANTIC_TAB_DISCARD_MEMFREE_MB"));
+    qInfo() << "[WPE-DISCARD] enabled=" << m_tabDiscardEnabled
+            << "maxLive=" << m_maxLiveTabCount
+            << "keepMin=" << m_pressureKeepMin
+            << "memFreeThreshMB=" << m_memFreeThresholdMb;
+
+    // Poll MemFree so we can shed tabs under pressure even without tab switches.
+    m_memoryPressureTimer = new QTimer(this);
+    m_memoryPressureTimer->setInterval(8000);
+    connect(m_memoryPressureTimer, &QTimer::timeout,
+            this, &WPEWebContainer::checkMemoryPressure);
+    if (m_tabDiscardEnabled)
+        m_memoryPressureTimer->start();
 
     // Foreground tracking follows the Wayland window visibility: lipstick
     // marks the window Minimized when the app is covered/on the home screen
@@ -686,10 +713,14 @@ void WPEWebContainer::onTabAdded(int tabId)
     // Pre-create the page so it's ready
     WPEWebPage *page = getOrCreatePage(tabId);
     Q_UNUSED(page)
+    // A newly-added background tab must not blow the live-tab budget: if we're
+    // already at the cap it will be discarded here and reload when first shown.
+    enforceLiveTabBudget();
 }
 
 void WPEWebContainer::onTabClosed(int tabId)
 {
+    m_mruTabs.removeAll(tabId);
     WPEWebPage *page = m_pages.take(tabId);
     if (page) {
         page->setVisible(false);
@@ -737,6 +768,106 @@ void WPEWebContainer::activatePage(int tabId)
         emit canGoBackChanged();
         emit canGoForwardChanged();
     }
+
+    // The just-activated tab is the most-recently-used; discard anything that
+    // now falls outside the live-tab budget.
+    touchMru(tabId);
+    enforceLiveTabBudget();
+}
+
+void WPEWebContainer::touchMru(int tabId)
+{
+    m_mruTabs.removeAll(tabId);
+    m_mruTabs.prepend(tabId);
+}
+
+int WPEWebContainer::effectiveLiveTabCap() const
+{
+    // Normally keep the active tab + (m_maxLiveTabCount-1) MRU tabs. Under
+    // memory pressure, shrink toward m_pressureKeepMin so we shed aggressively.
+    if (m_underMemoryPressure)
+        return qMin(m_maxLiveTabCount, m_pressureKeepMin);
+    return m_maxLiveTabCount;
+}
+
+void WPEWebContainer::discardPage(int tabId)
+{
+    // Never discard the tab the user is looking at.
+    if (m_contentItem && m_pages.value(tabId) == m_contentItem)
+        return;
+    WPEWebPage *page = m_pages.take(tabId);
+    if (!page)
+        return;
+    // Keep the tab-model entry (URL/title/thumbnail) — only the live page and
+    // its WebProcess go away. activatePage() recreates + reloads it on return.
+    page->setActive(false);
+    page->setVisible(false);
+    page->deleteLater();
+    qInfo() << "[WPE-DISCARD] discarded tab" << tabId
+            << "livePages=" << m_pages.size();
+}
+
+void WPEWebContainer::enforceLiveTabBudget()
+{
+    if (!m_tabDiscardEnabled)
+        return;
+
+    const int cap = effectiveLiveTabCap();
+    if (m_pages.size() <= cap)
+        return;
+
+    // Build the discard order: least-recently-used first. Any live page not in
+    // the MRU list (e.g. pre-created background tabs) is treated as coldest.
+    QList<int> victims;
+    for (int tabId : m_pages.keys()) {
+        if (!m_mruTabs.contains(tabId))
+            victims.prepend(tabId);        // never-activated → coldest
+    }
+    for (int i = m_mruTabs.size() - 1; i >= 0; --i) {
+        int tabId = m_mruTabs.at(i);
+        if (m_pages.contains(tabId))
+            victims.append(tabId);         // LRU appended after the never-used
+    }
+
+    const int activeTabId = this->tabId();
+    for (int tabId : victims) {
+        if (m_pages.size() <= cap)
+            break;
+        if (tabId == activeTabId)
+            continue;
+        discardPage(tabId);
+    }
+}
+
+void WPEWebContainer::checkMemoryPressure()
+{
+    if (!m_tabDiscardEnabled)
+        return;
+
+    // MemAvailable is bogus on this vendor kernel; trust MemFree.
+    QFile f(QStringLiteral("/proc/meminfo"));
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+        return;
+    long memFreeKb = -1;
+    while (!f.atEnd()) {
+        const QByteArray line = f.readLine();
+        if (line.startsWith("MemFree:")) {
+            memFreeKb = line.mid(8).trimmed().split(' ').first().toLong();
+            break;
+        }
+    }
+    f.close();
+    if (memFreeKb < 0)
+        return;
+
+    const bool nowPressure = (memFreeKb / 1024) < m_memFreeThresholdMb;
+    if (nowPressure != m_underMemoryPressure) {
+        m_underMemoryPressure = nowPressure;
+        qInfo() << "[WPE-DISCARD] memory pressure" << (nowPressure ? "ON" : "OFF")
+                << "MemFree=" << (memFreeKb / 1024) << "MB cap=" << effectiveLiveTabCap();
+    }
+    if (nowPressure)
+        enforceLiveTabBudget();
 }
 
 WPEWebPage *WPEWebContainer::getOrCreatePage(int tabId)

@@ -10,8 +10,10 @@
 #include <QQmlParserStatus>
 #include <QQmlComponent>
 #include <QMap>
+#include <QList>
 #include <QPointer>
 
+class QTimer;
 class WPEWebPage;
 class DeclarativeTabModel;
 class DeclarativeHistoryModel;
@@ -178,12 +180,28 @@ private:
     void setActiveTabRendered(bool r);
     void connectPage(WPEWebPage *page);
 
+    // --- Tab discarding (Lever 2): reclaim a backgrounded tab's whole
+    // WebProcess (RSS + GPU) when it falls outside the live-tab budget. The
+    // tab stays in the tab model (URL/title/thumbnail persist); activatePage()
+    // transparently recreates + reloads it via getOrCreatePage() on return. ---
+    void touchMru(int tabId);              // mark tabId most-recently-used
+    void discardPage(int tabId);           // tear down the page, keep the tab
+    void enforceLiveTabBudget();           // discard tabs beyond the MRU cap
+    void checkMemoryPressure();            // poll MemFree, tighten cap if low
+    int effectiveLiveTabCap() const;       // current cap (shrinks under pressure)
+
     WPEWebPage *m_contentItem = nullptr;
     PersistentTabModel *m_persistentTabModel = nullptr;
     PrivateTabModel *m_privateTabModel = nullptr;
     DeclarativeTabModel *m_tabModel = nullptr;
     DeclarativeHistoryModel *m_historyModel = nullptr;
     QMap<int, WPEWebPage *> m_pages;
+    QList<int> m_mruTabs;                   // most-recently-used first; front = active
+    QTimer *m_memoryPressureTimer = nullptr;
+    bool m_tabDiscardEnabled = true;        // ATLANTIC_TAB_DISCARD (default on)
+    int m_pressureKeepMin = 2;              // ATLANTIC_TAB_DISCARD_KEEP_MIN
+    int m_memFreeThresholdMb = 400;         // ATLANTIC_TAB_DISCARD_MEMFREE_MB
+    bool m_underMemoryPressure = false;
     QPointer<QQmlComponent> m_webPageComponent;
     QPointer<QObject> m_chromeWindow;
     QPointer<QQuickItem> m_rotationHandler;
