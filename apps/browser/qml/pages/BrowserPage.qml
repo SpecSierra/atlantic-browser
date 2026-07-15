@@ -367,7 +367,12 @@ Page {
         id: startPage
 
         width: browserPage.width
-        height: Math.ceil(overlay.y)
+        // Fill the whole page so the wallpaper backdrop sits behind the toolbar strip
+        // too: when the popup menu hides the toolbar, that strip must show wallpaper,
+        // not the empty white web view. Foreground layout uses contentHeight (the
+        // visible area above the toolbar) so the clock/search/grid don't shift.
+        height: browserPage.height
+        contentHeight: Math.ceil(overlay.y)
         clip: true
 
         visible: !!webView.tabModel && webView.tabModel.count === 0 && !overlay.toolBar.findInPageActive

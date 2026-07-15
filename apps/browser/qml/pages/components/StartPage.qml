@@ -27,6 +27,13 @@ Item {
     // true while the address-bar overlay is open (hide the foreground then)
     property bool overlayOpen: false
 
+    // Height of the visible area above the toolbar, used to lay out the foreground
+    // (clock / search / grid). The wallpaper backdrop, in contrast, fills the whole
+    // item (full screen) so the toolbar strip keeps wallpaper behind it — otherwise,
+    // when the popup menu hides the toolbar, that strip falls through to the empty
+    // white web view. Defaults to the item height when the host doesn't set it.
+    property real contentHeight: height
+
     property var now: new Date()
 
     property string wpUrl: WallpaperUtils.ambienceImageUrl(Ambience.source)
@@ -92,7 +99,9 @@ Item {
 
         width: parent.width - 2 * Theme.horizontalPageMargin
         anchors.horizontalCenter: parent.horizontalCenter
-        y: Math.round(parent.height * 0.14)
+        // Position within the visible area (above the toolbar), not the full-screen
+        // item height — so the foreground stays put while the backdrop fills the screen.
+        y: Math.round(root.contentHeight * 0.14)
         spacing: Theme.paddingMedium
         opacity: root.overlayOpen ? 0.0 : 1.0
         visible: opacity > 0.0
