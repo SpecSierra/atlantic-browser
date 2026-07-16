@@ -153,6 +153,18 @@ class WPEWebPage : public WPEQtView
     Q_PROPERTY(QStringList fileChooserNameFilters READ fileChooserNameFilters NOTIFY fileChooserNameFiltersChanged FINAL)
     Q_PROPERTY(bool fileChooserSelectMultiple READ fileChooserSelectMultiple NOTIFY fileChooserSelectMultipleChanged FINAL)
 
+    // HTML5 date/time/color input pickers — same JS-bridge + NOTIFY-property
+    // pattern as selectMenu* above. WebKit has no native WPE picker for these,
+    // so QML drives the Silica DatePicker/TimePicker/ColorPicker dialogs.
+    // inputPickerType is one of date|month|week|time|datetime-local|color;
+    // value/min/max/step are the raw HTML string values.
+    Q_PROPERTY(bool inputPickerActive READ inputPickerActive NOTIFY inputPickerActiveChanged FINAL)
+    Q_PROPERTY(QString inputPickerType READ inputPickerType NOTIFY inputPickerChanged FINAL)
+    Q_PROPERTY(QString inputPickerValue READ inputPickerValue NOTIFY inputPickerChanged FINAL)
+    Q_PROPERTY(QString inputPickerMin READ inputPickerMin NOTIFY inputPickerChanged FINAL)
+    Q_PROPERTY(QString inputPickerMax READ inputPickerMax NOTIFY inputPickerChanged FINAL)
+    Q_PROPERTY(QString inputPickerStep READ inputPickerStep NOTIFY inputPickerChanged FINAL)
+
     Q_PROPERTY(bool crashed READ crashed NOTIFY crashedChanged FINAL)
 
     // Pinch zoom visual scale — compositor-level transform during gesture; WebKit zoom committed on end
@@ -305,6 +317,19 @@ public:
     void openSelectMenu(const QStringList &options, int selectedIndex);
     bool selectMenuActive() const { return m_selectMenuActive; }
 
+    // Date/time/color input picker: QML calls resolveInputPicker(value) with the
+    // HTML-formatted value string on accept, or cancelInputPicker() on dismiss.
+    Q_INVOKABLE void resolveInputPicker(const QString &value);
+    Q_INVOKABLE void cancelInputPicker();
+    void openInputPicker(const QString &type, const QString &value,
+                         const QString &min, const QString &max, const QString &step);
+    bool inputPickerActive() const { return m_inputPickerActive; }
+    QString inputPickerType() const { return m_inputPickerType; }
+    QString inputPickerValue() const { return m_inputPickerValue; }
+    QString inputPickerMin() const { return m_inputPickerMin; }
+    QString inputPickerMax() const { return m_inputPickerMax; }
+    QString inputPickerStep() const { return m_inputPickerStep; }
+
     // Image long-press
     void openImageLongPress(const QString &imageUrl);
     Q_INVOKABLE void clearImageLongPress();
@@ -389,6 +414,8 @@ signals:
     void fileChooserActiveChanged();
     void fileChooserNameFiltersChanged();
     void fileChooserSelectMultipleChanged();
+    void inputPickerActiveChanged();
+    void inputPickerChanged();
 
     void visualScaleChanged();
     void pinchCenterChanged();
@@ -506,6 +533,14 @@ private:
     bool m_fileChooserActive = false;
     QStringList m_fileChooserNameFilters;
     bool m_fileChooserSelectMultiple = false;
+
+    bool m_inputPickerActive = false;
+    QString m_inputPickerType;
+    QString m_inputPickerValue;
+    QString m_inputPickerMin;
+    QString m_inputPickerMax;
+    QString m_inputPickerStep;
+
     bool m_crashed = false;
 
     // TLS certificate failure state (cert kept alive until accepted or next load)

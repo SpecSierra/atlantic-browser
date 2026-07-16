@@ -662,6 +662,9 @@ Page {
 
     Browser.SelectMenuOverlay { webView: webView }
 
+    // Native Silica pickers for <input type=date|month|week|time|datetime-local|color>.
+    Browser.InputPickerOverlay { webView: webView }
+
     Browser.ImageActionPanel { webView: webView }
 
     Component.onCompleted: {

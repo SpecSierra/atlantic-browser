@@ -1372,6 +1372,55 @@ static const char* const kSelectBridge = R"JS(
 })();
 )JS";
 
+// HTML5 date/time/color input pickers. WPE has no native picker for
+// <input type=date|month|week|time|datetime-local|color> (the WPE PageClient's
+// createColorPicker/createDateTimePicker both return nullptr and the glib
+// run-color-chooser signal is GTK-only), so tapping such a field would do
+// nothing. This bridge — mirroring kSelectBridge — intercepts the activation,
+// suppresses WebKit's own (absent) handling, and hands the field's current
+// value + min/max/step to the UI process, which drives a native Silica
+// DatePicker/TimePicker/ColorPicker dialog and writes the chosen value back via
+// WPEWebPage::resolveInputPicker (which sets el.value + fires input/change).
+static const char* const kInputPickerBridge = R"JS(
+(function() {
+    if (window.__wpeInputPickerBridgeInstalled) return;
+    window.__wpeInputPickerBridgeInstalled = true;
+
+    var PICKER_TYPES = { date:1, month:1, week:1, time:1, 'datetime-local':1, color:1 };
+
+    function handleActivation(e) {
+        var el = e.target;
+        while (el && el.tagName && el.tagName.toLowerCase() !== 'input') {
+            el = el.parentElement;
+        }
+        if (!el || !el.tagName || el.tagName.toLowerCase() !== 'input') return;
+        // Read the attribute, not el.type: if the runtime pref were ever off the
+        // element would report type=text, and we still want the attribute intent.
+        var type = (el.getAttribute('type') || '').toLowerCase();
+        if (!PICKER_TYPES[type]) return;
+        if (el.disabled || el.readOnly) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        window.__wpePendingInput = el;
+        try {
+            window.webkit.messageHandlers.inputPickerBridge.postMessage({
+                type: type,
+                value: el.value || '',
+                min: el.getAttribute('min') || '',
+                max: el.getAttribute('max') || '',
+                step: el.getAttribute('step') || ''
+            });
+        } catch(ex) {
+            console.error('[WPE-INPUTPICKER-JS] postMessage error: ' + ex);
+        }
+    }
+    document.addEventListener('mousedown',   handleActivation, true);
+    document.addEventListener('touchstart',  handleActivation, {capture: true, passive: true});
+    document.addEventListener('pointerdown', handleActivation, true);
+    document.addEventListener('click',       handleActivation, true);
+})();
+)JS";
+
 // Generic cosmetic ad blocking: the adblock engine's generic rules
 // (##.ad-banner and friends) are keyed by the class/id names actually present
 // in the DOM (Engine::hidden_class_id_selectors). This collector reports each

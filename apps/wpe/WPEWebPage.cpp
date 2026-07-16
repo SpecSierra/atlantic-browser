@@ -566,6 +566,33 @@ static void onSelectBridgeMessage(WebKitUserContentManager*, JSCValue* value, gp
     page->openSelectMenu(items, selectedIndex);
 }
 
+static void onInputPickerBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
+{
+    WPEWebPage* page = static_cast<WPEWebPage*>(userData);
+    if (!page || !value)
+        return;
+
+    gchar* json = jsc_value_to_json(value, 0);
+    if (!json)
+        return;
+
+    QByteArray jsonBytes(json);
+    g_free(json);
+
+    QJsonParseError parseError;
+    QJsonDocument doc = QJsonDocument::fromJson(jsonBytes, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !doc.isObject())
+        return;
+
+    QJsonObject obj = doc.object();
+    page->openInputPicker(
+        obj.value(QStringLiteral("type")).toString(),
+        obj.value(QStringLiteral("value")).toString(),
+        obj.value(QStringLiteral("min")).toString(),
+        obj.value(QStringLiteral("max")).toString(),
+        obj.value(QStringLiteral("step")).toString());
+}
+
 static void onSelectionBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
 {
     WPEWebPage* page = static_cast<WPEWebPage*>(userData);
@@ -1761,6 +1788,18 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                 nullptr, nullptr);
             webkit_user_content_manager_add_script(ucm, script);
             webkit_user_script_unref(script);
+
+            // --- HTML5 date/time/color input pickers via JS bridge ---
+            g_signal_connect(ucm, "script-message-received::inputPickerBridge",
+                             G_CALLBACK(onInputPickerBridgeMessage), this);
+            webkit_user_content_manager_register_script_message_handler(ucm, "inputPickerBridge", nullptr);
+            WebKitUserScript* inputPickerScript = webkit_user_script_new(
+                WPEUserScripts::kInputPickerBridge,
+                WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+                WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+                nullptr, nullptr);
+            webkit_user_content_manager_add_script(ucm, inputPickerScript);
+            webkit_user_script_unref(inputPickerScript);
 
             onSelectionBridgeInstall(ucm, this);
             if (s_cookieBannerBlocking)
@@ -3558,6 +3597,52 @@ void WPEWebPage::openSelectMenu(const QStringList &options, int selectedIndex)
     emit selectMenuOptionsChanged();
     emit selectMenuSelectedIndexChanged();
     emit selectMenuActiveChanged();
+}
+
+void WPEWebPage::openInputPicker(const QString &type, const QString &value,
+                                 const QString &min, const QString &max, const QString &step)
+{
+    m_inputPickerType = type;
+    m_inputPickerValue = value;
+    m_inputPickerMin = min;
+    m_inputPickerMax = max;
+    m_inputPickerStep = step;
+    m_inputPickerActive = true;
+    emit inputPickerChanged();
+    emit inputPickerActiveChanged();
+}
+
+void WPEWebPage::resolveInputPicker(const QString &value)
+{
+    // Assign to the pending input and fire input+change so page scripts and form
+    // state observe the new value, then clear the pending reference. The value is
+    // injected as the sole element of a JSON array literal ((["…"])[0]) so any
+    // quotes/backslashes survive without hand-rolled escaping.
+    const QByteArray enc = QJsonDocument(QJsonArray{ value }).toJson(QJsonDocument::Compact);
+    const QString script = QStringLiteral(
+        "(function(){"
+        "  var el=window.__wpePendingInput;"
+        "  if(!el) return;"
+        "  el.value=(%1)[0];"
+        "  el.dispatchEvent(new Event('input',{bubbles:true}));"
+        "  el.dispatchEvent(new Event('change',{bubbles:true}));"
+        "  window.__wpePendingInput=null;"
+        "})();"
+    ).arg(QString::fromUtf8(enc));
+    runJavaScript(script);
+    if (m_inputPickerActive) {
+        m_inputPickerActive = false;
+        emit inputPickerActiveChanged();
+    }
+}
+
+void WPEWebPage::cancelInputPicker()
+{
+    runJavaScript(QStringLiteral("window.__wpePendingInput=null;"));
+    if (m_inputPickerActive) {
+        m_inputPickerActive = false;
+        emit inputPickerActiveChanged();
+    }
 }
 
 void WPEWebPage::openImageLongPress(const QString &imageUrl)
