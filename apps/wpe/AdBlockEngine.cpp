@@ -18,6 +18,7 @@
 #include <QVector>
 
 bool AdBlockEngine::s_enabled = true;
+QStringList AdBlockEngine::s_allowlist;
 
 AdBlockEngine& AdBlockEngine::instance()
 {
@@ -71,7 +72,7 @@ bool AdBlockEngine::loadResources(const QString& path)
 
 QString AdBlockEngine::genericHides(const QUrl& url, const QByteArray& classes, const QByteArray& ids)
 {
-    if (!m_engine || !s_enabled) return QString();
+    if (!m_engine || !s_enabled || isAllowlistedUrl(url)) return QString();
     if (classes.isEmpty() && ids.isEmpty()) return QString();
 
     QByteArray urlUtf8 = url.toString().toUtf8();
@@ -96,9 +97,31 @@ static bool hostsRelated(const QString& a, const QString& b)
     return false;
 }
 
+void AdBlockEngine::setAllowlist(const QStringList& hosts)
+{
+    s_allowlist = hosts;
+}
+
+bool AdBlockEngine::isAllowlistedUrl(const QUrl& url)
+{
+    const QString host = url.host();
+    if (host.isEmpty()) return false;
+    for (const QString& h : s_allowlist) {
+        if (hostsRelated(host, h))
+            return true;
+    }
+    return false;
+}
+
+QByteArray AdBlockEngine::allowlistJoined()
+{
+    return s_allowlist.join(QLatin1Char('\n')).toUtf8();
+}
+
 bool AdBlockEngine::shouldBlockPopup(const QUrl& pageUrl, const QUrl& popupUrl)
 {
     if (!m_engine || !s_enabled) return false;
+    if (isAllowlistedUrl(pageUrl)) return false;
     if (!popupUrl.scheme().startsWith(QLatin1String("http"))) return false;
 
     const QByteArray src = pageUrl.toString().toUtf8();
@@ -140,7 +163,7 @@ static QVector<WebKitUserScript*>* installedScripts(WebKitUserContentManager* uc
 
 void AdBlockEngine::installCosmetics(WebKitUserContentManager* ucm, const QUrl& url)
 {
-    if (!m_engine || !s_enabled || !ucm) return;
+    if (!m_engine || !s_enabled || !ucm || isAllowlistedUrl(url)) return;
 
     const QString host = url.host();
     if (host.isEmpty() || !url.scheme().startsWith(QLatin1String("http"))) return;

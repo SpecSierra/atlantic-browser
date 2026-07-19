@@ -225,6 +225,7 @@ public:
     // dconf binding in BrowserPage.qml (via WPEWebContainer::setAdBlockEnabled),
     // so it works with any number of tabs (or none) open.
     static void applyAdBlockEnabledGlobally(bool enabled);
+    static void applyAdBlockAllowlistGlobally(const QString &json);
     static void applyCookieBannerBlockingGlobally(bool enabled);
     // Per-site UA overrides (JSON object host → profile id) from the
     // site_ua_overrides dconf key, pushed via WPEWebContainer like the two

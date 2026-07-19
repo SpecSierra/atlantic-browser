@@ -103,6 +103,7 @@ public:
     // WebProcesses). Called from BrowserPage.qml's dconf binding — C++ can't
     // read dconf itself (MDConfItem is a no-op stub in this build).
     Q_INVOKABLE void setAdBlockEnabled(bool enabled);
+    Q_INVOKABLE void setAdBlockAllowlist(const QString &json);
     // Cookie-banner auto-reject (autoconsent) toggle, same dconf-driven shape.
     Q_INVOKABLE void setCookieBannerBlockingEnabled(bool enabled);
     Q_INVOKABLE void setSiteUaOverrides(const QString &json);

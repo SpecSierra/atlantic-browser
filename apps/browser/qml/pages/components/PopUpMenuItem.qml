@@ -111,6 +111,35 @@ Item {
                 }
             }
 
+            OverlayListItem {
+                // Host of the current page ("" on about:/file: pages).
+                readonly property string _host: {
+                    var m = /^https?:\/\/([^\/:?#]+)/.exec(webView.url || "")
+                    return m ? m[1].toLowerCase() : ""
+                }
+
+                height: Theme.itemSizeSmall
+                enabled: _host.length > 0 && adBlockEngine.value
+                opacity: enabled ? 1.0 : 0.5
+                iconWidth: root.iconWidth
+                horizontalOffset: root.horizontalOffset
+                // No blocked/shield icon in the SFOS theme; icon-m-website is
+                // the same per-site glyph SettingsPage uses.
+                iconSource: "image://theme/icon-m-website"
+                checkable: true
+                // adBlockAllowlist and adBlockEngine resolve from BrowserPage's
+                // context (like webView/overlay above).
+                checked: enabled && !adBlockAllowlist.isAllowed(_host)
+                //: Per-site toggle: unchecking disables the ad blocker on this site
+                //% "Block ads on this site"
+                text: qsTrId("sailfish_browser-la-block_ads_on_site")
+
+                onClicked: {
+                    adBlockAllowlist.setAllowed(_host, checked)
+                    overlay.animator.showChrome()
+                }
+            }
+
         }
 
         Column {

@@ -8,6 +8,7 @@
 
 #pragma once
 #include <QString>
+#include <QStringList>
 #include <QByteArray>
 
 // The UI-process AdBlockEngine handles cosmetic filtering and popup
@@ -69,7 +70,17 @@ public:
     static bool isEnabled();
     static void setEnabled(bool enabled);
 
+    // Per-site allowlist: hosts (and their subdomains) on which all blocking —
+    // network (extension side), cosmetics, generic hides, popups — is skipped.
+    static void setAllowlist(const QStringList& hosts);
+    static bool isAllowlistedUrl(const QUrl& url);
+    // The list joined with '\n', for the WebProcess extension user message /
+    // init user-data.
+    static QByteArray allowlistJoined();
+
 private:
+    static QStringList s_allowlist;
+
     AdBlockEngine() = default;
     ~AdBlockEngine();
     AdBlockEngine(const AdBlockEngine&) = delete;

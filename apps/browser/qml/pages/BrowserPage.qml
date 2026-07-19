@@ -78,6 +78,35 @@ Page {
     }
 
     ConfigurationValue {
+        id: adBlockAllowlist
+        key: "/apps/atlantic-browser/settings/adblock_allowlist"
+        defaultValue: "[]"
+        // JSON array of hosts on which the ad blocker is disabled ("Block ads
+        // on this site" toggle in the popup menu). Same shape as adblock_enabled
+        // above: dconf is the single source of truth, applied process-wide.
+        onValueChanged: webView.setAdBlockAllowlist(value)
+        Component.onCompleted: webView.setAdBlockAllowlist(value)
+
+        // Is host (or a parent domain of it) on the allowlist?
+        function isAllowed(host) {
+            if (!host) return false
+            var list = JSON.parse(value)
+            for (var i = 0; i < list.length; i++) {
+                if (host === list[i] || host.indexOf("." + list[i], host.length - list[i].length - 1) >= 0)
+                    return true
+            }
+            return false
+        }
+
+        function setAllowed(host, allowed) {
+            if (!host) return
+            var list = JSON.parse(value).filter(function (h) { return h !== host })
+            if (allowed) list.push(host)
+            value = JSON.stringify(list)
+        }
+    }
+
+    ConfigurationValue {
         id: cookieBannerBlocking
         key: "/apps/atlantic-browser/settings/cookie_banner_blocking"
         defaultValue: true

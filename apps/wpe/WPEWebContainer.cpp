@@ -254,12 +254,15 @@ void WPEWebContainer::configureSandboxPaths()
     // (rather than calling the setters once) re-applies on every WebProcess
     // launch, including respawns after a crash. The initial enabled state is
     // passed as user-data; live toggles arrive via a per-page user message.
+    // User-data is (enabled, per-site allowlist joined with '\n') — the
+    // extension also accepts a plain boolean for compatibility.
     g_signal_connect(ctx, "initialize-web-process-extensions",
         G_CALLBACK(+[](WebKitWebContext *c, gpointer) {
             webkit_web_context_set_web_process_extensions_directory(
                 c, WPERuntimePaths::kWebExtensionsDir);
             webkit_web_context_set_web_process_extensions_initialization_user_data(
-                c, g_variant_new_boolean(AdBlockEngine::isEnabled()));
+                c, g_variant_new("(bs)", AdBlockEngine::isEnabled(),
+                                 AdBlockEngine::allowlistJoined().constData()));
         }), nullptr);
 
     // WebProcess memory pressure: WTF Linux defaults already match target thresholds for a 4 GB device:
@@ -701,6 +704,11 @@ void WPEWebContainer::setAdBlockEnabled(bool enabled)
 void WPEWebContainer::setCookieBannerBlockingEnabled(bool enabled)
 {
     WPEWebPage::applyCookieBannerBlockingGlobally(enabled);
+}
+
+void WPEWebContainer::setAdBlockAllowlist(const QString &json)
+{
+    WPEWebPage::applyAdBlockAllowlistGlobally(json);
 }
 
 void WPEWebContainer::setSiteUaOverrides(const QString &json)

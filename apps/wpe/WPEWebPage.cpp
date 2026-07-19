@@ -3981,3 +3981,47 @@ void WPEWebPage::applyAdBlockEnabledGlobally(bool enabled)
     }
     qDebug() << "[WPE-BLOCKER] ad block toggled" << (enabled ? "ON" : "OFF");
 }
+
+void WPEWebPage::applyAdBlockAllowlistGlobally(const QString &json)
+{
+    // dconf JSON array of hosts on which the ad blocker is disabled.
+    QStringList hosts;
+    const QJsonArray arr = QJsonDocument::fromJson(json.toUtf8()).array();
+    for (const QJsonValue &v : arr) {
+        const QString host = v.toString().toLower().trimmed();
+        if (!host.isEmpty())
+            hosts.append(host);
+    }
+
+    // Snapshot which live pages the edit changes, before swapping the list.
+    QHash<WPEWebPage *, bool> allowedBefore;
+    for (WPEWebPage *page : liveInstances())
+        allowedBefore.insert(page, AdBlockEngine::isAllowlistedUrl(page->url()));
+
+    AdBlockEngine::setAllowlist(hosts);
+
+    // Tell every WebProcess (network blocking); new WebProcesses get the list
+    // via the extension's init user-data.
+    const QByteArray joined = AdBlockEngine::allowlistJoined();
+    for (WPEWebPage *page : liveInstances()) {
+        WebKitWebView *wv = page->webView();
+        if (!wv)
+            continue;
+        webkit_web_view_send_message_to_page(
+            wv, webkit_user_message_new("atlantic-adblock-set-allowlist",
+                                        g_variant_new_string(joined.constData())),
+            nullptr, nullptr, nullptr);
+
+        // Pages whose allowlist state changed: tear down the per-view cosmetic
+        // sheets (they are keyed by host and survive reloads) and reload — the
+        // toggle is an explicit user action on this site, a stale half-blocked
+        // page would look like it did nothing. Load-committed reinstalls
+        // cosmetics where still appropriate.
+        if (allowedBefore.value(page) != AdBlockEngine::isAllowlistedUrl(page->url())
+            && !page->url().isEmpty()) {
+            AdBlockEngine::resetCosmetics(webkit_web_view_get_user_content_manager(wv));
+            webkit_web_view_reload(wv);
+        }
+    }
+    qInfo() << "[ADBLOCK] allowlist updated:" << hosts.size() << "hosts";
+}
