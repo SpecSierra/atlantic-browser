@@ -246,6 +246,27 @@ static bool urlIsGoogleMaps(const QUrl &url)
 
 // Twitch lives at twitch.tv and m.twitch.tv (the bare twitch.tv redirects to the
 // mobile host on a mobile UA).
+// MGP-player sites (pornhub + sister sites sharing the same es6player). Under
+// an Android-shaped UA the player commits to its MSE engine, which stalls
+// silently in this WebKit (src never attached, infinite spinner — see
+// kMgpNativeHls). Under an iPhone UA it takes the native-HLS path, which
+// device-verified plays (GStreamer hlsdemux + droidvdec). Paired with
+// kMgpNativeHls hiding MediaSource, this reproduces a real iPhone environment,
+// these sites' best-tested mobile configuration.
+static bool urlIsMgpSite(const QUrl &url)
+{
+    const QString host = url.host().toLower();
+    static const char* const kDomains[] = {
+        "pornhub.com", "pornhub.org", "youporn.com", "redtube.com", "tube8.com"
+    };
+    for (const char* d : kDomains) {
+        const QLatin1String dom(d);
+        if (host == dom || host.endsWith(QLatin1Char('.') + QString(dom)))
+            return true;
+    }
+    return false;
+}
+
 static bool urlIsTwitch(const QUrl &url)
 {
     const QString host = url.host().toLower();
@@ -284,6 +305,8 @@ QString atlanticUserAgentForUrl(const QUrl &url, bool desktopMode)
     if (!desktopMode && urlIsGoogleMaps(url))
         return iphoneMobileUserAgent();
     if (!desktopMode && cloudflareChallengedHosts().contains(url.host().toLower()))
+        return iphoneMobileUserAgent();
+    if (!desktopMode && urlIsMgpSite(url))
         return iphoneMobileUserAgent();
     if (!desktopMode && urlIsTwitch(url)) {
         return QStringLiteral(
