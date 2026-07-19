@@ -435,6 +435,11 @@ signals:
     void adBlockEnabledChanged();
     void cookieBannerBlockingEnabledChanged();
 
+public:
+    // Last committed main-frame URL; source URL for redirect-hop ad blocking
+    // (written/read by the load-changed C callbacks).
+    QUrl m_lastCommittedUrl;
+
 protected:
     QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
     void inputMethodEvent(QInputMethodEvent *event) override;

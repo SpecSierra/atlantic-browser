@@ -579,6 +579,16 @@ gboolean onDecidePolicy(WebKitWebView* webView, WebKitPolicyDecision* decision, 
                     return TRUE;
                 }
 
+                // Diagnostic: identify the path any escaping ad navigation
+                // took (navType/gesture/redirect) — only cross-host to keep
+                // the log quiet.
+                if (!mainUrl.host().isEmpty() && dest.host() != mainUrl.host()) {
+                    qInfo() << "[ADBLOCK] main-frame nav:" << uri
+                            << "type" << navType
+                            << "gesture" << (action && webkit_navigation_action_is_user_gesture(action))
+                            << "redirect" << (action && webkit_navigation_action_is_redirect(action));
+                }
+
                 // uBO-style "strict blocking". The pornhub-class click hijack
                 // doesn't window.open — it navigates the main frame straight
                 // to the ad redirect URL, so the NEW_WINDOW popup path below
@@ -1790,8 +1800,37 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                     if (event != WEBKIT_LOAD_COMMITTED)
                         return;
                     const gchar* uri = webkit_web_view_get_uri(view);
-                    if (uri && *uri)
-                        static_cast<WPEWebPage*>(userData)->applyUserAgentForUrl(QUrl(QString::fromUtf8(uri)));
+                    if (uri && *uri) {
+                        WPEWebPage* page = static_cast<WPEWebPage*>(userData);
+                        page->m_lastCommittedUrl = QUrl(QString::fromUtf8(uri));
+                        page->applyUserAgentForUrl(page->m_lastCommittedUrl);
+                    }
+                }),
+                this);
+            // Server-redirect hops of a main-frame load never re-enter
+            // decide-policy, so a click hijack whose first hop is unlisted
+            // (first-party click tracker) can 302 through listed ad
+            // redirectors straight onto an unlisted lander. Check every hop
+            // against the network filters (document type) and abort the load
+            // on a hit — the previous page stays up.
+            g_signal_connect(
+                wv, "load-changed",
+                G_CALLBACK(+[](WebKitWebView* view, WebKitLoadEvent event, gpointer userData) {
+                    if (event != WEBKIT_LOAD_REDIRECTED)
+                        return;
+                    const gchar* uri = webkit_web_view_get_uri(view);
+                    if (!uri || !*uri)
+                        return;
+                    WPEWebPage* page = static_cast<WPEWebPage*>(userData);
+                    const QUrl dest(QString::fromUtf8(uri));
+                    const QUrl& src = page->m_lastCommittedUrl;
+                    qInfo() << "[ADBLOCK] main-frame redirect hop:" << uri;
+                    if (AdBlockEngine::isEnabled() && !src.isEmpty()
+                            && !AdBlockEngine::isAllowlistedUrl(src)
+                            && AdBlockEngine::instance().shouldBlockPopup(src, dest)) {
+                        qInfo() << "[ADBLOCK] redirect blocked (document filter match):" << uri;
+                        webkit_web_view_stop_loading(view);
+                    }
                 }),
                 this);
             // Geolocation and camera/microphone permissions: prompt the user
