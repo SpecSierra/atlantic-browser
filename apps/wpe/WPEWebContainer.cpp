@@ -703,6 +703,11 @@ void WPEWebContainer::setCookieBannerBlockingEnabled(bool enabled)
     WPEWebPage::applyCookieBannerBlockingGlobally(enabled);
 }
 
+void WPEWebContainer::setSiteUaOverrides(const QString &json)
+{
+    WPEWebPage::applySiteUaOverridesGlobally(json);
+}
+
 void WPEWebContainer::onActiveTabChanged(int activeTabId)
 {
     activatePage(activeTabId);

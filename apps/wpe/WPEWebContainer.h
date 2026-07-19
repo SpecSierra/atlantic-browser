@@ -105,6 +105,7 @@ public:
     Q_INVOKABLE void setAdBlockEnabled(bool enabled);
     // Cookie-banner auto-reject (autoconsent) toggle, same dconf-driven shape.
     Q_INVOKABLE void setCookieBannerBlockingEnabled(bool enabled);
+    Q_INVOKABLE void setSiteUaOverrides(const QString &json);
 
     // QQmlParserStatus
     void classBegin() override;

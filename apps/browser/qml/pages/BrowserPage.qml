@@ -87,6 +87,17 @@ Page {
         Component.onCompleted: webView.setCookieBannerBlockingEnabled(value)
     }
 
+    ConfigurationValue {
+        id: siteUaOverrides
+        key: "/apps/atlantic-browser/settings/site_ua_overrides"
+        defaultValue: "{}"
+        // Same shape as adblock_enabled above: dconf (JSON object of
+        // host → UA profile id, edited by SiteUaSettingsPage) is the single
+        // source of truth, applied process-wide.
+        onValueChanged: webView.setSiteUaOverrides(value)
+        Component.onCompleted: webView.setSiteUaOverrides(value)
+    }
+
     function load(url, title) {
         overlay.dismiss(true)
         webView.load(url, title)

@@ -318,6 +318,46 @@ Page {
             }
 
             SectionHeader {
+                //: Section Header for per-site behaviour settings
+                //% "Websites"
+                text: qsTrId("atlantic-sh-websites")
+            }
+
+            BackgroundItem {
+                width: parent.width
+                contentHeight: Theme.itemSizeMedium
+                Row {
+                    width: parent.width - 2*Theme.horizontalPageMargin
+                    x: Theme.horizontalPageMargin
+                    spacing: Theme.paddingMedium
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    Icon {
+                        id: siteUaIcon
+                        source: "image://theme/icon-m-website"
+                    }
+                    Column {
+                        width: parent.width - parent.spacing - siteUaIcon.width
+                        anchors.verticalCenter: siteUaIcon.verticalCenter
+                        Label {
+                            width: parent.width
+                            //% "Site user agents"
+                            text: qsTrId("atlantic-he-site_user_agents")
+                        }
+                        Label {
+                            width: parent.width
+                            //% "Make selected websites see a different browser"
+                            text: qsTrId("atlantic-he-site_user_agents_description")
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            color: Theme.secondaryColor
+                            wrapMode: Text.Wrap
+                        }
+                    }
+                }
+                onClicked: pageStack.push("SiteUaSettingsPage.qml")
+            }
+
+            SectionHeader {
                 //: Section Header for Downloads settings
                 //% "Downloads"
                 text: qsTrId("settings_browser-la-downloads")

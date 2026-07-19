@@ -145,6 +145,70 @@ static QSet<QString> &cloudflareChallengedHosts()
     return hosts;
 }
 
+// User-selected per-site UA overrides (host → profile id), persisted in dconf
+// as a JSON object and pushed process-wide from BrowserPage.qml via
+// WPEWebContainer::setSiteUaOverrides (C++ cannot read dconf itself —
+// MDConfItem is a no-op stub in this build).
+static QHash<QString, QString> &siteUaOverridesMap()
+{
+    static QHash<QString, QString> overrides;
+    return overrides;
+}
+
+// Predefined UA profiles selectable in Settings → "Site user agents".
+// Ids are shared with SiteUaSettingsPage.qml; an unknown id means "no
+// override". Version tokens are frozen-ish shapes sniffers accept, matching
+// the philosophy of the built-in quirks above.
+static QString uaForProfile(const QString &profileId)
+{
+    if (profileId == QLatin1String("chrome-android")) {
+        return QStringLiteral(
+            "Mozilla/5.0 (Linux; Android 14; Pixel 7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/130.0.0.0 Mobile Safari/537.36");
+    }
+    if (profileId == QLatin1String("safari-iphone"))
+        return iphoneMobileUserAgent();
+    if (profileId == QLatin1String("firefox-android")) {
+        return QStringLiteral(
+            "Mozilla/5.0 (Android 14; Mobile; rv:130.0) "
+            "Gecko/130.0 Firefox/130.0");
+    }
+    if (profileId == QLatin1String("chrome-desktop")) {
+        return QStringLiteral(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/130.0.0.0 Safari/537.36");
+    }
+    if (profileId == QLatin1String("safari-mac")) {
+        return QStringLiteral(
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+            "Version/18.0 Safari/605.1.15");
+    }
+    if (profileId == QLatin1String("firefox-desktop")) {
+        return QStringLiteral(
+            "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) "
+            "Gecko/20100101 Firefox/130.0");
+    }
+    return QString();
+}
+
+// An entry for "example.com" covers example.com and every subdomain, so the
+// user doesn't have to add www./m./maps. variants separately.
+static QString siteUaOverrideForHost(const QString &hostIn)
+{
+    const QHash<QString, QString> &overrides = siteUaOverridesMap();
+    if (overrides.isEmpty())
+        return QString();
+    const QString host = hostIn.toLower();
+    for (auto it = overrides.constBegin(); it != overrides.constEnd(); ++it) {
+        if (host == it.key() || host.endsWith(QLatin1Char('.') + it.key()))
+            return uaForProfile(it.value());
+    }
+    return QString();
+}
+
 QString atlanticUserAgent(bool desktopMode)
 {
     const QByteArray envOverride =
@@ -210,6 +274,12 @@ static bool urlIsTwitch(const QUrl &url)
 // is left alone.
 QString atlanticUserAgentForUrl(const QUrl &url, bool desktopMode)
 {
+    // User-selected per-site override wins over every built-in quirk, and
+    // (unlike the quirks) applies in desktop mode too — it is an explicit
+    // choice, not a heuristic.
+    const QString userOverride = siteUaOverrideForHost(url.host());
+    if (!userOverride.isEmpty())
+        return userOverride;
     if (!desktopMode && urlIsGoogleMaps(url))
         return iphoneMobileUserAgent();
     if (!desktopMode && cloudflareChallengedHosts().contains(url.host().toLower()))
@@ -3817,6 +3887,28 @@ void WPEWebPage::applyCookieBannerBlockingGlobally(bool enabled)
         emit page->cookieBannerBlockingEnabledChanged();
     }
     qInfo() << "[COOKIE-BANNER] blocking toggled" << (enabled ? "ON" : "OFF");
+}
+
+void WPEWebPage::applySiteUaOverridesGlobally(const QString &json)
+{
+    QHash<QString, QString> parsed;
+    const QJsonObject obj = QJsonDocument::fromJson(json.toUtf8()).object();
+    for (auto it = obj.constBegin(); it != obj.constEnd(); ++it) {
+        const QString host = it.key().toLower().trimmed();
+        const QString profile = it.value().toString();
+        if (!host.isEmpty() && !profile.isEmpty())
+            parsed.insert(host, profile);
+    }
+    if (siteUaOverridesMap() == parsed)
+        return;
+    siteUaOverridesMap() = parsed;
+
+    // Re-resolve every live tab's UA so an added/removed override takes
+    // effect on its next navigation (a loaded page keeps what it fetched
+    // with until reloaded, same as the built-in quirks).
+    for (WPEWebPage *page : liveInstances())
+        page->applyUserAgentForUrl(page->url());
+    qInfo() << "[Atlantic] site UA overrides updated:" << parsed.size() << "entries";
 }
 
 void WPEWebPage::applyAdBlockEnabledGlobally(bool enabled)
