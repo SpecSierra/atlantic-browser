@@ -16,8 +16,11 @@ LIBS += -L$${WPE_SFOS_PREFIX}/lib -lWPEWebKit-2.0
 LIBS += -L$${SFOS_SYSROOT}/usr/lib64 -lgio-2.0 -lgobject-2.0 -lglib-2.0
 LIBS += -L$${WPE_SFOS_PREFIX}/lib -latlantic_adblock
 
+QT += network
+
 HEADERS += \
     $$PWD/AdBlockEngine.h \
+    $$PWD/AdBlockListUpdater.h \
     $$PWD/WPEWebPage.h \
     $$PWD/WPEUserScripts.h \
     $$PWD/WPEWebContainer.h \
@@ -25,6 +28,7 @@ HEADERS += \
 
 SOURCES += \
     $$PWD/AdBlockEngine.cpp \
+    $$PWD/AdBlockListUpdater.cpp \
     $$PWD/WPEWebPage.cpp \
     $$PWD/WPEWebContainer.cpp \
     $$PWD/WPEWebPageCreator.cpp

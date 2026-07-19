@@ -10,6 +10,7 @@
 #include "WPERuntimePaths.h"
 #include "downloadmanager.h"
 #include "AdBlockEngine.h"
+#include "AdBlockListUpdater.h"
 
 #include <QBuffer>
 #include <QClipboard>
@@ -1767,11 +1768,19 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                     // returns the default and would stomp the QML-pushed
                     // state back to enabled on every start.
                     qInfo() << "[ADBLOCK] enabled (persisted):" << AdBlockEngine::isEnabled();
-                    QString cachePath = QStringLiteral("/usr/share/atlantic-browser/engine.dat");
-                    if (!QFileInfo::exists(cachePath)) {
-                        cachePath = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation)
-                                    + QStringLiteral("/atlantic-browser/engine.dat");
+                    // Prefer whichever of the shipped copy and the updater's
+                    // downloaded copy carries the higher engine.version stamp
+                    // (the WebProcess extension applies the same rule).
+                    QString dir = QStringLiteral("/usr/share/atlantic-browser");
+                    const QString updated = AdBlockListUpdater::cacheDir();
+                    if (QFileInfo::exists(updated + QStringLiteral("/engine.dat"))
+                        && AdBlockListUpdater::versionIn(updated) > AdBlockListUpdater::versionIn(dir)) {
+                        dir = updated;
+                        qInfo() << "[ADBLOCK] using updated lists, version"
+                                << AdBlockListUpdater::versionIn(updated);
                     }
+                    const QString cachePath = dir + QStringLiteral("/engine.dat");
+                    AdBlockListUpdater::start();
                     if (!AdBlockEngine::instance().loadFromCache(cachePath)) {
                         qWarning() << "[ADBLOCK] engine not available — falling back to content blocker only";
                     } else {

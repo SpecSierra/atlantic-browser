@@ -8,6 +8,7 @@
 #include "WPEWebPage.h"
 #include "WPERuntimePaths.h"
 #include "AdBlockEngine.h"
+#include "AdBlockListUpdater.h"
 #include "WPEQtViewLoadRequest.h"
 #include "declarativehistorymodel.h"
 #include "declarativetabmodel.h"
@@ -279,6 +280,10 @@ void WPEWebContainer::configureSandboxPaths()
                            QStringLiteral("compat-libdir"));
     addSandboxPathIfExists(ctx, QString::fromUtf8(WPERuntimePaths::kAtlanticShareDir), TRUE,
                            QStringLiteral("atlantic-share"));
+    // Updated filter lists downloaded by AdBlockListUpdater — the WebProcess
+    // extension reads engine.dat from here when its stamp beats the shipped one.
+    addSandboxPathIfExists(ctx, AdBlockListUpdater::cacheDir(), TRUE,
+                           QStringLiteral("adblock-updates"));
     addSandboxPathIfExists(ctx, QString::fromUtf8(WPERuntimePaths::kQtShareDir), TRUE,
                            QStringLiteral("qt-share"));
     addSandboxPathIfExists(ctx, QString::fromUtf8(WPERuntimePaths::kQtLibDir), TRUE,
