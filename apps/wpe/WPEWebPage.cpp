@@ -578,6 +578,23 @@ gboolean onDecidePolicy(WebKitWebView* webView, WebKitPolicyDecision* decision, 
                     webkit_policy_decision_ignore(decision);
                     return TRUE;
                 }
+
+                // uBO-style "strict blocking". The pornhub-class click hijack
+                // doesn't window.open — it navigates the main frame straight
+                // to the ad redirect URL, so the NEW_WINDOW popup path below
+                // never sees it. Refuse any navigation whose destination
+                // matches the network filters as a top-level document (ad
+                // redirectors like trafficjunky are all listed). mainUrl must
+                // be non-empty so fresh-tab typed navigations are exempt.
+                // (Also fires for subframes, which can't be told apart here —
+                // a filter-matched ad iframe being refused is fine.)
+                if (AdBlockEngine::isEnabled() && !mainUrl.isEmpty()
+                        && !AdBlockEngine::isAllowlistedUrl(mainUrl)
+                        && AdBlockEngine::instance().shouldBlockPopup(mainUrl, dest)) {
+                    qInfo() << "[ADBLOCK] navigation blocked (document filter match):" << uri;
+                    webkit_policy_decision_ignore(decision);
+                    return TRUE;
+                }
             }
         }
         return FALSE;
