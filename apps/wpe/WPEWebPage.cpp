@@ -3260,6 +3260,40 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
         m_trackedTouchPoints.clear();
     }
 
+    // UI-process fallback for revealing the chrome. The normal path is the
+    // in-page scroll bridge (kScrollBridge → scrollPositionChanged), but that
+    // runs on the page's main thread and starves on JS-heavy sites while APZ
+    // keeps scrolling on the scrolling thread — leaving the toolbar stuck
+    // hidden. Recognize the "pull down" gesture here from raw touch input,
+    // which nothing in the page can block. Show-only: hiding stays page-driven
+    // so a flick on a non-scrollable page never wrongly hides the toolbar.
+    if (activePoints.size() == 1 && !m_pinchZoomActive && !m_textSelectionActive) {
+        const qreal y = activePoints.at(0).pos().y();
+        if (event->type() == QEvent::TouchBegin || !m_uiGestureTracking) {
+            m_uiGestureTracking = true;
+            m_uiGestureAccumDown = 0.0;
+        } else {
+            const qreal dy = y - m_uiGestureLastY;
+            // A direction flip resets the accumulator so jitter can't add up.
+            m_uiGestureAccumDown = dy > 0 ? m_uiGestureAccumDown + dy : 0.0;
+            if (m_uiGestureAccumDown > m_chromeGestureThreshold
+                    && m_chromeGestureEnabled && !m_fixedToolbar && !m_forcedChrome
+                    && !m_chrome) {
+                // Disarm any debounced hide from the scroll bridge so it
+                // can't immediately undo the show.
+                m_chromeGestureDebounceTimer.stop();
+                m_chromeGestureArmed = false;
+                m_pendingChrome = true;
+                setChrome(true);
+            }
+        }
+        m_uiGestureLastY = y;
+    } else {
+        m_uiGestureTracking = false;
+    }
+    if (event->type() == QEvent::TouchEnd || event->type() == QEvent::TouchCancel)
+        m_uiGestureTracking = false;
+
     WPEQtView::touchEvent(event);
 
     // Accept the touch event so Qt does not synthesize QMouseEvents from it via

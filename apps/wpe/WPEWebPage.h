@@ -524,6 +524,12 @@ private:
     QTimer m_chromeGestureDebounceTimer;
     bool m_pendingChrome = true;
     bool m_chromeGestureArmed = false;
+    // UI-process "pull down to reveal chrome" gesture (touchEvent): accumulated
+    // downward finger travel of the current single touch. Show-only backup for
+    // the in-page scroll bridge, which starves when page JS hogs the main thread.
+    qreal m_uiGestureLastY = 0.0;
+    qreal m_uiGestureAccumDown = 0.0;
+    bool m_uiGestureTracking = false;
     bool m_pendingFullscreenEntry = false;
     QTimer m_pendingFullscreenEntryGuard;
     QTimer m_fullscreenEnteredGuard;      // 3s guard after entering: blocks spurious false reports
