@@ -1038,6 +1038,24 @@ static const char* const kYouTubeH264 = R"JS(
 //     and the gate can reappear, so a MutationObserver + short interval keep
 //     watching. Self-scoped to Twitch hosts. Set ATLANTIC_DISABLE_TWITCH=1 to
 //     disable the whole script.
+// MGP player sites (pornhub + sister sites sharing the same es6player): the
+// player's MSE-based HLS engine stalls silently in this WebKit — it fetches
+// master.m3u8, then never attaches a source (video stays src-less,
+// loadingSource=true forever → infinite spinner on play). Native GStreamer
+// HLS playback of the same URL works (device-verified: readyState 4, frames
+// decoding). Hiding MediaSource before the player scripts run makes its
+// detector take the native-HLS path, exactly like stock iOS Safari (which has
+// no MSE and is these sites' best-tested mobile path).
+static const char* const kMgpNativeHls = R"JS(
+(function() {
+    if (!/(^|\.)(pornhub\.(com|org)|youporn\.com|redtube\.com|tube8\.com)$/.test(location.hostname))
+        return;
+    try { Object.defineProperty(window, 'MediaSource', { value: undefined, configurable: true }); } catch (e) {}
+    try { Object.defineProperty(window, 'ManagedMediaSource', { value: undefined, configurable: true }); } catch (e) {}
+    try { Object.defineProperty(window, 'WebKitMediaSource', { value: undefined, configurable: true }); } catch (e) {}
+})();
+)JS";
+
 static const char* const kTwitch = R"JS(
 (function() {
     try {

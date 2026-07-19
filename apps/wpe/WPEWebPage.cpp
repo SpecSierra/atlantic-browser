@@ -1100,6 +1100,21 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
         webkit_user_script_unref(ytH264Script);
     }
 
+    // MGP-player (pornhub-family) playback fix: hide MediaSource so the player
+    // uses native HLS instead of its silently-stalling MSE engine (see
+    // kMgpNativeHls). DOCUMENT_START so it precedes the player's capability
+    // detector; all frames (embeds). Site-scoped inside the script. Set
+    // ATLANTIC_DISABLE_MGP_HLS=1 to disable.
+    if (!envVarEnabled(qgetenv("ATLANTIC_DISABLE_MGP_HLS"))) {
+        WebKitUserScript* mgpScript = webkit_user_script_new(
+            WPEUserScripts::kMgpNativeHls,
+            WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+            WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+            nullptr, nullptr);
+        webkit_user_content_manager_add_script(ucm, mgpScript);
+        webkit_user_script_unref(mgpScript);
+    }
+
     // Twitch playback fix. The Android-Chrome UA quirk (atlanticUserAgentForUrl)
     // gets Twitch onto its MSE player so WPE can decode the stream; kTwitch then
     // clears the two gates that still stop playback — it force-mutes load-time
