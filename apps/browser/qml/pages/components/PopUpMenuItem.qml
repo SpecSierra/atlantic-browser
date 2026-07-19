@@ -131,7 +131,7 @@ Item {
                 // context (like webView/overlay above).
                 checked: enabled && !adBlockAllowlist.isAllowed(_host)
                 //: Per-site toggle: unchecking disables the ad blocker on this site
-                //% "Block ads on this site"
+                //% "Block ads"
                 text: qsTrId("sailfish_browser-la-block_ads_on_site")
 
                 onClicked: {
