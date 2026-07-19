@@ -258,6 +258,13 @@ public:
     void applyUserAgentForUrl(const QUrl &url);
     // True when the URL gets a per-site UA quirk (Maps, Cloudflare hosts).
     bool urlHasUaQuirk(const QUrl &url) const;
+
+    // Popunder guard: after a popup is routed into this view, same-tab
+    // scripted redirects to an unrelated site are blocked for a short window
+    // (the reverse-popunder puts the real content in the popup and JS-redirects
+    // the original tab to the ad).
+    void notePopupRouted(const QString &url);
+    bool popupGuardShouldBlock(const QString &url, int navigationType);
     void applyInitialDeviceScale(qreal scale);
     void setFullscreenState(bool fullscreen);
     void setNativeFullscreenRequested(bool fullscreen);
@@ -488,6 +495,8 @@ private:
     bool m_fixedToolbar = false;
     bool m_loaded = false;
     bool m_desktopMode = false;
+    qint64 m_popupRoutedAtMs = 0;
+    QString m_popupRoutedUrl;
     qreal m_lastScrollY = 0.0;
     QVariant m_resurrectedContentRect;
     bool m_textSelectionActive = false;

@@ -567,6 +567,17 @@ gboolean onDecidePolicy(WebKitWebView* webView, WebKitPolicyDecision* decision, 
                 const QUrl mainUrl(mainUri ? QString::fromUtf8(mainUri) : QString());
                 if (page->urlHasUaQuirk(dest) || !page->urlHasUaQuirk(mainUrl))
                     page->applyUserAgentForUrl(dest);
+
+                // Popunder guard (see notePopupRouted): while active, drop
+                // same-tab scripted redirects to unrelated sites — the ad
+                // half of a reverse-popunder racing the routed content.
+                const WebKitNavigationType navType = action
+                    ? webkit_navigation_action_get_navigation_type(action)
+                    : WEBKIT_NAVIGATION_TYPE_OTHER;
+                if (page->popupGuardShouldBlock(QString::fromUtf8(uri), navType)) {
+                    webkit_policy_decision_ignore(decision);
+                    return TRUE;
+                }
             }
         }
         return FALSE;
@@ -604,7 +615,11 @@ gboolean onDecidePolicy(WebKitWebView* webView, WebKitPolicyDecision* decision, 
         // Popup blocking. New-window navigations bypass the WebProcess adblock
         // extension (they are not subresource requests), so ad popups /
         // popunders must be filtered here before being routed into the view.
-        if (AdBlockEngine::isEnabled()) {
+        WPEWebPage* page = static_cast<WPEWebPage*>(userData);
+        const gchar* mainUri = webkit_web_view_get_uri(webView);
+        const QUrl mainUrl(mainUri ? QString::fromUtf8(mainUri) : QString());
+        const QUrl dest(QString::fromUtf8(uri));
+        if (AdBlockEngine::isEnabled() && !AdBlockEngine::isAllowlistedUrl(mainUrl)) {
             // A window.open with no user gesture behind it is a scripted
             // popup; nothing legitimate opens windows uninvited.
             if (action && !webkit_navigation_action_is_user_gesture(action)) {
@@ -612,16 +627,33 @@ gboolean onDecidePolicy(WebKitWebView* webView, WebKitPolicyDecision* decision, 
                 webkit_policy_decision_ignore(decision);
                 return TRUE;
             }
-            // Gesture-hijacked popups (click anywhere → ad tab) carry a real
-            // gesture, so also match the destination against the filter list.
-            const gchar* mainUri = webkit_web_view_get_uri(webView);
-            const QUrl mainUrl(mainUri ? QString::fromUtf8(mainUri) : QString());
-            if (AdBlockEngine::instance().shouldBlockPopup(mainUrl, QUrl(QString::fromUtf8(uri)))) {
+            // A scripted window.open (not a target=_blank link click) to an
+            // unrelated site is the popunder-ad signature even WITH a gesture
+            // (the click is hijacked). $popup filters don't exist in this
+            // engine build (adblock-rust drops the option), so this heuristic
+            // is the only cover. Legit third-party popups (OAuth) were never
+            // functional in this single-window model anyway — routing them
+            // into the view orphaned the opener.
+            const WebKitNavigationType navType = action
+                ? webkit_navigation_action_get_navigation_type(action)
+                : WEBKIT_NAVIGATION_TYPE_OTHER;
+            if (navType != WEBKIT_NAVIGATION_TYPE_LINK_CLICKED
+                && !mainUrl.host().isEmpty()
+                && !AdBlockEngine::areHostsRelated(mainUrl.host(), dest.host())) {
+                qInfo() << "[ADBLOCK] popup blocked (scripted third-party):" << uri;
+                webkit_policy_decision_ignore(decision);
+                return TRUE;
+            }
+            // Popups that pass still get matched against the filter list.
+            if (AdBlockEngine::instance().shouldBlockPopup(mainUrl, dest)) {
                 qInfo() << "[ADBLOCK] popup blocked (filter match):" << uri;
                 webkit_policy_decision_ignore(decision);
                 return TRUE;
             }
         }
+        qInfo() << "[ADBLOCK] popup routed into view:" << uri;
+        if (page)
+            page->notePopupRouted(QString::fromUtf8(uri));
         webkit_web_view_load_uri(webView, uri);
     }
     webkit_policy_decision_ignore(decision);
@@ -3989,6 +4021,38 @@ void WPEWebPage::applyAdBlockEnabledGlobally(bool enabled)
         emit page->adBlockEnabledChanged();
     }
     qDebug() << "[WPE-BLOCKER] ad block toggled" << (enabled ? "ON" : "OFF");
+}
+
+void WPEWebPage::notePopupRouted(const QString &url)
+{
+    m_popupRoutedAtMs = QDateTime::currentMSecsSinceEpoch();
+    m_popupRoutedUrl = url;
+}
+
+bool WPEWebPage::popupGuardShouldBlock(const QString &url, int navigationType)
+{
+    if (m_popupRoutedAtMs == 0 || !AdBlockEngine::isEnabled())
+        return false;
+    if (QDateTime::currentMSecsSinceEpoch() - m_popupRoutedAtMs > 3000)
+        return false;
+    // The routed popup load itself arrives here as a scripted navigation.
+    if (url == m_popupRoutedUrl)
+        return false;
+    // Only same-tab scripted redirects (a link click is the user moving on).
+    if (navigationType == WEBKIT_NAVIGATION_TYPE_LINK_CLICKED)
+        return false;
+    // Related to either the routed content or the page that spawned it is
+    // fine; the popunder ad is an unrelated third party. NOTE this callback
+    // also fires for subframes (no way to tell, see the UA gotcha above), so
+    // an unrelated third-party iframe navigating inside the 3s window is
+    // collateral — acceptable: the guard only arms right after a popup route,
+    // and the network blocker kills most ad frames anyway.
+    const QString host = QUrl(url).host();
+    if (AdBlockEngine::areHostsRelated(host, QUrl(m_popupRoutedUrl).host())
+        || AdBlockEngine::areHostsRelated(host, this->url().host()))
+        return false;
+    qInfo() << "[ADBLOCK] popunder redirect blocked:" << url;
+    return true;
 }
 
 void WPEWebPage::applyAdBlockAllowlistGlobally(const QString &json)

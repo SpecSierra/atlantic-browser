@@ -97,6 +97,11 @@ static bool hostsRelated(const QString& a, const QString& b)
     return false;
 }
 
+bool AdBlockEngine::areHostsRelated(const QString& a, const QString& b)
+{
+    return hostsRelated(a, b);
+}
+
 void AdBlockEngine::setAllowlist(const QStringList& hosts)
 {
     s_allowlist = hosts;

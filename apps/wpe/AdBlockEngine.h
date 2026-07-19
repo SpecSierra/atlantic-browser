@@ -78,6 +78,10 @@ public:
     // init user-data.
     static QByteArray allowlistJoined();
 
+    // Same first-party relation as the WebProcess extension: equal hosts or
+    // one a dotted suffix of the other.
+    static bool areHostsRelated(const QString& a, const QString& b);
+
 private:
     static QStringList s_allowlist;
 
