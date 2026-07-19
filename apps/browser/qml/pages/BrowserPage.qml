@@ -458,15 +458,15 @@ Page {
         width: browserPage.width
         height: Math.ceil(overlay.y)
 
-        // Keep the page (or plain black, when no tab is loaded) visible behind the
-        // chrome instead of a flat dim: no dimmer when the overlay is fully open
-        // (URL entry) or when only the connection-info panel is up.
-        dimmerOpacity: (overlay.animator.atBottom
-                        || overlay.animator.atTop
-                        || overlay.toolBar.certOverlayActive
-                        || webView.tabModel.count === 0)
-                       ? 0.0
-                       : 0.9 - (overlay.y / (webView.fullscreenHeight - overlay.toolBar.rowHeight)) * 0.9
+        // No dim at all: the shader has blending off, so any mid-transition
+        // opacity overwrites the page with dark pixels (black flash while the
+        // overlay animates). Keep the item for its MouseArea/private texture.
+        dimmerOpacity: 0.0
+        // The private-mode texture below is a child, so the item must stay
+        // visible in private mode; blending on makes the zero-opacity shader
+        // paint nothing instead of opaque black.
+        blending: true
+        visible: webView.privateMode && !overlay.animator.allowContentUse
 
         MouseArea {
             property bool inEmptyPrivateMode: webView.privateMode && webView.privateTabModel.count === 0
