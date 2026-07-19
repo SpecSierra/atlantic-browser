@@ -10,11 +10,14 @@
 #include <QString>
 #include <QByteArray>
 
-// The UI-process AdBlockEngine handles cosmetic filtering only; network
-// blocking lives in the WebProcess adblock extension. Network-match FFI lives
-// there, not here.
+// The UI-process AdBlockEngine handles cosmetic filtering and popup
+// (new-window navigation) blocking; per-request network blocking lives in the
+// WebProcess adblock extension. Popups never reach the extension's
+// send-request hook as a blockable subresource — they arrive in the UI
+// process as a NEW_WINDOW policy decision — hence the network-match FFI here.
 extern "C" {
     struct CosmeticResult { const char* hide_selectors; const char* injected_script; const char* generated_css; };
+    struct MatchResult { bool matched; bool important; char* redirect; char* exception; };
     typedef void AtlanticAdblockEngine;
 
     AtlanticAdblockEngine* atlantic_adblock_create_from_cache(const uint8_t*, size_t);
@@ -22,6 +25,10 @@ extern "C" {
     CosmeticResult         atlantic_adblock_get_cosmetic(AtlanticAdblockEngine*, const char* url);
     void                   atlantic_adblock_free_cosmetic(CosmeticResult);
     bool                   atlantic_adblock_use_resources_json(AtlanticAdblockEngine*, const uint8_t*, size_t);
+    MatchResult            atlantic_adblock_match_network(AtlanticAdblockEngine*, const char* src_url,
+                                                          const char* req_url, const char* type,
+                                                          int third_party);
+    void                   atlantic_adblock_free_match_result(MatchResult);
     char*                  atlantic_adblock_get_generic_hides(AtlanticAdblockEngine*, const char* url,
                                                               const char* classes, const char* ids);
     void                   atlantic_adblock_free_string(char*);
@@ -53,6 +60,11 @@ public:
     // (newline-separated), return the newline-separated generic hide selectors
     // that apply on url (site exceptions honoured). Empty result = nothing new.
     QString genericHides(const QUrl& url, const QByteArray& classes, const QByteArray& ids);
+
+    // Should a popup / new-window navigation from pageUrl to popupUrl be
+    // blocked? Matches popupUrl against the network filters as a top-level
+    // document load (catches ad/redirect hosts on the list).
+    bool shouldBlockPopup(const QUrl& pageUrl, const QUrl& popupUrl);
 
     static bool isEnabled();
     static void setEnabled(bool enabled);

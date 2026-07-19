@@ -83,6 +83,36 @@ QString AdBlockEngine::genericHides(const QUrl& url, const QByteArray& classes, 
     return result;
 }
 
+// Same relatedness rule as the WebProcess extension: equal hosts or one a
+// dotted suffix of the other count as first-party.
+static bool hostsRelated(const QString& a, const QString& b)
+{
+    if (a.isEmpty() || b.isEmpty()) return false;
+    if (a.compare(b, Qt::CaseInsensitive) == 0) return true;
+    if (a.length() > b.length())
+        return a.endsWith(QLatin1Char('.') + b, Qt::CaseInsensitive);
+    if (b.length() > a.length())
+        return b.endsWith(QLatin1Char('.') + a, Qt::CaseInsensitive);
+    return false;
+}
+
+bool AdBlockEngine::shouldBlockPopup(const QUrl& pageUrl, const QUrl& popupUrl)
+{
+    if (!m_engine || !s_enabled) return false;
+    if (!popupUrl.scheme().startsWith(QLatin1String("http"))) return false;
+
+    const QByteArray src = pageUrl.toString().toUtf8();
+    const QByteArray req = popupUrl.toString().toUtf8();
+    const int thirdParty = hostsRelated(pageUrl.host(), popupUrl.host()) ? 0 : 1;
+
+    MatchResult r = atlantic_adblock_match_network(
+        m_engine, src.constData(), req.constData(), "document", thirdParty);
+    // A popup can't carry a surrogate redirect; only a plain match blocks.
+    const bool block = r.matched && !r.redirect;
+    atlantic_adblock_free_match_result(r);
+    return block;
+}
+
 // Hosts whose cosmetic sheet is already installed on a given content manager,
 // stored on the manager itself so the set dies with it.
 static const char* kInstalledHostsKey = "atlantic-adblock-cosmetic-hosts";

@@ -600,6 +600,27 @@ gboolean onDecidePolicy(WebKitWebView* webView, WebKitPolicyDecision* decision, 
     WebKitURIRequest* request = action ? webkit_navigation_action_get_request(action) : nullptr;
     const gchar* uri = request ? webkit_uri_request_get_uri(request) : nullptr;
     if (uri && *uri) {
+        // Popup blocking. New-window navigations bypass the WebProcess adblock
+        // extension (they are not subresource requests), so ad popups /
+        // popunders must be filtered here before being routed into the view.
+        if (AdBlockEngine::isEnabled()) {
+            // A window.open with no user gesture behind it is a scripted
+            // popup; nothing legitimate opens windows uninvited.
+            if (action && !webkit_navigation_action_is_user_gesture(action)) {
+                qInfo() << "[ADBLOCK] popup blocked (no user gesture):" << uri;
+                webkit_policy_decision_ignore(decision);
+                return TRUE;
+            }
+            // Gesture-hijacked popups (click anywhere → ad tab) carry a real
+            // gesture, so also match the destination against the filter list.
+            const gchar* mainUri = webkit_web_view_get_uri(webView);
+            const QUrl mainUrl(mainUri ? QString::fromUtf8(mainUri) : QString());
+            if (AdBlockEngine::instance().shouldBlockPopup(mainUrl, QUrl(QString::fromUtf8(uri)))) {
+                qInfo() << "[ADBLOCK] popup blocked (filter match):" << uri;
+                webkit_policy_decision_ignore(decision);
+                return TRUE;
+            }
+        }
         webkit_web_view_load_uri(webView, uri);
     }
     webkit_policy_decision_ignore(decision);
