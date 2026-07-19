@@ -280,6 +280,58 @@ static const char* const kSelectionBridge = R"JS(
 // bridge runs inside every cross-origin subframe and reports editable
 // focus/blur to the UI process, which shows the keyboard and keeps the
 // probe from hiding it while the subframe field stays focused.
+// Companion to the cookie-banner layer: some consent dialogs (custom,
+// non-CMP ones autoconsent cannot answer — e.g. uio.no) scroll-lock the page
+// (body overflow:hidden via a class) while open. The cosmetic hide rules then
+// remove the dialog but nothing ever releases the lock. Watchdog: if the page
+// is scroll-locked, consent machinery exists in the DOM, and none of it is
+// visible (the blocker hid it), force the lock open and strip consent-ish
+// lock classes. A visible dialog (or no consent elements at all — e.g. a
+// legitimate fullscreen menu) leaves the lock alone.
+static const char* const kCookieScrollUnlock = R"JS(
+(function() {
+    if (window.top !== window)
+        return;
+    var re = /(consent|cookie|gdpr|cmp)/i;
+    var tries = 0;
+    var timer = setInterval(function() {
+        if (++tries > 40) { clearInterval(timer); return; }
+        try { check(); } catch (e) {}
+    }, 1500);
+    function visible(e) {
+        // The lock class usually sits on body/html — they are the lock, not
+        // the dialog.
+        if (e === document.body || e === document.documentElement) return false;
+        if (!e.offsetWidth || !e.offsetHeight) return false;
+        var cs = getComputedStyle(e);
+        if (cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') return false;
+        var r = e.getBoundingClientRect();
+        return r.width >= innerWidth * 0.4 && r.height >= 100
+            && r.top < innerHeight && r.bottom > 0;
+    }
+    function check() {
+        var html = document.documentElement, body = document.body;
+        if (!body) return;
+        var locked = /hidden/.test(getComputedStyle(body).overflowY + ' ' + getComputedStyle(html).overflowY)
+                  || getComputedStyle(body).position === 'fixed';
+        if (!locked) return;
+        var els = document.querySelectorAll(
+            '[id*="consent" i],[class*="consent" i],[id*="cookie" i],[class*="cookie" i],[id*="gdpr" i],[class*="gdpr" i]');
+        if (!els.length) return;
+        for (var i = 0; i < els.length; i++)
+            if (visible(els[i])) return;
+        [html, body].forEach(function(n) {
+            n.style.setProperty('overflow', 'visible', 'important');
+            var cls = (typeof n.className === 'string' ? n.className : '').split(/\s+/);
+            cls.forEach(function(c) { if (c && re.test(c)) n.classList.remove(c); });
+        });
+        if (getComputedStyle(body).position === 'fixed')
+            body.style.setProperty('position', 'static', 'important');
+        clearInterval(timer);
+    }
+})();
+)JS";
+
 static const char* const kEditableFocusBridge = R"JS(
 (function() {
     if (window === window.top) return;

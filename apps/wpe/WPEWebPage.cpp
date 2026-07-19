@@ -832,6 +832,7 @@ static void onEditableFocusMessage(WebKitUserContentManager*, JSCValue* value, g
 // non-CMP banners autoconsent does not know.
 static bool s_cookieBannerBlocking = true;
 static const char* kAutoconsentScriptKey = "atlantic-autoconsent-script";
+static const char* kScrollUnlockScriptKey = "atlantic-cookie-scroll-unlock-script";
 
 static const QByteArray& autoconsentScriptSource()
 {
@@ -867,6 +868,17 @@ static void installAutoconsent(WebKitUserContentManager* ucm)
     // (never remove_all_scripts here — the ucm carries the bridge scripts).
     g_object_set_data_full(G_OBJECT(ucm), kAutoconsentScriptKey, script,
                            reinterpret_cast<GDestroyNotify>(webkit_user_script_unref));
+
+    // Scroll-lock watchdog for banners autoconsent can't answer (top frame
+    // only — the lock lives on the main document's body).
+    WebKitUserScript* unlock = webkit_user_script_new(
+        WPEUserScripts::kCookieScrollUnlock,
+        WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
+        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_END,
+        nullptr, nullptr);
+    webkit_user_content_manager_add_script(ucm, unlock);
+    g_object_set_data_full(G_OBJECT(ucm), kScrollUnlockScriptKey, unlock,
+                           reinterpret_cast<GDestroyNotify>(webkit_user_script_unref));
 }
 
 static void removeAutoconsent(WebKitUserContentManager* ucm)
@@ -877,6 +889,11 @@ static void removeAutoconsent(WebKitUserContentManager* ucm)
         return;
     webkit_user_content_manager_remove_script(ucm, script);
     g_object_set_data(G_OBJECT(ucm), kAutoconsentScriptKey, nullptr);
+    if (auto* unlock = static_cast<WebKitUserScript*>(
+            g_object_get_data(G_OBJECT(ucm), kScrollUnlockScriptKey))) {
+        webkit_user_content_manager_remove_script(ucm, unlock);
+        g_object_set_data(G_OBJECT(ucm), kScrollUnlockScriptKey, nullptr);
+    }
 }
 
 static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page)
