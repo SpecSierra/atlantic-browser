@@ -3901,13 +3901,27 @@ void WPEWebPage::applySiteUaOverridesGlobally(const QString &json)
     }
     if (siteUaOverridesMap() == parsed)
         return;
+
+    // Snapshot each tab's effective UA before swapping the map, so only tabs
+    // the edit actually affects get reloaded below.
+    QHash<WPEWebPage *, QString> uaBefore;
+    for (WPEWebPage *page : liveInstances())
+        uaBefore.insert(page, atlanticUserAgentForUrl(page->url(), page->m_desktopMode));
+
     siteUaOverridesMap() = parsed;
 
-    // Re-resolve every live tab's UA so an added/removed override takes
-    // effect on its next navigation (a loaded page keeps what it fetched
-    // with until reloaded, same as the built-in quirks).
-    for (WPEWebPage *page : liveInstances())
+    // Re-resolve every live tab's UA, and reload the tabs whose UA changed —
+    // an override edit is an explicit user action on a site that (typically)
+    // misbehaves under the current UA, so waiting for a manual reload would
+    // just look like the setting did nothing.
+    for (WPEWebPage *page : liveInstances()) {
         page->applyUserAgentForUrl(page->url());
+        const QString uaNow = atlanticUserAgentForUrl(page->url(), page->m_desktopMode);
+        if (uaNow != uaBefore.value(page) && !page->url().isEmpty()) {
+            if (WebKitWebView *view = page->webView())
+                webkit_web_view_reload(view);
+        }
+    }
     qInfo() << "[Atlantic] site UA overrides updated:" << parsed.size() << "entries";
 }
 
