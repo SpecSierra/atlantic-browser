@@ -159,8 +159,8 @@ Item {
                 // enabled = host is NOT on the blocklist.
                 checked: enabled && !javascriptBlocklist.isBlocked(_host)
                 //: Per-site toggle: unchecking disables JavaScript on this site
-                //% "Enable JavaScript"
-                text: qsTrId("sailfish_browser-la-enable_javascript_on_site")
+                //% "JavaScript"
+                text: qsTrId("sailfish_browser-la-javascript_on_site")
 
                 onClicked: {
                     // The Switch has automaticCheck:false, so `checked` still
