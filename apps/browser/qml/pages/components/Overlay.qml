@@ -299,7 +299,11 @@ Shared.Background {
                         id: selToolbar
                         property var ci: webView ? webView.contentItem : null
                         width: textSelectionToolbar.width
-                        height: Theme.itemSizeSmall
+                        // Fill the whole toolbar band so each icon+label group
+                        // centres within it (equal top/bottom margin) instead of
+                        // packing into an itemSizeSmall strip whose bottom (the
+                        // label) fell off the screen edge.
+                        height: textSelectionToolbar.height
                         spacing: 0
 
                         Item {
@@ -310,6 +314,11 @@ Shared.Background {
                                 spacing: Theme.paddingSmall / 2
                                 IconButton {
                                     anchors.horizontalCenter: parent.horizontalCenter
+                                    // Clamp to the glyph size so the caption hugs
+                                    // the icon instead of floating below a tall
+                                    // touch box.
+                                    width: Theme.iconSizeMedium
+                                    height: Theme.iconSizeMedium
                                     icon.source: "image://theme/icon-m-clipboard"
                                     onClicked: {
                                         if (selToolbar.ci) {
@@ -335,6 +344,8 @@ Shared.Background {
                                 spacing: Theme.paddingSmall / 2
                                 IconButton {
                                     anchors.horizontalCenter: parent.horizontalCenter
+                                    width: Theme.iconSizeMedium
+                                    height: Theme.iconSizeMedium
                                     icon.source: "image://theme/icon-m-select-all"
                                     onClicked: { if (selToolbar.ci) selToolbar.ci.selectAll() }
                                 }
@@ -355,6 +366,8 @@ Shared.Background {
                                 spacing: Theme.paddingSmall / 2
                                 IconButton {
                                     anchors.horizontalCenter: parent.horizontalCenter
+                                    width: Theme.iconSizeMedium
+                                    height: Theme.iconSizeMedium
                                     icon.source: "image://theme/icon-m-input-remove"
                                     onClicked: { if (selToolbar.ci) selToolbar.ci.clearSelection() }
                                 }
