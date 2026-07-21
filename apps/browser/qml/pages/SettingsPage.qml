@@ -334,7 +334,7 @@ Page {
 
                     Icon {
                         id: siteUaIcon
-                        source: "image://theme/icon-m-website"
+                        source: "image://theme/icon-m-wizard"
                     }
                     Column {
                         width: parent.width - parent.spacing - siteUaIcon.width
