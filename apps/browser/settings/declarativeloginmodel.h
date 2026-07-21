@@ -25,6 +25,11 @@ class DeclarativeLoginModel : public QAbstractListModel, public QQmlParserStatus
     Q_INTERFACES(QQmlParserStatus)
     Q_PROPERTY(int count READ rowCount NOTIFY countChanged)
     Q_PROPERTY(bool populated READ populated NOTIFY populatedChanged)
+    // Master-password gate (Phase 4). locked: the vault is not open this
+    // session. hasVault: a vault has already been created (drives setup vs
+    // unlock in the UI).
+    Q_PROPERTY(bool locked READ locked NOTIFY lockedChanged)
+    Q_PROPERTY(bool hasVault READ hasVault NOTIFY lockedChanged)
 
 public:
     enum Roles {
@@ -40,9 +45,22 @@ public:
     void classBegin() override;
     void componentComplete() override;
 
+    bool locked() const;
+    bool hasVault() const;
+    // Master-password gate. createVault() makes a new vault; unlock() opens an
+    // existing one (false on wrong password); lock() closes it.
+    Q_INVOKABLE bool createVault(const QString &masterPassword);
+    Q_INVOKABLE bool unlock(const QString &masterPassword);
+    Q_INVOKABLE void lock();
+
+    // Creates a new login. Returns the new uid, or -1 if it duplicates an
+    // existing entry / the store rejected it.
+    Q_INVOKABLE int add(const QString &hostname, const QString &username, const QString &password);
     Q_INVOKABLE void modify(int uid, const QString &username, const QString &password);
     Q_INVOKABLE void remove(int uid);
     Q_INVOKABLE bool canModify(int uid, const QString &username, const QString &password) const;
+    // canModify requires an existing uid; add() uses this to reject duplicates.
+    Q_INVOKABLE bool canAdd(const QString &hostname, const QString &username) const;
 
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
@@ -53,15 +71,16 @@ public:
 signals:
     void countChanged();
     void populatedChanged();
+    void lockedChanged();
+
+private slots:
+    // Reacts to the store locking/unlocking (incl. auto-lock on background).
+    void onStoreLockedChanged();
 
 private:
-    void setLoginList(const QVariantList &data);
     void requestLogins();
     // Returns -1 if the uid is invalid
     int indexFromUid(int uid) const;
-
-private slots:
-    void handleRecvObserve(const QString &message, const QVariant &data);
 
 private:
     // <uid, index>

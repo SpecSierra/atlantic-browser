@@ -1555,4 +1555,117 @@ static const char* const kAdblockClassIdCollector = R"JS(
 })();
 )JS";
 
+// Password autofill (read path), Phase 2. Installs window.__atlLogin.fill(u,p),
+// which the native side calls (WPEWebPage::fillLoginForOrigin) after a match is
+// found in the credential store. Gesture-first: credentials are only requested
+// when the user focuses a detected login field — nothing is filled on bare page
+// load, so an invisible/off-screen form can't silently harvest a fill. Injected
+// TOP_FRAME only (no cross-origin iframe fill). Never submits.
+static const char* const kLoginBridge = R"JS(
+(function() {
+    if (window.__atlLogin) return;
+
+    function isVisible(el) {
+        if (!el || el.type === 'hidden' || el.disabled || el.readOnly) return false;
+        var r = el.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0) return false;
+        var st = window.getComputedStyle(el);
+        if (st.visibility === 'hidden' || st.display === 'none') return false;
+        if (el.offsetParent === null && st.position !== 'fixed') return false;
+        return true;
+    }
+
+    // Locate the first visible password field and its most likely username
+    // partner (nearest preceding text/email/tel input in the same form).
+    function findFields() {
+        var pw = null;
+        var pwList = document.querySelectorAll('input[type=password]');
+        for (var i = 0; i < pwList.length; i++) {
+            if (isVisible(pwList[i])) { pw = pwList[i]; break; }
+        }
+        if (!pw) return null;
+
+        var user = null;
+        var scope = pw.form ? pw.form.querySelectorAll('input')
+                            : document.querySelectorAll('input');
+        for (var j = 0; j < scope.length; j++) {
+            var el = scope[j];
+            if (el === pw) break;
+            var t = (el.type || 'text').toLowerCase();
+            if ((t === 'text' || t === 'email' || t === 'tel' || t === '') && isVisible(el))
+                user = el;
+        }
+        return { user: user, pass: pw };
+    }
+
+    // Set a value the way a real keystroke would, so frameworks (React et al.)
+    // that track the native value setter observe the change.
+    function setVal(el, v) {
+        try {
+            var desc = Object.getOwnPropertyDescriptor(
+                Object.getPrototypeOf(el), 'value');
+            if (desc && desc.set) desc.set.call(el, v);
+            else el.value = v;
+        } catch (e) { try { el.value = v; } catch (_e) {} }
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    var api = {};
+    api.fill = function(u, p) {
+        var f = findFields();
+        if (!f) return;
+        if (f.user && u != null && u !== '') setVal(f.user, u);
+        if (f.pass && p != null) setVal(f.pass, p);   // no auto-submit
+    };
+    window.__atlLogin = api;
+
+    function requestFill() {
+        try {
+            window.webkit.messageHandlers.loginBridge.postMessage({
+                type: 'request', origin: location.origin
+            });
+        } catch (e) {}
+    }
+
+    function attach() {
+        var f = findFields();
+        if (!f) return;
+        [f.user, f.pass].forEach(function(el) {
+            if (!el || el.__atlBound) return;
+            el.__atlBound = true;
+            el.addEventListener('focus', requestFill);
+        });
+    }
+
+    // Capture on submit: offer to save/update the credentials the user just
+    // entered. Listens at the document in the capture phase so it fires even if
+    // the page cancels the event, and catches dynamically-added forms.
+    function onSubmit() {
+        var f = findFields();
+        if (!f || !f.pass || !f.pass.value) return;
+        try {
+            window.webkit.messageHandlers.loginBridge.postMessage({
+                type: 'capture',
+                origin: location.origin,
+                username: f.user ? f.user.value : '',
+                password: f.pass.value
+            });
+        } catch (e) {}
+    }
+    document.addEventListener('submit', onSubmit, true);
+
+    if (document.readyState === 'loading')
+        document.addEventListener('DOMContentLoaded', attach);
+    else
+        attach();
+
+    // Re-scan for SPA / late-injected login forms.
+    try {
+        new MutationObserver(function() { attach(); })
+            .observe(document.documentElement, { childList: true, subtree: true });
+    } catch (e) {}
+})();
+)JS";
+
 } // namespace WPEUserScripts

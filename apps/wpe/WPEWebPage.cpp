@@ -11,6 +11,7 @@
 #include "downloadmanager.h"
 #include "AdBlockEngine.h"
 #include "AdBlockListUpdater.h"
+#include "credentialstore.h"
 
 #include <QBuffer>
 #include <QClipboard>
@@ -1328,6 +1329,53 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
     webkit_user_script_unref(script);
 }
 
+// Password autofill (read path). The kLoginBridge script posts {type:'request',
+// origin} when the user focuses a login field; we look up the store and inject.
+static void onLoginBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
+{
+    WPEWebPage* page = static_cast<WPEWebPage*>(userData);
+    if (!page || !value)
+        return;
+
+    gchar* json = jsc_value_to_json(value, 0);
+    if (!json)
+        return;
+    QByteArray jsonBytes(json);
+    g_free(json);
+
+    QJsonDocument doc = QJsonDocument::fromJson(jsonBytes);
+    if (!doc.isObject())
+        return;
+
+    const QJsonObject obj = doc.object();
+    const QString type = obj.value(QStringLiteral("type")).toString();
+    const QString origin = obj.value(QStringLiteral("origin")).toString();
+
+    if (type == QLatin1String("request")) {
+        page->fillLoginForOrigin(origin);
+    } else if (type == QLatin1String("capture")) {
+        page->offerSaveLogin(origin,
+                             obj.value(QStringLiteral("username")).toString(),
+                             obj.value(QStringLiteral("password")).toString());
+    }
+}
+
+static void onLoginBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page)
+{
+    g_signal_connect(ucm, "script-message-received::loginBridge",
+                     G_CALLBACK(onLoginBridgeMessage), page);
+    webkit_user_content_manager_register_script_message_handler(ucm, "loginBridge", nullptr);
+
+    // TOP_FRAME only: no autofill into cross-origin iframes.
+    WebKitUserScript* script = webkit_user_script_new(
+        WPEUserScripts::kLoginBridge,
+        WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
+        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+        nullptr, nullptr);
+    webkit_user_content_manager_add_script(ucm, script);
+    webkit_user_script_unref(script);
+}
+
 bool dispatchTextToFocusedElement(WPEWebPage* page, const QString& text, int replaceBeforeCaret)
 {
     if (!page)
@@ -2091,6 +2139,7 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             onImageLongPressBridgeInstall(ucm, this);
             onScrollBridgeInstall(ucm, this);
             onMediaBridgeInstall(ucm, this);
+            onLoginBridgeInstall(ucm, this);
 
             WebKitNetworkSession* session = webkit_web_view_get_network_session(wv);
             if (!session) {
@@ -3663,6 +3712,132 @@ void WPEWebPage::findFinish()
         webkit_find_controller_search_finish(fc);
     setFindInPageHasResult(false);
     clearSelection();
+}
+
+// Host of a stored credential's hostname, which may be a bare host
+// ("example.com") or a full origin ("https://example.com"). QUrl only parses a
+// host when a scheme is present, so prepend one for the bare form.
+static QString credentialHost(const QString &stored)
+{
+    const QString s = stored.contains(QStringLiteral("://"))
+                          ? stored
+                          : QStringLiteral("https://") + stored;
+    return QUrl(s).host().toLower();
+}
+
+void WPEWebPage::fillLoginForOrigin(const QString &origin)
+{
+    WebKitWebView *wv = webView();
+    if (!wv || origin.isEmpty())
+        return;
+    if (!CredentialStore::instance()->isUnlocked())
+        return; // vault locked — nothing to fill from
+
+    const QUrl originUrl(origin);
+    // Only autofill on secure origins — never leak a credential into an http
+    // page where it could be observed or MITM'd.
+    if (originUrl.scheme() != QLatin1String("https"))
+        return;
+    const QString host = originUrl.host().toLower();
+    if (host.isEmpty())
+        return;
+
+    QString user, pass;
+    int matches = 0;
+    const auto rows = CredentialStore::instance()->all();
+    for (const auto &row : rows) {
+        const QVariantMap &f = row.second;
+        if (credentialHost(f.value(QStringLiteral("hostname")).toString()) != host)
+            continue;
+        ++matches;
+        if (matches == 1) {
+            user = f.value(QStringLiteral("username")).toString();
+            pass = f.value(QStringLiteral("password")).toString();
+        }
+    }
+    // Phase 2 fills the single stored login; an account picker for multiple
+    // logins on one host is a later enhancement.
+    if (matches != 1)
+        return;
+
+    // Pass values as a JSON array so they are escaped safely (no string
+    // interpolation into JS source).
+    const QString args = QString::fromUtf8(
+        QJsonDocument(QJsonArray{ user, pass }).toJson(QJsonDocument::Compact));
+    const QString js =
+        QStringLiteral("(function(a){try{window.__atlLogin&&window.__atlLogin.fill(a[0],a[1]);}catch(e){}})(%1);")
+            .arg(args);
+
+    webkit_web_view_evaluate_javascript(
+        wv, js.toUtf8().constData(), -1, nullptr, nullptr, nullptr, nullptr, nullptr);
+}
+
+void WPEWebPage::offerSaveLogin(const QString &origin, const QString &username, const QString &password)
+{
+    // Nothing to save without a password. (Empty username is allowed — some
+    // sites use a single secret field.)
+    if (password.isEmpty())
+        return;
+    if (!CredentialStore::instance()->isUnlocked())
+        return; // vault locked — can't compare or store; skip the prompt
+
+    const QUrl originUrl(origin);
+    // Only capture on secure origins: a credential saved from an http page
+    // could never be autofilled anyway (fill is https-only) and storing it
+    // just widens the attack surface.
+    if (originUrl.scheme() != QLatin1String("https"))
+        return;
+    const QString host = originUrl.host().toLower();
+    if (host.isEmpty())
+        return;
+
+    // Compare against the store: skip if an identical entry already exists,
+    // offer an update if the username is known with a different password.
+    int existingUid = -1;
+    const auto rows = CredentialStore::instance()->all();
+    for (const auto &row : rows) {
+        const QVariantMap &f = row.second;
+        if (credentialHost(f.value(QStringLiteral("hostname")).toString()) != host)
+            continue;
+        if (f.value(QStringLiteral("username")).toString() != username)
+            continue;
+        if (f.value(QStringLiteral("password")).toString() == password)
+            return; // already stored, unchanged
+        existingUid = row.first; // same user, new password -> update
+        break;
+    }
+
+    m_saveLoginPending = true;
+    m_saveLoginHost = host;
+    m_saveLoginUsername = username;
+    m_saveLoginPassword = password;
+    m_saveLoginExistingUid = existingUid;
+    emit saveLoginChanged();
+}
+
+void WPEWebPage::resolveSaveLogin(bool save)
+{
+    if (!m_saveLoginPending)
+        return;
+
+    if (save) {
+        QVariantMap fields;
+        fields.insert(QStringLiteral("hostname"), m_saveLoginHost);
+        fields.insert(QStringLiteral("formSubmitURL"), m_saveLoginHost);
+        fields.insert(QStringLiteral("username"), m_saveLoginUsername);
+        fields.insert(QStringLiteral("password"), m_saveLoginPassword);
+        if (m_saveLoginExistingUid >= 0)
+            CredentialStore::instance()->update(m_saveLoginExistingUid, fields);
+        else
+            CredentialStore::instance()->insert(fields);
+    }
+
+    m_saveLoginPending = false;
+    m_saveLoginHost.clear();
+    m_saveLoginUsername.clear();
+    m_saveLoginPassword.clear();
+    m_saveLoginExistingUid = -1;
+    emit saveLoginChanged();
 }
 
 // --- TLS / Security info ---

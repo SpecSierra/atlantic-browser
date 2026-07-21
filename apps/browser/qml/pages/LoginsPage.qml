@@ -47,12 +47,126 @@ Page {
         notification.show()
     }
 
+    // Master-password gate: shown until the vault is unlocked (or created).
+    // A single set of PasswordFields serves both flows; hasVault picks which.
+    Column {
+        id: gate
+
+        readonly property bool showing: loginModel.locked
+
+        visible: showing
+        opacity: showing ? 1.0 : 0.0
+        width: parent.width - 2 * Theme.horizontalPageMargin
+        x: Theme.horizontalPageMargin
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: Theme.paddingLarge
+
+        function submit() {
+            gate.error = false
+            if (loginModel.hasVault) {
+                if (!loginModel.unlock(passwordField.text)) {
+                    gate.error = true
+                    passwordField.text = ""
+                    passwordField.focus = true
+                }
+            } else {
+                if (passwordField.text.length < 4) {
+                    gate.error = true
+                    return
+                }
+                if (passwordField.text !== confirmField.text) {
+                    gate.mismatch = true
+                    return
+                }
+                loginModel.createVault(passwordField.text)
+            }
+        }
+
+        property bool error: false
+        property bool mismatch: false
+
+        PageHeader {
+            //% "Passwords"
+            title: qsTrId("sailfish_browser-he-passwords")
+        }
+
+        Label {
+            width: parent.width
+            wrapMode: Text.WordWrap
+            color: Theme.highlightColor
+            text: loginModel.hasVault
+                  //% "Enter your master password to unlock your saved passwords."
+                  ? qsTrId("sailfish_browser-la-login_unlock_hint")
+                  //% "Set a master password to protect your saved passwords. You'll need it to unlock them."
+                  : qsTrId("sailfish_browser-la-login_setup_hint")
+        }
+
+        PasswordField {
+            id: passwordField
+            width: parent.width
+            //% "Master password"
+            label: qsTrId("sailfish_browser-la-login_master_password")
+            errorHighlight: gate.error
+            //% "Wrong password"
+            description: gate.error && loginModel.hasVault
+                         ? qsTrId("sailfish_browser-la-login_wrong_password") : ""
+            EnterKey.iconSource: loginModel.hasVault ? "image://theme/icon-m-enter-accept" : "image://theme/icon-m-enter-next"
+            EnterKey.onClicked: {
+                if (loginModel.hasVault) gate.submit()
+                else confirmField.focus = true
+            }
+            onTextChanged: { gate.error = false; gate.mismatch = false }
+        }
+
+        PasswordField {
+            id: confirmField
+            width: parent.width
+            visible: !loginModel.hasVault
+            //% "Confirm password"
+            label: qsTrId("sailfish_browser-la-login_confirm_password")
+            errorHighlight: gate.mismatch
+            //% "Passwords don't match"
+            description: gate.mismatch ? qsTrId("sailfish_browser-la-login_password_mismatch") : ""
+            EnterKey.iconSource: "image://theme/icon-m-enter-accept"
+            EnterKey.onClicked: gate.submit()
+            onTextChanged: gate.mismatch = false
+        }
+
+        Button {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: loginModel.hasVault
+                  //% "Unlock"
+                  ? qsTrId("sailfish_browser-bt-login_unlock")
+                  //% "Create"
+                  : qsTrId("sailfish_browser-bt-login_create")
+            onClicked: gate.submit()
+        }
+    }
+
     SilicaListView {
         id: view
 
         anchors.fill: parent
         model: loginFilterModel
         currentIndex: -1
+        visible: !gate.showing
+
+        PullDownMenu {
+            MenuItem {
+                //% "Lock"
+                text: qsTrId("sailfish_browser-me-login_lock")
+                onClicked: loginModel.lock()
+            }
+            MenuItem {
+                //% "Add login"
+                text: qsTrId("sailfish_browser-me-login_add")
+                onClicked: pageStack.animatorPush("EditLoginPage.qml", {
+                                                      loginModel: loginModel,
+                                                      secureAction: secureAction
+                                                  })
+            }
+        }
+
         header: Column {
             width: parent.width
             PageHeader {

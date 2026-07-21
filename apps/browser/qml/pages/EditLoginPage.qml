@@ -17,15 +17,23 @@ Dialog {
     id: page
 
     property int uid: -1
+    readonly property bool creating: uid < 0
     property LoginModel loginModel
     property SecureAction secureAction
     property alias hostname: hostnameField.text
     property alias username: usernameField.text
     property alias password: passwordField.text
 
-    canAccept: loginModel.canModify(uid, username, password)
+    canAccept: creating
+               ? (hostname.length > 0 && loginModel.canAdd(hostname, username))
+               : loginModel.canModify(uid, username, password)
     onAcceptBlocked: usernameField.errorHighlight = true
-    onAccepted: loginModel.modify(uid, username, password)
+    onAccepted: {
+        if (creating)
+            loginModel.add(hostname, username, password)
+        else
+            loginModel.modify(uid, username, password)
+    }
 
     SilicaFlickable {
         anchors.fill: parent
@@ -37,19 +45,25 @@ Dialog {
             width: parent.width
 
             DialogHeader {
-                //% "Edit login"
-                title: qsTrId("sailfish_browser-me-login_edit_login")
+                title: page.creating
+                       //% "Add login"
+                       ? qsTrId("sailfish_browser-me-login_add_login")
+                       //% "Edit login"
+                       : qsTrId("sailfish_browser-me-login_edit_login")
             }
 
-            Label {
+            TextField {
                 id: hostnameField
 
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * Theme.horizontalPageMargin
-                height: Theme.itemSizeSmall
+                width: parent.width
+                readOnly: !page.creating
                 //% "Hostname"
-                text: qsTrId("sailfish_browser-me-login_edit_hostname")
-                color: Theme.highlightColor
+                label: qsTrId("sailfish_browser-me-login_edit_hostname")
+                //% "example.com"
+                placeholderText: qsTrId("sailfish_browser-ph-login_hostname")
+                inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase | Qt.ImhUrlCharactersOnly
+
+                EnterKey.onClicked: usernameField.focus = true
             }
 
             TextField {

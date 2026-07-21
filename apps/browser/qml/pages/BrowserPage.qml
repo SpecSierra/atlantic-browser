@@ -730,6 +730,9 @@ Page {
     // remembered per host+type for the session).
     Browser.PermissionBanner { webView: webView }
 
+    // "Save password?" prompt after a login form is submitted.
+    Browser.SaveLoginBanner { webView: webView }
+
     Browser.SelectMenuOverlay { webView: webView }
 
     // Native Silica pickers for <input type=date|month|week|time|datetime-local|color>.

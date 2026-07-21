@@ -137,6 +137,15 @@ class WPEWebPage : public WPEQtView
     Q_PROPERTY(QString permissionHost READ permissionHost NOTIFY permissionChanged FINAL)
     Q_PROPERTY(QString permissionType READ permissionType NOTIFY permissionChanged FINAL)
 
+    // "Save password?" prompt (Phase 3 capture). Raised when a login is
+    // submitted whose credentials are new or changed vs the store. QML shows a
+    // banner and calls resolveSaveLogin(bool). saveLoginIsUpdate distinguishes
+    // "Update password" (known username, changed password) from a fresh save.
+    Q_PROPERTY(bool saveLoginPending READ saveLoginPending NOTIFY saveLoginChanged FINAL)
+    Q_PROPERTY(QString saveLoginHost READ saveLoginHost NOTIFY saveLoginChanged FINAL)
+    Q_PROPERTY(QString saveLoginUsername READ saveLoginUsername NOTIFY saveLoginChanged FINAL)
+    Q_PROPERTY(bool saveLoginIsUpdate READ saveLoginIsUpdate NOTIFY saveLoginChanged FINAL)
+
     // Find-in-page
     Q_PROPERTY(bool findInPageHasResult READ findInPageHasResult NOTIFY findInPageHasResultChanged FINAL)
 
@@ -307,6 +316,12 @@ public:
     bool findInPageHasResult() const { return m_findInPageHasResult; }
     void setFindInPageHasResult(bool has);
 
+    // Password autofill (read path). Called by the loginBridge user script when
+    // the user focuses a login field; looks up the credential store and, if a
+    // match exists for this https origin, injects the values into the page.
+    // Never auto-submits. See kLoginBridge in WPEUserScripts.h.
+    void fillLoginForOrigin(const QString &origin);
+
     // Security
     QObject* security() const { return m_security; }
 
@@ -322,6 +337,15 @@ public:
     QString permissionHost() const { return m_permissionHost; }
     QString permissionType() const { return m_permissionType; }
     Q_INVOKABLE void resolvePermission(bool allow);
+
+    // Save-password prompt (Phase 3). offerSaveLogin() is called by the
+    // loginBridge capture message; resolveSaveLogin() persists on accept.
+    bool saveLoginPending() const { return m_saveLoginPending; }
+    QString saveLoginHost() const { return m_saveLoginHost; }
+    QString saveLoginUsername() const { return m_saveLoginUsername; }
+    bool saveLoginIsUpdate() const { return m_saveLoginExistingUid >= 0; }
+    void offerSaveLogin(const QString &origin, const QString &username, const QString &password);
+    Q_INVOKABLE void resolveSaveLogin(bool save);
     void handlePermissionRequest(void *request); // WebKitPermissionRequest*, takes a ref
 
     // Save page as PDF
@@ -418,6 +442,7 @@ signals:
     void securityChanged();
     void tlsErrorChanged();
     void permissionChanged();
+    void saveLoginChanged();
     void findInPageHasResultChanged();
 
     void recvAsyncMessage(const QString &message, const QVariant &data);
@@ -585,6 +610,13 @@ private:
     QString m_permissionHost;
     QString m_permissionType;
     QHash<QString, bool> m_permissionDecisions; // "host|type", session-only
+
+    // Save-password prompt state (Phase 3).
+    bool m_saveLoginPending = false;
+    QString m_saveLoginHost;
+    QString m_saveLoginUsername;
+    QString m_saveLoginPassword;
+    int m_saveLoginExistingUid = -1; // >=0 => update that entry, else insert
     // Guards the one-shot WebProcess auto-reload (see web-process-terminated
     // handler). Set when an auto-reload is issued; cleared on a successful load
     // so a later, unrelated crash can recover once too. Prevents a reload loop
