@@ -196,7 +196,7 @@ Page {
             }
 
             TextSwitch {
-                //% "Ad block"
+                //% "Adblock"
                 text: qsTrId("atlantic-la-ad_block")
                 //% "Block advertisements and trackers"
                 description: qsTrId("atlantic-la-ad_block_description")
