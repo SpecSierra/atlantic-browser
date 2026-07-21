@@ -341,7 +341,7 @@ Page {
                         anchors.verticalCenter: siteUaIcon.verticalCenter
                         Label {
                             width: parent.width
-                            //% "Site user agents"
+                            //% "Change user agents"
                             text: qsTrId("atlantic-he-site_user_agents")
                         }
                         Label {
