@@ -123,12 +123,7 @@ Item {
                 opacity: enabled ? 1.0 : 0.5
                 iconWidth: root.iconWidth
                 horizontalOffset: root.horizontalOffset
-                // Bundled shield-with-slash glyph (the SFOS theme has no
-                // ad-block/shield icon). Monochrome PNG (rasterized from an SVG;
-                // the target Qt has no qsvg imageformat plugin): Silica's Icon
-                // tints it to Theme.primaryColor/highlight via its alpha, like a
-                // theme icon. 96px to stay crisp at the device pixel ratio.
-                iconSource: Qt.resolvedUrl("icon-m-adblock.png")
+                iconSource: "image://theme/icon-m-browser-permissions"
                 checkable: true
                 // adBlockAllowlist and adBlockEngine resolve from BrowserPage's
                 // context (like webView/overlay above).
