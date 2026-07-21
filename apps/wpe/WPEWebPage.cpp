@@ -156,6 +156,40 @@ static QHash<QString, QString> &siteUaOverridesMap()
     return overrides;
 }
 
+// Hosts on which JavaScript is disabled ("Enable JavaScript" per-site toggle in
+// the popup menu). Default is JS-on everywhere, so this is a blocklist (unlike
+// the ad-block allowlist, which lists sites where blocking is OFF). Stored as a
+// dconf JSON array and pushed process-wide from BrowserPage.qml via
+// WPEWebContainer::setJavaScriptBlocklist (C++ cannot read dconf itself —
+// MDConfItem is a no-op stub in this build).
+static QStringList &jsBlocklist()
+{
+    static QStringList hosts;
+    return hosts;
+}
+
+// An entry for "example.com" covers example.com and every subdomain, so the
+// user doesn't have to add www./m. variants separately (same semantics as the
+// UA overrides and the ad-block allowlist).
+static bool jsBlockedForHost(const QString &hostIn)
+{
+    const QStringList &hosts = jsBlocklist();
+    if (hosts.isEmpty() || hostIn.isEmpty())
+        return false;
+    const QString host = hostIn.toLower();
+    for (const QString &h : hosts) {
+        if (host == h || host.endsWith(QLatin1Char('.') + h))
+            return true;
+    }
+    return false;
+}
+
+static bool jsBlockedForUrl(const QUrl &url)
+{
+    // Only http(s) documents carry a meaningful host; about:/file: pages keep JS.
+    return jsBlockedForHost(url.host());
+}
+
 // Predefined UA profiles selectable in Settings → "Site user agents".
 // Ids are shared with SiteUaSettingsPage.qml; an unknown id means "no
 // override". Version tokens are frozen-ish shapes sniffers accept, matching
@@ -1796,6 +1830,9 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                     qInfo("[Atlantic] site isolation enabled (experimental, opt-in)");
                 }
             }
+            // Gate JavaScript for this view's initial document per the per-site
+            // blocklist (LOAD_COMMITTED re-applies it on every subsequent nav).
+            applyJavaScriptEnabledForUrl(url());
             g_signal_connect(wv, "decide-policy", G_CALLBACK(onDecidePolicy), this);
             // Cloudflare managed-challenge detection: the interstitial loads
             // its scripts from /cdn-cgi/challenge-platform/ on the page's own
@@ -1842,6 +1879,10 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                         WPEWebPage* page = static_cast<WPEWebPage*>(userData);
                         page->m_lastCommittedUrl = QUrl(QString::fromUtf8(uri));
                         page->applyUserAgentForUrl(page->m_lastCommittedUrl);
+                        // Same authoritative main-frame URL: gate JavaScript for
+                        // the committing document (per-site "Enable JavaScript"
+                        // toggle) before its scripts run.
+                        page->applyJavaScriptEnabledForUrl(page->m_lastCommittedUrl);
                     }
                 }),
                 this);
@@ -4242,4 +4283,58 @@ void WPEWebPage::applyAdBlockAllowlistGlobally(const QString &json)
         }
     }
     qInfo() << "[ADBLOCK] allowlist updated:" << hosts.size() << "hosts";
+}
+
+void WPEWebPage::applyJavaScriptEnabledForUrl(const QUrl &url)
+{
+    WebKitWebView *wv = webView();
+    if (!wv)
+        return;
+    WebKitSettings *settings = webkit_web_view_get_settings(wv);
+    if (!settings)
+        return;
+    // enable-javascript is read live per script (ScriptController::canExecuteScripts),
+    // so setting it here — at the point the document's URL becomes known, before
+    // its scripts run — gates that document. Applied from the LOAD_COMMITTED
+    // handler (authoritative main-frame URL) and at webViewCreated for the first
+    // document.
+    const gboolean enabled = jsBlockedForUrl(url) ? FALSE : TRUE;
+    if (webkit_settings_get_enable_javascript(settings) != enabled)
+        webkit_settings_set_enable_javascript(settings, enabled);
+}
+
+void WPEWebPage::applyJavaScriptBlocklistGlobally(const QString &json)
+{
+    // dconf JSON array of hosts on which JavaScript is disabled.
+    QStringList hosts;
+    const QJsonArray arr = QJsonDocument::fromJson(json.toUtf8()).array();
+    for (const QJsonValue &v : arr) {
+        const QString host = v.toString().toLower().trimmed();
+        if (!host.isEmpty())
+            hosts.append(host);
+    }
+    if (jsBlocklist() == hosts)
+        return;
+
+    // Snapshot which live pages the edit changes, before swapping the list.
+    QHash<WPEWebPage *, bool> blockedBefore;
+    for (WPEWebPage *page : liveInstances())
+        blockedBefore.insert(page, jsBlockedForUrl(page->url()));
+
+    jsBlocklist() = hosts;
+
+    // Re-apply the setting to every live page, and reload the tabs whose JS
+    // state actually flipped — the toggle is an explicit user action on this
+    // site, and JS can only start/stop cleanly on a fresh document (already
+    // running scripts keep running; a page that expected no JS keeps whatever
+    // it built). LOAD_COMMITTED re-applies the setting on the reload.
+    for (WPEWebPage *page : liveInstances()) {
+        page->applyJavaScriptEnabledForUrl(page->url());
+        if (blockedBefore.value(page) != jsBlockedForUrl(page->url())
+            && !page->url().isEmpty()) {
+            if (WebKitWebView *wv = page->webView())
+                webkit_web_view_reload(wv);
+        }
+    }
+    qInfo() << "[Atlantic] JavaScript blocklist updated:" << hosts.size() << "hosts";
 }

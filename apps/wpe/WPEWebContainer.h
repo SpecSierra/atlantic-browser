@@ -107,6 +107,8 @@ public:
     // Cookie-banner auto-reject (autoconsent) toggle, same dconf-driven shape.
     Q_INVOKABLE void setCookieBannerBlockingEnabled(bool enabled);
     Q_INVOKABLE void setSiteUaOverrides(const QString &json);
+    // Per-site "Enable JavaScript" toggle: JSON array of hosts where JS is off.
+    Q_INVOKABLE void setJavaScriptBlocklist(const QString &json);
 
     // QQmlParserStatus
     void classBegin() override;

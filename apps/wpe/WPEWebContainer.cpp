@@ -721,6 +721,11 @@ void WPEWebContainer::setSiteUaOverrides(const QString &json)
     WPEWebPage::applySiteUaOverridesGlobally(json);
 }
 
+void WPEWebContainer::setJavaScriptBlocklist(const QString &json)
+{
+    WPEWebPage::applyJavaScriptBlocklistGlobally(json);
+}
+
 void WPEWebContainer::onActiveTabChanged(int activeTabId)
 {
     activatePage(activeTabId);

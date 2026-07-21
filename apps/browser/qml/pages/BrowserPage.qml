@@ -107,6 +107,36 @@ Page {
     }
 
     ConfigurationValue {
+        id: javascriptBlocklist
+        key: "/apps/atlantic-browser/settings/javascript_blocklist"
+        defaultValue: "[]"
+        // JSON array of hosts on which JavaScript is disabled ("Enable
+        // JavaScript on this site" toggle in the popup menu). Default is JS-on
+        // everywhere, so this is a blocklist. Same shape as adBlockAllowlist
+        // above: dconf is the single source of truth, applied process-wide.
+        onValueChanged: webView.setJavaScriptBlocklist(value)
+        Component.onCompleted: webView.setJavaScriptBlocklist(value)
+
+        // Is host (or a parent domain of it) on the blocklist?
+        function isBlocked(host) {
+            if (!host) return false
+            var list = JSON.parse(value)
+            for (var i = 0; i < list.length; i++) {
+                if (host === list[i] || host.indexOf("." + list[i], host.length - list[i].length - 1) >= 0)
+                    return true
+            }
+            return false
+        }
+
+        function setBlocked(host, blocked) {
+            if (!host) return
+            var list = JSON.parse(value).filter(function (h) { return h !== host })
+            if (blocked) list.push(host)
+            value = JSON.stringify(list)
+        }
+    }
+
+    ConfigurationValue {
         id: cookieBannerBlocking
         key: "/apps/atlantic-browser/settings/cookie_banner_blocking"
         defaultValue: true

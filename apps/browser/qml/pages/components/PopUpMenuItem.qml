@@ -140,6 +140,39 @@ Item {
                 }
             }
 
+            OverlayListItem {
+                // Host of the current page ("" on about:/file: pages).
+                readonly property string _host: {
+                    var m = /^https?:\/\/([^\/:?#]+)/.exec(webView.url || "")
+                    return m ? m[1].toLowerCase() : ""
+                }
+
+                height: Theme.itemSizeSmall
+                enabled: _host.length > 0
+                opacity: enabled ? 1.0 : 0.5
+                iconWidth: root.iconWidth
+                horizontalOffset: root.horizontalOffset
+                iconSource: "image://theme/icon-m-browser-javascript"
+                checkable: true
+                // javascriptBlocklist resolves from BrowserPage's context (like
+                // adBlockAllowlist above). JS is on by default, so checked means
+                // enabled = host is NOT on the blocklist.
+                checked: enabled && !javascriptBlocklist.isBlocked(_host)
+                //: Per-site toggle: unchecking disables JavaScript on this site
+                //% "Enable JavaScript"
+                text: qsTrId("sailfish_browser-la-enable_javascript_on_site")
+
+                onClicked: {
+                    // The Switch has automaticCheck:false, so `checked` still
+                    // holds the pre-tap state here (JS currently enabled). New
+                    // blocked state = toggle of current = `checked` (enabled ⇒
+                    // now block; disabled ⇒ now unblock) — same trick as the
+                    // "Block ads" item above.
+                    javascriptBlocklist.setBlocked(_host, checked)
+                    overlay.animator.showChrome()
+                }
+            }
+
         }
 
         Column {

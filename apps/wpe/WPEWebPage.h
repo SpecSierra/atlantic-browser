@@ -231,6 +231,12 @@ public:
     // site_ua_overrides dconf key, pushed via WPEWebContainer like the two
     // toggles above.
     static void applySiteUaOverridesGlobally(const QString &json);
+    // Per-site "Enable JavaScript" toggle: JSON array of hosts on which JS is
+    // disabled (javascript_blocklist dconf key), pushed via WPEWebContainer like
+    // the toggles above. applyJavaScriptEnabledForUrl sets the per-view setting
+    // from the URL; it's driven at webViewCreated and LOAD_COMMITTED.
+    static void applyJavaScriptBlocklistGlobally(const QString &json);
+    void applyJavaScriptEnabledForUrl(const QUrl &url);
 
     bool throttlePainting() const;
     void setThrottlePainting(bool throttle);
