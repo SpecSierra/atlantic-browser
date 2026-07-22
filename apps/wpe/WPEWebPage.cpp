@@ -74,6 +74,41 @@ bool envVarEnabled(const QByteArray &value)
     return normalized == "1" || normalized == "true" || normalized == "yes" || normalized == "on";
 }
 
+// Toggle a WebKit runtime feature by its glib identifier.
+//
+// Two traps made earlier feature toggles silent no-ops — both are load-bearing
+// here:
+//  - Identifiers are the WebKit preference names with any "Enabled" suffix
+//    STRIPPED (WebKitFeature.cpp toIdentifier): "SiteIsolationEnabled" is
+//    matched as "SiteIsolation".
+//  - webkit_settings_get_experimental_features() only returns features of
+//    status developer/testable/preview/stable; "unstable" features exist only
+//    in the all-features list. Always scan the full list.
+//
+// Returns false (with a warning unless quietIfMissing) when the feature does
+// not exist in this engine build — e.g. compiled out behind a cmake flag.
+bool setRuntimeFeature(WebKitSettings *settings, const char *identifier, gboolean enabled,
+                       bool quietIfMissing = false)
+{
+    bool found = false;
+    if (WebKitFeatureList *features = webkit_settings_get_all_features()) {
+        for (gsize i = 0; i < webkit_feature_list_get_length(features); ++i) {
+            WebKitFeature *feature = webkit_feature_list_get(features, i);
+            if (!g_strcmp0(webkit_feature_get_identifier(feature), identifier)) {
+                webkit_settings_set_feature_enabled(settings, feature, enabled);
+                qInfo("[Atlantic] runtime feature %s = %s", identifier, enabled ? "on" : "off");
+                found = true;
+                break;
+            }
+        }
+        webkit_feature_list_unref(features);
+    }
+    if (!found && !quietIfMissing)
+        qWarning("[Atlantic] runtime feature '%s' not found in this engine build — toggle skipped",
+                 identifier);
+    return found;
+}
+
 // ── User agent ───────────────────────────────────────────────────────────────
 // Reworked after the engine switch: the gecko-era strings carried no Safari
 // "Version/x" token, so version-sniffing sites could not classify the browser
@@ -1835,47 +1870,51 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                 webkit_settings_set_media_playback_requires_user_gesture(settings, TRUE);
 
                 // FIX (hybris/Adreno blank page): keep DOM rendering in the
-                // WebProcess. The engine is built with
-                // ENABLE_GPU_PROCESS_DOM_RENDERING_BY_DEFAULT
-                // (webkit-gpu-process-by-default-wpe.patch), but on this device the
-                // GPU process cannot export composited frames — there is no GBM /
-                // DRM render node (/dev/dri/renderD128 absent), only the libhybris
-                // EGL fallback — so DOM-in-GPU rendering yields a blank content area
-                // while the chrome still draws. Force the GPU-process DOM rendering
-                // preference off so frames flow through the working WPEBackend-fdo
-                // path. Set ATLANTIC_FORCE_GPU_DOM_RENDERING=1 to keep it on.
-                if (!envVarEnabled(qgetenv("ATLANTIC_FORCE_GPU_DOM_RENDERING"))) {
-                    if (WebKitFeatureList* allFeatures = webkit_settings_get_all_features()) {
-                        for (gsize i = 0; i < webkit_feature_list_get_length(allFeatures); ++i) {
-                            WebKitFeature* feature = webkit_feature_list_get(allFeatures, i);
-                            if (g_strcmp0(webkit_feature_get_identifier(feature), "UseGPUProcessForDOMRenderingEnabled") == 0) {
-                                webkit_settings_set_feature_enabled(settings, feature, FALSE);
-                                qInfo("[Atlantic] GPU-process DOM rendering disabled (hybris frame-export workaround)");
-                            }
-                        }
-                        webkit_feature_list_unref(allFeatures);
-                    }
-                }
+                // WebProcess. On this device the GPU process cannot export
+                // composited frames — there is no GBM / DRM render node
+                // (/dev/dri/renderD128 absent), only the libhybris EGL fallback —
+                // so DOM-in-GPU rendering yields a blank content area while the
+                // chrome still draws. The current engine build compiles the GPU
+                // process out entirely (ENABLE_GPU_PROCESS=OFF in
+                // atlantic-wpe-features.cmake), so the feature is normally absent
+                // (quietIfMissing); this guard is the safety net for builds that
+                // re-enable it. Set ATLANTIC_FORCE_GPU_DOM_RENDERING=1 to keep it on.
+                if (!envVarEnabled(qgetenv("ATLANTIC_FORCE_GPU_DOM_RENDERING")))
+                    setRuntimeFeature(settings, "UseGPUProcessForDOMRendering", FALSE,
+                                      /* quietIfMissing */ true);
 
-                // Site isolation (experimental, opt-in via ATLANTIC_ENABLE_SITE_ISOLATION).
-                // Puts cross-origin iframes / cross-site frames in separate WebProcesses;
-                // each WebProcess is bwrap-confined, so this composes with the sandbox for
-                // genuine cross-site isolation. The upstream feature is marked "unstable"
-                // and multiplies the WebProcess count (heavy on a 3.5 GB device), so it is
-                // OFF unless explicitly enabled. SiteIsolationSharedProcessEnabled bounds
-                // the process count by sharing one process across cross-site frames.
+                // Process isolation (top level): one WebProcess per tab, plus a
+                // process swap on every cross-site navigation (PSON) so a tab's
+                // WebProcess never carries two sites across a navigation.
+                // Upstream default is ON (stable status), but it is a per-page
+                // preference that upstream has flipped per-port before — pin it
+                // explicitly so a default change cannot regress isolation
+                // silently. Device-verified 2026-07-22 (build 599): a same-tab
+                // example.org → jolla.com navigation swaps to a fresh
+                // WPEWebProcess. ATLANTIC_DISABLE_PSON=1 is the A/B escape hatch.
+                if (!envVarEnabled(qgetenv("ATLANTIC_DISABLE_PSON")))
+                    setRuntimeFeature(settings, "ProcessSwapOnCrossSiteNavigation", TRUE);
+
+                // Site isolation (OOPIF; opt-in via ATLANTIC_ENABLE_SITE_ISOLATION,
+                // OFF by default) — NOT usable on WPE 2.52.x. Device-proven
+                // 2026-07-22 (build 599, identifiers hot-patched): the features do
+                // engage — cross-site iframes get their own WPEWebProcess — but
+                // their content can never reach the screen: coordinated graphics
+                // has no cross-process frame hosting (GraphicsLayer::
+                // setContentsToPlatformLayerHost() is only implemented on
+                // Cocoa/Win), so isolated iframes render as blank boxes and the
+                // isolated WebProcess crashes. Upstream tracks this as missing
+                // platform work. The toggle is kept, now actually functional
+                // (the original matched the wrong list AND the wrong identifiers,
+                // see setRuntimeFeature), for re-evaluation on a future WPE that
+                // implements coordinated-graphics frame hosting.
                 if (envVarEnabled(qgetenv("ATLANTIC_ENABLE_SITE_ISOLATION"))) {
-                    if (WebKitFeatureList* features = webkit_settings_get_experimental_features()) {
-                        for (gsize i = 0; i < webkit_feature_list_get_length(features); ++i) {
-                            WebKitFeature* feature = webkit_feature_list_get(features, i);
-                            const char* id = webkit_feature_get_identifier(feature);
-                            if (g_strcmp0(id, "SiteIsolationEnabled") == 0
-                                || g_strcmp0(id, "SiteIsolationSharedProcessEnabled") == 0)
-                                webkit_settings_set_feature_enabled(settings, feature, TRUE);
-                        }
-                        webkit_feature_list_unref(features);
-                    }
-                    qInfo("[Atlantic] site isolation enabled (experimental, opt-in)");
+                    const bool engaged = setRuntimeFeature(settings, "SiteIsolation", TRUE);
+                    setRuntimeFeature(settings, "SiteIsolationSharedProcess", TRUE);
+                    if (engaged)
+                        qWarning("[Atlantic] site isolation enabled — EXPERIMENTAL: on WPE 2.52.x "
+                                 "cross-site iframes render blank (no coordinated-graphics frame "
+                                 "hosting upstream) and their WebProcess crashes");
                 }
             }
             // Gate JavaScript for this view's initial document per the per-site
