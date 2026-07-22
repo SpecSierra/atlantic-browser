@@ -15,9 +15,119 @@
 #include <QFile>
 #include <QGuiApplication>
 
+#include <dlfcn.h>
 #include <sqlite3.h>
 
 #include "browserpaths.h"
+
+// ---------------------------------------------------------------------------
+// Private SQLCipher binding.
+//
+// SQLCipher (libsqlcipher) and stock libsqlite3 export the SAME `sqlite3_*`
+// symbols. The browser already loads libsqlite3 through Gecko (mozStorage's
+// cookie DB) and qtcontacts/qsqlite. If we *link* libsqlcipher, its symbols
+// enter the global scope and interpose libsqlite3's: a buffer allocated by
+// libsqlite3 gets freed by SQLCipher's allocator (and vice-versa), corrupting
+// the heap. That crashed the cookie-DB thread on startup before the UI painted.
+//
+// So we never link SQLCipher. We dlopen it into a PRIVATE namespace:
+//   RTLD_LOCAL    keeps its sqlite3_* out of the global scope, so nothing else
+//                 (Gecko, qsqlite, qtcontacts) is interposed;
+//   RTLD_DEEPBIND makes SQLCipher resolve its OWN sqlite3_* internally instead
+//                 of binding to the globally-visible libsqlite3.
+// The store then calls the API through the resolved function pointers below.
+// ---------------------------------------------------------------------------
+namespace {
+struct Sqlite3Api {
+    void *handle = nullptr;
+    bool attempted = false;
+    decltype(&::sqlite3_open) open = nullptr;
+    decltype(&::sqlite3_close) close = nullptr;
+    decltype(&::sqlite3_exec) exec = nullptr;
+    decltype(&::sqlite3_errmsg) errmsg = nullptr;
+    decltype(&::sqlite3_free) free = nullptr;
+    decltype(&::sqlite3_prepare_v2) prepare_v2 = nullptr;
+    decltype(&::sqlite3_step) step = nullptr;
+    decltype(&::sqlite3_finalize) finalize = nullptr;
+    decltype(&::sqlite3_column_int) column_int = nullptr;
+    decltype(&::sqlite3_column_type) column_type = nullptr;
+    decltype(&::sqlite3_column_text) column_text = nullptr;
+    decltype(&::sqlite3_bind_null) bind_null = nullptr;
+    decltype(&::sqlite3_bind_text) bind_text = nullptr;
+    decltype(&::sqlite3_bind_int) bind_int = nullptr;
+    decltype(&::sqlite3_last_insert_rowid) last_insert_rowid = nullptr;
+};
+Sqlite3Api g_sq;
+
+bool loadSqliteApi()
+{
+    if (g_sq.attempted)
+        return g_sq.handle != nullptr;
+    g_sq.attempted = true;
+
+    // libsqlcipher on device (encrypts); plaintext libsqlite3 as a dev/host
+    // fallback when SQLCipher isn't packaged. Either way it stays private.
+    const char *const candidates[] = { "libsqlcipher.so.0", "libsqlite3.so.0" };
+    for (const char *name : candidates) {
+        g_sq.handle = dlopen(name, RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND);
+        if (g_sq.handle)
+            break;
+    }
+    if (!g_sq.handle) {
+        qWarning() << "[CredentialStore] cannot load SQLCipher/SQLite:" << dlerror();
+        return false;
+    }
+
+#define SQ_RESOLVE(field, sym) \
+    g_sq.field = reinterpret_cast<decltype(g_sq.field)>(dlsym(g_sq.handle, #sym))
+    SQ_RESOLVE(open, sqlite3_open);
+    SQ_RESOLVE(close, sqlite3_close);
+    SQ_RESOLVE(exec, sqlite3_exec);
+    SQ_RESOLVE(errmsg, sqlite3_errmsg);
+    SQ_RESOLVE(free, sqlite3_free);
+    SQ_RESOLVE(prepare_v2, sqlite3_prepare_v2);
+    SQ_RESOLVE(step, sqlite3_step);
+    SQ_RESOLVE(finalize, sqlite3_finalize);
+    SQ_RESOLVE(column_int, sqlite3_column_int);
+    SQ_RESOLVE(column_type, sqlite3_column_type);
+    SQ_RESOLVE(column_text, sqlite3_column_text);
+    SQ_RESOLVE(bind_null, sqlite3_bind_null);
+    SQ_RESOLVE(bind_text, sqlite3_bind_text);
+    SQ_RESOLVE(bind_int, sqlite3_bind_int);
+    SQ_RESOLVE(last_insert_rowid, sqlite3_last_insert_rowid);
+#undef SQ_RESOLVE
+
+    if (!(g_sq.open && g_sq.close && g_sq.exec && g_sq.errmsg && g_sq.free
+          && g_sq.prepare_v2 && g_sq.step && g_sq.finalize && g_sq.column_int
+          && g_sq.column_type && g_sq.column_text && g_sq.bind_null
+          && g_sq.bind_text && g_sq.bind_int && g_sq.last_insert_rowid)) {
+        qWarning() << "[CredentialStore] SQLCipher/SQLite missing expected symbols";
+        dlclose(g_sq.handle);
+        g_sq.handle = nullptr;
+        return false;
+    }
+    return true;
+}
+} // namespace
+
+// Route the bare C-API names through the privately-loaded table. Defined AFTER
+// <sqlite3.h> so the header's own declarations (and the decltype()s above) see
+// the real functions; every call site below now dispatches through g_sq.
+#define sqlite3_open              g_sq.open
+#define sqlite3_close             g_sq.close
+#define sqlite3_exec              g_sq.exec
+#define sqlite3_errmsg            g_sq.errmsg
+#define sqlite3_free              g_sq.free
+#define sqlite3_prepare_v2        g_sq.prepare_v2
+#define sqlite3_step              g_sq.step
+#define sqlite3_finalize          g_sq.finalize
+#define sqlite3_column_int        g_sq.column_int
+#define sqlite3_column_type       g_sq.column_type
+#define sqlite3_column_text       g_sq.column_text
+#define sqlite3_bind_null         g_sq.bind_null
+#define sqlite3_bind_text         g_sq.bind_text
+#define sqlite3_bind_int          g_sq.bind_int
+#define sqlite3_last_insert_rowid g_sq.last_insert_rowid
 
 namespace {
 // Ordered column list — shared by schema, insert and update so the binding
@@ -81,6 +191,11 @@ bool CredentialStore::isSetup() const
 
 bool CredentialStore::openWithPassphrase(const QString &passphrase, bool creating)
 {
+    if (!loadSqliteApi()) {
+        qWarning() << "[CredentialStore] SQLite/SQLCipher unavailable; vault disabled";
+        return false;
+    }
+
     const QString path = databasePath();
     if (path.isNull()) {
         qWarning() << "[CredentialStore] no writable data location";
