@@ -991,6 +991,15 @@ void WPEWebContainer::connectPage(WPEWebPage *page)
             emit canGoForwardChanged();
         }
     });
+    // Same-document navigations (SPA pushState) emit no load change, so without
+    // this the toolbar's back/forward state stayed stale mid-SPA and the button
+    // kept rendering the home glyph.
+    connect(page, &WPEQtView::backForwardChanged, this, [this, page]() {
+        if (page == m_contentItem) {
+            emit canGoBackChanged();
+            emit canGoForwardChanged();
+        }
+    });
     connect(page, &WPEQtView::loadProgressChanged, this, &WPEWebContainer::onPageLoadProgressChanged);
     connect(page, &WPEWebPage::paintedChanged, this, &WPEWebContainer::onPagePaintedChanged);
     connect(page, &WPEWebPage::chromeChanged, this, &WPEWebContainer::needChromeChanged);
