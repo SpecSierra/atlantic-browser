@@ -24,6 +24,7 @@
 #include <QStringList>
 #include <QSurfaceFormat>
 #include <qqmldebug.h>
+#include <QElapsedTimer>
 #include <QTimer>
 #include <QTranslator>
 
@@ -97,6 +98,24 @@ static QString browserRuntimeLibraryPath()
             : QString::fromLocal8Bit(overridePath);
 }
 
+// Startup-phase tracing: single monotonic clock started on first use, printed
+// as [ATL-STARTUP] <ms> <event>. Cheap fprintfs; left in permanently so launch
+// regressions stay diagnosable from /tmp/atl.log without special builds.
+static qint64 startupElapsedMs()
+{
+    static QElapsedTimer timer;
+    if (!timer.isValid()) {
+        timer.start();
+    }
+    return timer.elapsed();
+}
+
+static void logStartupPhase(const char *event)
+{
+    fprintf(stderr, "[ATL-STARTUP] %5lld %s\n",
+            static_cast<long long>(startupElapsedMs()), event);
+}
+
 // Fixed runtime-load delay. Unset (-1) means "load as soon as the splash has
 // painted its first frame"; setting ATLANTIC_BROWSER_RUNTIME_DELAY_MS restores
 // a fixed timer (A/B lever, and escape hatch if first-frame triggering misfires).
@@ -120,9 +139,11 @@ static void preloadBrowserRuntimeLibrary()
 
     const QString path = browserRuntimeLibraryPath();
     std::thread([path]() {
+        logStartupPhase("preload-dlopen-begin");
         if (!dlopen(QFile::encodeName(path).constData(), RTLD_LAZY)) {
             fprintf(stderr, "[ATLANTIC] Runtime preload failed: %s\n", dlerror());
         }
+        logStartupPhase("preload-dlopen-end");
     }).detach();
 }
 
@@ -812,6 +833,7 @@ static bool loadBrowserRuntime(QLibrary *runtimeLibrary, QQuickView *view, QGuiA
         return true;
     }
 
+    logStartupPhase("load-runtime-begin");
     runtimeLibrary->setFileName(browserRuntimeLibraryPath());
     if (!runtimeLibrary->load()) {
         fprintf(stderr, "[ATLANTIC] Failed to load browser runtime %s: %s\n",
@@ -820,6 +842,7 @@ static bool loadBrowserRuntime(QLibrary *runtimeLibrary, QQuickView *view, QGuiA
         return false;
     }
 
+    logStartupPhase("load-runtime-dlopened");
     auto startRuntime = reinterpret_cast<AtlanticBrowserRuntimeStartFn>(
                 runtimeLibrary->resolve("atlanticBrowserRuntimeStart"));
     if (!startRuntime) {
@@ -847,6 +870,7 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
         return runSilicaMainSmokeUi(argc, argv);
     }
 
+    logStartupPhase("main-enter");
     qInstallMessageHandler(qmlDebugMessageHandler);
     logStartupContext(argc, argv);
 
@@ -879,10 +903,12 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     }
 
     QScopedPointer<QGuiApplication> app(new QGuiApplication(argc, argv));
+    logStartupPhase("qguiapp-created");
     configureGpuModeFromCapabilities();
     QScopedPointer<QQuickView> view(new QQuickView);
 
     configureBrowserApplication(app.data(), view.data());
+    logStartupPhase("view-configured");
     installApplicationShutdownHooks(app.data(), view.data());
 
     std::unique_ptr<QLibrary> runtimeLibrary(new QLibrary);
@@ -909,17 +935,38 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
             auto frameConnection = std::make_shared<QMetaObject::Connection>();
             *frameConnection = QObject::connect(view.data(), &QQuickWindow::afterRendering, app.data(),
                                                 [frameConnection, loadRuntime]() {
+                logStartupPhase("trigger-afterRendering-delivered");
                 QObject::disconnect(*frameConnection);
                 loadRuntime();
             }, Qt::QueuedConnection);
-            QTimer::singleShot(1500, app.data(), loadRuntime);
+            QTimer::singleShot(1500, app.data(), [loadRuntime]() {
+                logStartupPhase("trigger-safety-timer");
+                loadRuntime();
+            });
+
+            // Log-only probes (removed after first emission): when do the
+            // render-thread signals actually FIRE, independent of when the
+            // GUI thread can service the queued delivery above.
+            auto renderProbe = std::make_shared<QMetaObject::Connection>();
+            *renderProbe = QObject::connect(view.data(), &QQuickWindow::afterRendering,
+                                            view.data(), [renderProbe]() {
+                logStartupPhase("emit-afterRendering(render-thread)");
+                QObject::disconnect(*renderProbe);
+            }, Qt::DirectConnection);
+            auto swapProbe = std::make_shared<QMetaObject::Connection>();
+            *swapProbe = QObject::connect(view.data(), &QQuickWindow::frameSwapped,
+                                          view.data(), [swapProbe]() {
+                logStartupPhase("emit-frameSwapped(render-thread)");
+                QObject::disconnect(*swapProbe);
+            }, Qt::DirectConnection);
         }
     }
     // Install SIGABRT handler AFTER all Qt init (Qt installs its own during QGuiApplication
     // construction which would override an earlier install).
     installBrowserRestartCount();
     installSigAbrtRestartHandler();
-    
+
+    logStartupPhase("exec-enter");
     int result = app->exec();
     
     // Force thread cleanup before exit to prevent hanging processes
