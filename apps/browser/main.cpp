@@ -894,19 +894,25 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
         if (fixedDelayMs >= 0) {
             QTimer::singleShot(fixedDelayMs, app.data(), loadRuntime);
         } else {
-            // Load as soon as the splash has presented its first frame: the
+            // Load as soon as the splash has rendered its first frame: the
             // splash paints once, then the GUI thread blocks on runtime startup
-            // instead of idling out a fixed delay. frameSwapped is emitted on
-            // the render thread, so queue over to the GUI thread and disconnect
-            // on first delivery. The timer is a safety net in case no frame is
-            // ever presented (loadBrowserRuntime is idempotent).
+            // instead of idling out a fixed delay. afterRendering (not
+            // frameSwapped!) is the trigger: on this Wayland stack
+            // eglSwapBuffers blocks on lipstick's frame callbacks until the
+            // app-launch animation completes (~2.7s), so frameSwapped fires
+            // long after the first frame is actually visible. afterRendering
+            // fires on the render thread right after the frame is drawn, so
+            // queue over to the GUI thread and disconnect on first delivery.
+            // The timer is a safety net in case nothing is ever rendered; at
+            // the old fixed default the worst case matches the old behavior
+            // (loadBrowserRuntime is idempotent).
             auto frameConnection = std::make_shared<QMetaObject::Connection>();
-            *frameConnection = QObject::connect(view.data(), &QQuickWindow::frameSwapped, app.data(),
+            *frameConnection = QObject::connect(view.data(), &QQuickWindow::afterRendering, app.data(),
                                                 [frameConnection, loadRuntime]() {
                 QObject::disconnect(*frameConnection);
                 loadRuntime();
             }, Qt::QueuedConnection);
-            QTimer::singleShot(3000, app.data(), loadRuntime);
+            QTimer::singleShot(1500, app.data(), loadRuntime);
         }
     }
     // Install SIGABRT handler AFTER all Qt init (Qt installs its own during QGuiApplication
