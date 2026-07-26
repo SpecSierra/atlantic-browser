@@ -109,6 +109,12 @@ public:
     Q_INVOKABLE void setSiteUaOverrides(const QString &json);
     // Per-site "Enable JavaScript" toggle: JSON array of hosts where JS is off.
     Q_INVOKABLE void setJavaScriptBlocklist(const QString &json);
+    // Reserve `inset` device-independent px at the bottom of the WebKit layout
+    // viewport for the (bottom) URL bar, so position:fixed bottom content lays
+    // out above the chrome instead of behind it. Driven from BrowserPage.qml
+    // off the *settled* chrome state (one relayout per show/hide, not per
+    // frame). 0 restores the full-height viewport. dconf-gated, default OFF.
+    Q_INVOKABLE void setContentBottomInset(qreal inset);
 
     // QQmlParserStatus
     void classBegin() override;
@@ -178,6 +184,9 @@ private:
     void restoreInitialContent();
     QSizeF preferredPageSize(const QSizeF &screenSize) const;
     qreal initialPageDeviceScaleFactor(const QSizeF &screenSize) const;
+    // Base page height minus the reserved bottom inset (never negative). This is
+    // the height handed to every WPEWebPage → the WebKit layout viewport.
+    qreal insetPageHeight(qreal baseHeight) const;
     void configurePageGeometry(WPEWebPage *page, const QSizeF &screenSize);
     WPEWebPage *getOrCreatePage(int tabId);
     void activatePage(int tabId);
@@ -200,6 +209,7 @@ private:
     DeclarativeTabModel *m_tabModel = nullptr;
     DeclarativeHistoryModel *m_historyModel = nullptr;
     QMap<int, WPEWebPage *> m_pages;
+    qreal m_bottomInset = 0.0;              // reserved bottom URL-bar strip (dip); see setContentBottomInset
     QList<int> m_mruTabs;                   // most-recently-used first; front = active
     QTimer *m_memoryPressureTimer = nullptr;
     bool m_tabDiscardEnabled = true;        // ATLANTIC_TAB_DISCARD (default on)

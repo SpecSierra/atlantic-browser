@@ -157,6 +157,18 @@ Page {
         Component.onCompleted: webView.setSiteUaOverrides(value)
     }
 
+    ConfigurationValue {
+        id: viewportInsetConfig
+        key: "/apps/atlantic-browser/settings/viewport_inset_toolbar"
+        defaultValue: false
+        // The live value is applied by webView._desiredContentBottomInset's
+        // change handler (fires whenever this flag, the chrome state, or the
+        // toolbar height changes). This restores the inset on startup, when no
+        // change handler has fired yet. C++ (MDConfItem stub) can't read dconf,
+        // so this binding is the single source of the persisted state.
+        Component.onCompleted: webView.setContentBottomInset(webView._desiredContentBottomInset)
+    }
+
     function load(url, title) {
         overlay.dismiss(true)
         webView.load(url, title)
@@ -282,6 +294,23 @@ Page {
         maxLiveTabCount: maxliveTabs.value
         toolbarHeight: overlay.animator.opened ? overlay.toolBar.rowHeight : 0
         rotationHandler: browserPage
+
+        // Bottom URL-bar viewport inset (dconf: viewport_inset_toolbar, default
+        // OFF). When enabled, reserve the toolbar strip in the WebKit layout
+        // viewport while the chrome is settled-visible, so position:fixed bottom
+        // content (hover buttons, cookie bars, chat bubbles) lays out above the
+        // URL bar instead of behind it. Gated on the *settled* "chromeVisible"
+        // state so the viewport relayouts exactly once per show/hide — the drag
+        // and fling states are distinct, so scrolling does not reflow per frame.
+        // Fullscreen video keeps the full-height viewport. The value is applied
+        // by the handler here plus the config block's Component.onCompleted
+        // (startup); C++ clamps and no-ops unchanged values.
+        readonly property real _desiredContentBottomInset:
+            (viewportInsetConfig.value
+             && overlay.animator.state === "chromeVisible"
+             && !contentFullscreen)
+            ? overlay.toolBar.rowHeight : 0
+        on_DesiredContentBottomInsetChanged: setContentBottomInset(_desiredContentBottomInset)
         imOpened: virtualKeyboardObserver.opened
         canShowSelectionMarkers: !orientationFader.waitForWebContentOrientationChanged
         historyModel: historyModel

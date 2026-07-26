@@ -358,6 +358,11 @@ qreal WPEWebContainer::initialPageDeviceScaleFactor(const QSizeF &screenSize) co
     return screenSize.width() / WPERuntimePaths::kReferenceViewportWidth;
 }
 
+qreal WPEWebContainer::insetPageHeight(qreal baseHeight) const
+{
+    return qMax(qreal(0), baseHeight - m_bottomInset);
+}
+
 void WPEWebContainer::configurePageGeometry(WPEWebPage *page, const QSizeF &screenSize)
 {
     if (!page) {
@@ -366,9 +371,28 @@ void WPEWebContainer::configurePageGeometry(WPEWebPage *page, const QSizeF &scre
 
     const QSizeF size = preferredPageSize(screenSize);
     page->setWidth(size.width());
-    page->setHeight(size.height());
+    page->setHeight(insetPageHeight(size.height()));
     connect(this, &QQuickItem::widthChanged, page, [this, page]() { page->setWidth(width()); });
-    connect(this, &QQuickItem::heightChanged, page, [this, page]() { page->setHeight(height()); });
+    connect(this, &QQuickItem::heightChanged, page, [this, page]() { page->setHeight(insetPageHeight(height())); });
+}
+
+void WPEWebContainer::setContentBottomInset(qreal inset)
+{
+    if (inset < 0.0) {
+        inset = 0.0;
+    }
+    if (qFuzzyCompare(m_bottomInset, inset)) {
+        return;
+    }
+    m_bottomInset = inset;
+    // Re-lay out every live page's WebKit viewport (not just the active one) so
+    // returning to a background tab already reflects the reserved strip.
+    const qreal base = height();
+    for (WPEWebPage *page : m_pages) {
+        if (page) {
+            page->setHeight(insetPageHeight(base));
+        }
+    }
 }
 
 void WPEWebContainer::initializeTabModels(int nextTabId)

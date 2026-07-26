@@ -458,6 +458,19 @@ Page {
                 automaticCheck: false
                 onClicked: fixedToolbarConfig.value = !fixedToolbarConfig.value
             }
+
+            TextSwitch {
+                //: Reserve room for the toolbar so page content is never hidden behind it
+                //% "Keep content clear of the toolbar"
+                text: qsTrId("settings_browser-la-viewport_inset_toolbar")
+                //% "Shrink the page so bottom buttons sit above the address bar instead of behind it"
+                description: qsTrId("settings_browser-la-viewport_inset_toolbar_description")
+                checked: viewportInsetConfig.value
+                leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
+                _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
+                automaticCheck: false
+                onClicked: viewportInsetConfig.value = !viewportInsetConfig.value
+            }
         }
     }
 
@@ -486,6 +499,13 @@ Page {
         id: fixedToolbarConfig
 
         key: "/apps/atlantic-browser/settings/fixed_toolbar"
+        defaultValue: false
+    }
+
+    ConfigurationValue {
+        id: viewportInsetConfig
+
+        key: "/apps/atlantic-browser/settings/viewport_inset_toolbar"
         defaultValue: false
     }
 
