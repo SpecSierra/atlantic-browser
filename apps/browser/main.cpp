@@ -35,6 +35,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <fcntl.h>
+#include <dlfcn.h>
+#include <thread>
 
 static char** g_restartArgv = nullptr;
 // Restart count stored as a global (set before execv via environ, read on startup)
@@ -95,11 +97,33 @@ static QString browserRuntimeLibraryPath()
             : QString::fromLocal8Bit(overridePath);
 }
 
+// Fixed runtime-load delay. Unset (-1) means "load as soon as the splash has
+// painted its first frame"; setting ATLANTIC_BROWSER_RUNTIME_DELAY_MS restores
+// a fixed timer (A/B lever, and escape hatch if first-frame triggering misfires).
 static int browserRuntimeDelayMs()
 {
     bool ok = false;
     const int delay = qEnvironmentVariableIntValue("ATLANTIC_BROWSER_RUNTIME_DELAY_MS", &ok);
-    return ok && delay >= 0 ? delay : 1500;
+    return ok && delay >= 0 ? delay : -1;
+}
+
+// dlopen the runtime library off the GUI thread while the splash is coming up,
+// so the later QLibrary::load() on the GUI thread hits the already-mapped
+// library instead of paying the full relocation cost (~0.6s: the runtime pulls
+// in libWPEWebKit). dlopen is thread-safe and refcounted; the handle is never
+// closed, matching the previous lifetime (the runtime was never unloaded).
+static void preloadBrowserRuntimeLibrary()
+{
+    if (envVarEnabled(qgetenv("ATLANTIC_NO_RUNTIME_PRELOAD"))) {
+        return;
+    }
+
+    const QString path = browserRuntimeLibraryPath();
+    std::thread([path]() {
+        if (!dlopen(QFile::encodeName(path).constData(), RTLD_LAZY)) {
+            fprintf(stderr, "[ATLANTIC] Runtime preload failed: %s\n", dlerror());
+        }
+    }).detach();
 }
 
 static void writeStartupBytes(int fd, const char *data, size_t size)
@@ -838,6 +862,10 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
 
     configureBrowserProcessEnvironment();
 
+    // Start mapping the runtime library in the background while Qt and the
+    // splash come up; the first-frame load below then finds it already loaded.
+    preloadBrowserRuntimeLibrary();
+
     QSurfaceFormat format = QSurfaceFormat::defaultFormat();
     format.setRenderableType(QSurfaceFormat::OpenGLES);
     format.setProfile(QSurfaceFormat::NoProfile);
@@ -859,10 +887,27 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
 
     std::unique_ptr<QLibrary> runtimeLibrary(new QLibrary);
     if (!silicaMainSmokeUi) {
-        QTimer::singleShot(browserRuntimeDelayMs(), app.data(),
-                           [runtimeLibrary = runtimeLibrary.get(), view = view.data(), app = app.data()]() {
+        const int fixedDelayMs = browserRuntimeDelayMs();
+        auto loadRuntime = [runtimeLibrary = runtimeLibrary.get(), view = view.data(), app = app.data()]() {
             loadBrowserRuntime(runtimeLibrary, view, app);
-        });
+        };
+        if (fixedDelayMs >= 0) {
+            QTimer::singleShot(fixedDelayMs, app.data(), loadRuntime);
+        } else {
+            // Load as soon as the splash has presented its first frame: the
+            // splash paints once, then the GUI thread blocks on runtime startup
+            // instead of idling out a fixed delay. frameSwapped is emitted on
+            // the render thread, so queue over to the GUI thread and disconnect
+            // on first delivery. The timer is a safety net in case no frame is
+            // ever presented (loadBrowserRuntime is idempotent).
+            auto frameConnection = std::make_shared<QMetaObject::Connection>();
+            *frameConnection = QObject::connect(view.data(), &QQuickWindow::frameSwapped, app.data(),
+                                                [frameConnection, loadRuntime]() {
+                QObject::disconnect(*frameConnection);
+                loadRuntime();
+            }, Qt::QueuedConnection);
+            QTimer::singleShot(3000, app.data(), loadRuntime);
+        }
     }
     // Install SIGABRT handler AFTER all Qt init (Qt installs its own during QGuiApplication
     // construction which would override an earlier install).
