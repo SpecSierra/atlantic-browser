@@ -506,7 +506,7 @@ Page {
         id: viewportInsetConfig
 
         key: "/apps/atlantic-browser/settings/viewport_inset_toolbar"
-        defaultValue: false
+        defaultValue: true
     }
 
     ConfigurationValue {

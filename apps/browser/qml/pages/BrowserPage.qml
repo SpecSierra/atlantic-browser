@@ -160,7 +160,7 @@ Page {
     ConfigurationValue {
         id: viewportInsetConfig
         key: "/apps/atlantic-browser/settings/viewport_inset_toolbar"
-        defaultValue: false
+        defaultValue: true
         // The live value is applied by webView._desiredContentBottomInset's
         // change handler (fires whenever this flag, the chrome state, or the
         // toolbar height changes). This restores the inset on startup, when no
