@@ -1312,6 +1312,39 @@ static void onScrollBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* pag
     webkit_user_script_unref(script);
 }
 
+static void onPinchBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
+{
+    WPEWebPage* page = static_cast<WPEWebPage*>(userData);
+    if (!page || !value)
+        return;
+
+    bool consumed = false;
+    JSCValue* member = jsc_value_object_get_property(value, "consumed");
+    if (member) {
+        consumed = jsc_value_to_boolean(member);
+        g_object_unref(member);
+    }
+    if (consumed)
+        page->notifyPagePinchConsumed();
+    else
+        page->notifyPagePinchDeclined();
+}
+
+static void onPinchBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page)
+{
+    g_signal_connect(ucm, "script-message-received::pinchBridge",
+                     G_CALLBACK(onPinchBridgeMessage), page);
+    webkit_user_content_manager_register_script_message_handler(ucm, "pinchBridge", nullptr);
+
+    WebKitUserScript* script = webkit_user_script_new(
+        WPEUserScripts::kPinchBridge,
+        WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+        nullptr, nullptr);
+    webkit_user_content_manager_add_script(ucm, script);
+    webkit_user_script_unref(script);
+}
+
 static void onMediaBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
 {
     WPEWebPage* page = static_cast<WPEWebPage*>(userData);
@@ -2177,6 +2210,7 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                 installAutoconsent(ucm);
             onImageLongPressBridgeInstall(ucm, this);
             onScrollBridgeInstall(ucm, this);
+            onPinchBridgeInstall(ucm, this);
             onMediaBridgeInstall(ucm, this);
             onLoginBridgeInstall(ucm, this);
 
@@ -2346,6 +2380,22 @@ qreal WPEWebPage::selectionDisplayScale() const
 {
     const qreal scale = currentPageZoomLevel();
     return scale > 0.0 ? scale : 1.0;
+}
+
+void WPEWebPage::notifyPagePinchConsumed()
+{
+    m_pagePinchConsumerHint = true;
+    if (m_pinchMode == PinchMode::Pending)
+        m_pinchMode = PinchMode::PageDriven;
+}
+
+void WPEWebPage::notifyPagePinchDeclined()
+{
+    // Explicit "not consumed" verdict from the page: the browser pinch may
+    // engage without waiting out the ack grace window. Only demote a pending
+    // sequence — a consumed verdict (or the sticky hint) always wins.
+    if (m_pinchMode == PinchMode::Pending && !m_pagePinchConsumerHint)
+        m_pagePinchDeclined = true;
 }
 
 void WPEWebPage::setMediaPlaybackState(bool audioActive, bool videoActive)
@@ -3007,6 +3057,8 @@ void WPEWebPage::onLoadingChanged(WPEQtViewLoadRequest *loadRequest)
         if (!qFuzzyCompare(m_visualScale, 1.0)) {
             m_visualScale = 1.0;
         }
+        m_pinchMode = PinchMode::Idle;
+        m_pagePinchConsumerHint = false;
         setChrome(true);
         emit domContentLoadedChanged();
         emit loadedChanged();
@@ -3405,6 +3457,41 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
         event->type());
     const bool shouldSyncKeyboard = (event->type() == QEvent::TouchEnd && activePoints.size() <= 1);
     if (activePoints.size() >= 2) {
+        // 2-finger gestures are offered to the page before the browser pinch
+        // engages: maps and other gesture-handling pages preventDefault the
+        // touches and must receive them, or they can never zoom. The
+        // pinchBridge user script reports consumption; until it does (or the
+        // grace window expires) events are forwarded untouched.
+        static const bool forwardPinch = []() {
+            const char* env = getenv("ATLANTIC_PINCH_FORWARD");
+            return !(env && env[0] == '0');
+        }();
+        static const qint64 pinchAckGraceMs = []() -> qint64 {
+            const char* env = getenv("ATLANTIC_PINCH_ACK_MS");
+            return env ? atoi(env) : 200;
+        }();
+
+        if (forwardPinch && !m_pinchZoomActive) {
+            if (m_pinchMode == PinchMode::Idle) {
+                m_pinchMode = m_pagePinchConsumerHint ? PinchMode::PageDriven : PinchMode::Pending;
+                m_pinchPendingSinceMs = QDateTime::currentMSecsSinceEpoch();
+                m_pagePinchDeclined = false;
+            }
+            if (m_pinchMode == PinchMode::Pending
+                && (m_pagePinchDeclined
+                    || QDateTime::currentMSecsSinceEpoch() - m_pinchPendingSinceMs > pinchAckGraceMs)) {
+                // Declined verdict or no report at all: the browser pinch takes
+                // over below, starting from the current finger distance.
+                m_pinchMode = PinchMode::Browser;
+            }
+            if (m_pinchMode == PinchMode::Pending || m_pinchMode == PinchMode::PageDriven) {
+                m_uiGestureTracking = false;
+                WPEQtView::touchEvent(event);
+                event->accept();
+                return;
+            }
+        }
+
         const qreal pinchDistance = QLineF(activePoints.at(0).pos(), activePoints.at(1).pos()).length();
         WebKitWebView *wv = webView();
         if (wv && pinchDistance > 0.0) {
@@ -3448,6 +3535,10 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
         event->accept();
         return;
     }
+
+    // Fewer than 2 active points: any pinch sequence is over. Page-driven and
+    // pending sequences just fall through so the page sees the finger lift.
+    m_pinchMode = PinchMode::Idle;
 
     if (m_pinchZoomActive) {
         if (activePoints.size() < 2 || event->type() == QEvent::TouchEnd || event->type() == QEvent::TouchCancel) {

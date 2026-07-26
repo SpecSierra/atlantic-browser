@@ -285,6 +285,8 @@ public:
     void setNativeFullscreenRequested(bool fullscreen);
     void setDomFullscreenActive(bool fullscreen);
     void setMediaPlaybackState(bool audioActive, bool videoActive);
+    void notifyPagePinchConsumed();
+    void notifyPagePinchDeclined();
     void updateObservedMediaState(bool audioActive, bool videoActive, bool fullscreenActive,
                                   qreal volume, bool muted, bool volumeChangedByPage);
     Q_INVOKABLE void setMediaMuted(bool muted);
@@ -546,6 +548,16 @@ private:
     bool m_findInitialized = false;
     QObject *m_security = nullptr;
     bool m_pinchZoomActive = false;
+    // 2-finger gestures go to the page first; the pinchBridge user script
+    // reports if the page preventDefault'd them (maps run their own pinch).
+    // The browser pinch (m_pinchZoomActive) only engages when no report
+    // arrives within the ack grace window. ATLANTIC_PINCH_FORWARD=0 restores
+    // the old always-intercept behavior.
+    enum class PinchMode { Idle, Pending, PageDriven, Browser };
+    PinchMode m_pinchMode = PinchMode::Idle;
+    qint64 m_pinchPendingSinceMs = 0;
+    bool m_pagePinchConsumerHint = false;  // page consumed a pinch this navigation
+    bool m_pagePinchDeclined = false;      // explicit not-consumed verdict, current sequence
     qreal m_pinchStartDistance = 0.0;
     double m_pinchStartZoomLevel = 1.0;
     double m_defaultZoomLevel = 1.0;

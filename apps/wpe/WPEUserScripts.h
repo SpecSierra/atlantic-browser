@@ -1148,6 +1148,57 @@ static const char* const kScrollBridge = R"JS(
 })();
 )JS";
 
+// Reports whether the page consumes 2-finger touch sequences — maps and other
+// gesture-handling pages do, either by preventDefault'ing the touches or by
+// declaring a pinch-blocking touch-action (Google Maps: touch-action:none on
+// body). WPEWebPage forwards 2-finger touches to the page first and only runs
+// its own pinch-zoom when the verdict is "not consumed" (see the pinch state
+// machine in touchEvent). Capture-phase listeners on window so page
+// stopPropagation can't hide the events; defaultPrevented is read in a
+// 0-timeout, after the page's own handlers ran. The "false" verdict is only
+// sent from the first 2-finger touchmove: touchstart is often left
+// unprevented even by pages that then consume the move.
+static const char* const kPinchBridge = R"JS(
+(function() {
+    if (window.__wpePinchBridgeInstalled) return;
+    window.__wpePinchBridgeInstalled = true;
+
+    var verdictSent = false;
+    function post(consumed) {
+        if (verdictSent) return;
+        verdictSent = true;
+        try { window.webkit.messageHandlers.pinchBridge.postMessage({consumed: consumed}); } catch (err) {}
+    }
+    function blocksPinch(el) {
+        try {
+            for (var n = el; n && n.nodeType === 1; n = n.parentElement) {
+                var ta = getComputedStyle(n).touchAction;
+                if (!ta || ta === 'auto' || ta === 'manipulation') continue;
+                if (ta.indexOf('pinch-zoom') === -1) return true;
+            }
+        } catch (err) {}
+        return false;
+    }
+    function check(e) {
+        if (!e.touches || e.touches.length < 2 || verdictSent) return;
+        if (blocksPinch(e.target)) { post(true); return; }
+        var isMove = e.type === 'touchmove';
+        setTimeout(function() {
+            if (verdictSent) return;
+            if (e.defaultPrevented) post(true);
+            else if (isMove) post(false);
+        }, 0);
+    }
+    function reset(e) {
+        if (!e.touches || e.touches.length < 2) verdictSent = false;
+    }
+    window.addEventListener('touchstart', check, {passive: true, capture: true});
+    window.addEventListener('touchmove', check, {passive: true, capture: true});
+    window.addEventListener('touchend', reset, {passive: true, capture: true});
+    window.addEventListener('touchcancel', reset, {passive: true, capture: true});
+})();
+)JS";
+
 static const char* const kMediaBridge = R"JS(
 (function() {
     if (window.__wpeMediaBridgeInstalled) return;
