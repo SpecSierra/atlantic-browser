@@ -3642,6 +3642,47 @@ void WPEWebPage::scheduleVirtualKeyboardSync()
     });
 }
 
+void WPEWebPage::revealFocusedEditable()
+{
+    WebKitWebView* wv = webView();
+    if (!wv)
+        return;
+
+    // Runs after the keyboard inset shrank the layout viewport. A
+    // position:fixed bottom bar re-lays out above the keyboard on its own, but
+    // an input in normal flow at the end of the document is simply below the
+    // new viewport bottom and needs a scroll. 'nearest' keeps that scroll
+    // minimal (and is a no-op when the element is already visible, e.g. the
+    // fixed-bar case), so focusing an input mid-page does not jump the page.
+    //
+    // dispatch_set_size is async, so the relayout lands a frame or two after
+    // the inset is applied — hence the retries in the caller, not here.
+    static const char* kRevealScript =
+        "(function(){"
+        "  function isEditable(e){"
+        "    if(!e) return false;"
+        "    if(e.isContentEditable) return true;"
+        "    var tag=(e.tagName||'').toLowerCase();"
+        "    if(tag==='textarea') return !e.readOnly && !e.disabled;"
+        "    if(tag==='input'){"
+        "      var t=(e.type||'text').toLowerCase();"
+        "      var blocked={button:1,submit:1,reset:1,checkbox:1,radio:1,file:1,image:1,range:1,color:1,hidden:1};"
+        "      return !blocked[t] && !e.readOnly && !e.disabled;"
+        "    }"
+        "    return false;"
+        "  }"
+        "  var el=document.activeElement;"
+        "  while(el && el.tagName==='IFRAME'){"
+        "    try{ var d=el.contentDocument; if(!d){ el=null; break; } el=d.activeElement; }catch(_e){ el=null; break; }"
+        "  }"
+        "  if(!isEditable(el)) return false;"
+        "  try{ el.scrollIntoView({block:'nearest',inline:'nearest'}); }catch(_e){ try{ el.scrollIntoView(false); }catch(_e2){} }"
+        "  return true;"
+        "})();";
+
+    webkit_web_view_evaluate_javascript(wv, kRevealScript, -1, nullptr, nullptr, nullptr, nullptr, nullptr);
+}
+
 void WPEWebPage::syncVirtualKeyboardToFocusedElement()
 {
     WebKitWebView* wv = webView();

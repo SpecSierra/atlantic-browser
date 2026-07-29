@@ -256,15 +256,21 @@ Page {
 
         onWindowChanged: webView.chromeWindow = window
 
-        // Update content height only after virtual keyboard fully opened.
-        states: State {
-            name: "boundHeightControl"
-            when: virtualKeyboardObserver.opened && webView.enabled
-            PropertyChanges {
-                target: webView.contentItem
-                virtualKeyboardHeight: virtualKeyboardObserver.imSize
-            }
-        }
+        // Height of the keyboard to reserve in the WebKit layout viewport, so
+        // an input at the bottom of the page lays out ABOVE the keyboard
+        // instead of behind it. Consumed by webView._desiredContentBottomInset.
+        //
+        // Gated on `opened` (imSize > 0 && panelSize == imSize) — the settled
+        // state, after the show animation — so the viewport relayouts exactly
+        // once per show/hide instead of on every animation frame. Same
+        // discipline as the toolbar inset's "chromeVisible" gating.
+        //
+        // This used to be a PropertyChanges onto contentItem.virtualKeyboardHeight,
+        // a property left over from the EmbedLite port that the WPE content item
+        // never had — it only ever logged "Cannot assign to non-existent
+        // property" and the keyboard covered bottom inputs. Do not reinstate it.
+        readonly property real contentInset:
+            (opened && webView.enabled) ? imSize : 0
     }
 
     QtObject {
@@ -305,11 +311,19 @@ Page {
         // Fullscreen video keeps the full-height viewport. The value is applied
         // by the handler here plus the config block's Component.onCompleted
         // (startup); C++ clamps and no-ops unchanged values.
+        //
+        // The virtual keyboard reserves its own strip on the same path, always
+        // on (no setting): an input hidden behind the keyboard is a defect, not
+        // a preference. The two insets are combined with max(), not summed —
+        // the keyboard is drawn over the toolbar strip, so reserving both would
+        // double-count the overlap and leave a dead band above the keyboard.
         readonly property real _desiredContentBottomInset:
-            (viewportInsetConfig.value
-             && overlay.animator.state === "chromeVisible"
-             && !contentFullscreen)
-            ? overlay.toolBar.rowHeight : 0
+            Math.max(
+                (viewportInsetConfig.value
+                 && overlay.animator.state === "chromeVisible"
+                 && !contentFullscreen)
+                ? overlay.toolBar.rowHeight : 0,
+                contentFullscreen ? 0 : virtualKeyboardObserver.contentInset)
         on_DesiredContentBottomInsetChanged: setContentBottomInset(_desiredContentBottomInset)
         imOpened: virtualKeyboardObserver.opened
         canShowSelectionMarkers: !orientationFader.waitForWebContentOrientationChanged

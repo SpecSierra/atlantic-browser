@@ -18,6 +18,7 @@
 #include "tab.h"
 
 #include <QGuiApplication>
+#include <QPointer>
 #include <QTimer>
 #include <QFile>
 #include <QScreen>
@@ -384,6 +385,7 @@ void WPEWebContainer::setContentBottomInset(qreal inset)
     if (qFuzzyCompare(m_bottomInset, inset)) {
         return;
     }
+    const bool grew = inset > m_bottomInset;
     m_bottomInset = inset;
     // Re-lay out every live page's WebKit viewport (not just the active one) so
     // returning to a background tab already reflects the reserved strip.
@@ -392,6 +394,23 @@ void WPEWebContainer::setContentBottomInset(qreal inset)
         if (page) {
             page->setHeight(insetPageHeight(base));
         }
+    }
+
+    if (!grew || !m_contentItem) {
+        return;
+    }
+    // The viewport just got shorter (keyboard opening, or the toolbar coming
+    // back): a focused input in normal flow can now sit below the fold. Reveal
+    // it on the active page only — a background tab has no keyboard. The
+    // relayout is async (dispatch_set_size), so retry across a couple of frames
+    // rather than racing it; the script is a no-op once the element is visible.
+    QPointer<WPEWebPage> page(m_contentItem);
+    for (int delayMs : { 0, 150, 350 }) {
+        QTimer::singleShot(delayMs, page, [page]() {
+            if (page) {
+                page->revealFocusedEditable();
+            }
+        });
     }
 }
 

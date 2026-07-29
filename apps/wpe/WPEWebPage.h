@@ -297,6 +297,10 @@ public:
     Q_INVOKABLE void forceChrome(bool forced);
     Q_INVOKABLE void suspendView();
     Q_INVOKABLE void resumeView();
+    // Scroll the focused editable back into view after the layout viewport
+    // shrank under it (virtual keyboard opening). No-op when nothing editable
+    // is focused. See WPEWebContainer::setContentBottomInset().
+    Q_INVOKABLE void revealFocusedEditable();
     Q_INVOKABLE void sendAsyncMessage(const QString &name, const QVariant &data);
     Q_INVOKABLE void addMessageListener(const QString &name);
     Q_INVOKABLE void clearSelection();
