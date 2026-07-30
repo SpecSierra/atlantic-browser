@@ -22,7 +22,17 @@
 
 namespace {
 
-const char kDefaultBaseUrl[] = "https://specsierra.github.io/atlantic-engine/adblock";
+// Path is keyed to adblock-rust's serialized cache format version, NOT to the
+// crate version. engine.dat carries that number in its header and an engine
+// rejects any other (VersionMismatch), so a payload built for one format must
+// never be offered to a client expecting another: selection here is by epoch
+// stamp only, and a client cannot tell "newer" from "unreadable" before
+// downloading it. Publishing each format under its own path means an older
+// client simply sees no updates (404 -> logged no-op, cache untouched) instead
+// of re-downloading ~17 MB it will throw away on every refresh.
+// Bump this whenever ADBLOCK_RUST_DAT_VERSION changes, together with the
+// destination_dir in both engine-repo workflows.
+const char kDefaultBaseUrl[] = "https://specsierra.github.io/atlantic-engine/adblock/v5";
 const char kShippedDir[] = "/usr/share/atlantic-browser";
 // Marker whose mtime is the last completed check (successful or "already
 // current"); failures leave it untouched so the next start retries.
