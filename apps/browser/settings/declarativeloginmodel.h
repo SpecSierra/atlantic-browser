@@ -30,6 +30,12 @@ class DeclarativeLoginModel : public QAbstractListModel, public QQmlParserStatus
     // unlock in the UI).
     Q_PROPERTY(bool locked READ locked NOTIFY lockedChanged)
     Q_PROPERTY(bool hasVault READ hasVault NOTIFY lockedChanged)
+    // Fail-closed states the UI must show instead of the password gate, since
+    // no password the user can type will resolve either of them.
+    // encryptionAvailable: this build/device cannot encrypt at all.
+    // vaultUnreadable: the existing logins.db is not an openable encrypted DB.
+    Q_PROPERTY(bool encryptionAvailable READ encryptionAvailable CONSTANT)
+    Q_PROPERTY(bool vaultUnreadable READ vaultUnreadable NOTIFY vaultUnreadableChanged)
 
 public:
     enum Roles {
@@ -47,6 +53,8 @@ public:
 
     bool locked() const;
     bool hasVault() const;
+    bool encryptionAvailable() const;
+    bool vaultUnreadable() const;
     // Master-password gate. createVault() makes a new vault; unlock() opens an
     // existing one (false on wrong password); lock() closes it.
     Q_INVOKABLE bool createVault(const QString &masterPassword);
@@ -72,6 +80,7 @@ signals:
     void countChanged();
     void populatedChanged();
     void lockedChanged();
+    void vaultUnreadableChanged();
 
 private slots:
     // Reacts to the store locking/unlocking (incl. auto-lock on background).

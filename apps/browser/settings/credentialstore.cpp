@@ -65,8 +65,11 @@ bool loadSqliteApi()
         return g_sq.handle != nullptr;
     g_sq.attempted = true;
 
-    // libsqlcipher on device (encrypts); plaintext libsqlite3 as a dev/host
-    // fallback when SQLCipher isn't packaged. Either way it stays private.
+    // libsqlcipher on device (encrypts). libsqlite3 is still tried so the
+    // failure is diagnosable rather than a bare "cannot load", but it cannot
+    // be used as a fallback: encryptionAvailable() below rejects any library
+    // that does not answer PRAGMA cipher_version, and nothing opens a vault
+    // until it passes. Either way the handle stays private.
     const char *const candidates[] = { "libsqlcipher.so.0", "libsqlite3.so.0" };
     for (const char *name : candidates) {
         g_sq.handle = dlopen(name, RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND);
@@ -148,6 +151,19 @@ const char *const kSchema =
     " password TEXT,"
     " usernameField TEXT,"
     " passwordField TEXT);";
+
+// True if the statement yields at least one row. Used to tell SQLCipher from
+// stock SQLite: an unknown PRAGMA is not an error in SQLite, it simply returns
+// nothing, so the row — not the return code — is the signal.
+bool pragmaYieldsRow(sqlite3 *db, const char *sql)
+{
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+        return false;
+    const bool row = sqlite3_step(stmt) == SQLITE_ROW;
+    sqlite3_finalize(stmt);
+    return row;
+}
 }
 
 CredentialStore *CredentialStore::instance()
@@ -175,6 +191,81 @@ CredentialStore::~CredentialStore()
         sqlite3_close(m_db);
 }
 
+bool CredentialStore::encryptionAvailable()
+{
+    // -1 unprobed, 0 no, 1 yes. Probed against an in-memory DB so it costs
+    // nothing and needs no key: PRAGMA cipher_version is answered by any
+    // SQLCipher connection and by no stock SQLite one.
+    static int cached = -1;
+    if (cached >= 0)
+        return cached == 1;
+    cached = 0;
+
+    if (!loadSqliteApi())
+        return false;
+
+    sqlite3 *probe = nullptr;
+    if (sqlite3_open(":memory:", &probe) == SQLITE_OK && probe)
+        cached = pragmaYieldsRow(probe, "PRAGMA cipher_version;") ? 1 : 0;
+    if (probe)
+        sqlite3_close(probe);
+
+    if (cached != 1) {
+        qWarning() << "[CredentialStore] the SQLite in use is NOT SQLCipher — it "
+                      "cannot encrypt. The password vault is disabled rather than "
+                      "storing passwords in cleartext. Install the 'sqlcipher' package.";
+    }
+    return cached == 1;
+}
+
+void CredentialStore::setVaultUnreadable(bool unreadable)
+{
+    if (m_vaultUnreadable == unreadable)
+        return;
+    m_vaultUnreadable = unreadable;
+    emit vaultUnreadableChanged();
+}
+
+void CredentialStore::refreshVaultState()
+{
+    // Only meaningful for an existing file we are not already inside.
+    if (m_unlocked || !isSetup() || !encryptionAvailable()) {
+        setVaultUnreadable(false);
+        return;
+    }
+
+    // Open the vault UNKEYED. A SQLCipher connection with no key behaves like
+    // plain SQLite, so a successful schema read here means the file is a
+    // PLAINTEXT database — written by a build that fell back silently before
+    // the encryption check existed. Its passwords were never protected and no
+    // master password will ever open it. Deliberately not migrated: reported.
+    //
+    // A properly encrypted vault fails this read, which is the good case, and
+    // leaves the state clear so a wrong password stays "wrong password".
+    const QString path = databasePath();
+    if (path.isNull()) {
+        setVaultUnreadable(false);
+        return;
+    }
+
+    sqlite3 *probe = nullptr;
+    bool plaintext = false;
+    if (sqlite3_open(path.toUtf8().constData(), &probe) == SQLITE_OK && probe) {
+        plaintext = sqlite3_exec(probe, "SELECT count(*) FROM sqlite_master;",
+                                 nullptr, nullptr, nullptr) == SQLITE_OK;
+    }
+    if (probe)
+        sqlite3_close(probe);
+
+    if (plaintext) {
+        qWarning() << "[CredentialStore] logins.db is an UNENCRYPTED database — it "
+                      "predates the encryption check and cannot be opened with a "
+                      "master password. Passwords in it were never protected. "
+                      "Remove it to start a new vault:" << path;
+    }
+    setVaultUnreadable(plaintext);
+}
+
 QString CredentialStore::databasePath() const
 {
     const QString dir = BrowserPaths::dataLocation();
@@ -196,6 +287,11 @@ bool CredentialStore::openWithPassphrase(const QString &passphrase, bool creatin
         return false;
     }
 
+    // Fail closed before touching the file. Without real encryption, creating
+    // a vault writes cleartext passwords and opening one accepts any password.
+    if (!encryptionAvailable())
+        return false;
+
     const QString path = databasePath();
     if (path.isNull()) {
         qWarning() << "[CredentialStore] no writable data location";
@@ -210,8 +306,8 @@ bool CredentialStore::openWithPassphrase(const QString &passphrase, bool creatin
     }
 
     // Apply the passphrase before any other statement. Under SQLCipher this
-    // runs PBKDF2 with the DB's stored salt; under stock libsqlite3 it is an
-    // ignored no-op. Single quotes are doubled to keep the SQL literal valid.
+    // runs PBKDF2 with the DB's stored salt. Single quotes are doubled to keep
+    // the SQL literal valid.
     QString escaped = passphrase;
     escaped.replace(QLatin1Char('\''), QLatin1String("''"));
     const QString keyPragma = QStringLiteral("PRAGMA key = '%1';").arg(escaped);
@@ -219,13 +315,20 @@ bool CredentialStore::openWithPassphrase(const QString &passphrase, bool creatin
 
     if (!creating) {
         // Verify the key: reading the schema of a SQLCipher DB with the wrong
-        // passphrase fails with SQLITE_NOTADB. (Always succeeds on plaintext
-        // libsqlite3 — real verification requires the sqlcipher build.)
+        // passphrase fails with SQLITE_NOTADB. encryptionAvailable() has
+        // already established that this check is meaningful.
         if (sqlite3_exec(m_db, "SELECT count(*) FROM sqlite_master;",
                          nullptr, nullptr, nullptr) != SQLITE_OK) {
             sqlite3_close(m_db);
             m_db = nullptr;
-            return false; // wrong master password
+
+            // The same failure covers two very different situations, and
+            // telling the user "wrong password" for the second one sends them
+            // round a loop no password can end. refreshVaultState() tells them
+            // apart; it leaves vaultUnreadable() false for a genuine wrong
+            // password, so the existing gate keeps handling that case.
+            refreshVaultState();
+            return false; // wrong master password, or an unusable vault
         }
     }
 
@@ -239,6 +342,7 @@ bool CredentialStore::openWithPassphrase(const QString &passphrase, bool creatin
     }
 
     m_unlocked = true;
+    setVaultUnreadable(false);
     emit lockedChanged();
     return true;
 }

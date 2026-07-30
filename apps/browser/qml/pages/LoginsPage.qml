@@ -47,12 +47,67 @@ Page {
         notification.show()
     }
 
+    // Fail-closed error, shown INSTEAD of the master-password gate. Both cases
+    // here are unfixable by typing a password, so offering the password field
+    // would only send the user round a loop: either this build cannot encrypt
+    // at all (vault deliberately disabled rather than storing cleartext), or
+    // the existing vault file is not an openable encrypted database.
+    Column {
+        id: vaultError
+
+        readonly property bool showing: !loginModel.encryptionAvailable || loginModel.vaultUnreadable
+
+        visible: showing
+        width: parent.width - 2 * Theme.horizontalPageMargin
+        x: Theme.horizontalPageMargin
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: Theme.paddingLarge
+
+        PageHeader {
+            //% "Passwords"
+            title: qsTrId("sailfish_browser-he-passwords")
+        }
+
+        Image {
+            anchors.horizontalCenter: parent.horizontalCenter
+            // icon-m-warning, not icon-l-: the -m- variant is the one already
+            // proven present in this theme (TlsErrorBanner, CertificateInfo).
+            source: "image://theme/icon-m-warning?" + Theme.errorColor
+        }
+
+        Label {
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.WordWrap
+            font.pixelSize: Theme.fontSizeLarge
+            color: Theme.errorColor
+            text: loginModel.encryptionAvailable
+                  //% "Saved passwords can't be opened"
+                  ? qsTrId("sailfish_browser-la-login_vault_unreadable")
+                  //% "Password storage is unavailable"
+                  : qsTrId("sailfish_browser-la-login_no_encryption")
+        }
+
+        Label {
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.WordWrap
+            font.pixelSize: Theme.fontSizeSmall
+            color: Theme.highlightColor
+            text: loginModel.encryptionAvailable
+                  //% "The password file on this device is not encrypted. It was written by a faulty version of the browser, so the passwords in it were never protected, and no master password can open it. Remove it to start a new vault."
+                  ? qsTrId("sailfish_browser-la-login_vault_unreadable_detail")
+                  //% "This installation cannot encrypt saved passwords, so the password manager is switched off rather than storing them unprotected. The 'sqlcipher' package is missing."
+                  : qsTrId("sailfish_browser-la-login_no_encryption_detail")
+        }
+    }
+
     // Master-password gate: shown until the vault is unlocked (or created).
     // A single set of PasswordFields serves both flows; hasVault picks which.
     Column {
         id: gate
 
-        readonly property bool showing: loginModel.locked
+        readonly property bool showing: loginModel.locked && !vaultError.showing
 
         visible: showing
         opacity: showing ? 1.0 : 0.0
@@ -149,7 +204,7 @@ Page {
         anchors.fill: parent
         model: loginFilterModel
         currentIndex: -1
-        visible: !gate.showing
+        visible: !gate.showing && !vaultError.showing
 
         PullDownMenu {
             MenuItem {

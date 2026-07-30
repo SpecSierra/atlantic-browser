@@ -24,6 +24,8 @@ DeclarativeLoginModel::DeclarativeLoginModel(QObject *parent)
     // Backed by the encrypted CredentialStore; uid == the store's rowid.
     connect(CredentialStore::instance(), &CredentialStore::lockedChanged,
             this, &DeclarativeLoginModel::onStoreLockedChanged);
+    connect(CredentialStore::instance(), &CredentialStore::vaultUnreadableChanged,
+            this, &DeclarativeLoginModel::vaultUnreadableChanged);
 }
 
 void DeclarativeLoginModel::classBegin()
@@ -32,6 +34,11 @@ void DeclarativeLoginModel::classBegin()
 
 void DeclarativeLoginModel::componentComplete()
 {
+    // Check the vault file before anything renders, so a vault that cannot be
+    // opened at all shows its own error instead of a password gate the user
+    // has no way to satisfy.
+    CredentialStore::instance()->refreshVaultState();
+
     // Populate only if a previous part of the session already unlocked the
     // vault; otherwise the UI shows the setup/unlock gate.
     if (CredentialStore::instance()->isUnlocked()) {
@@ -50,6 +57,16 @@ bool DeclarativeLoginModel::locked() const
 bool DeclarativeLoginModel::hasVault() const
 {
     return CredentialStore::instance()->isSetup();
+}
+
+bool DeclarativeLoginModel::encryptionAvailable() const
+{
+    return CredentialStore::encryptionAvailable();
+}
+
+bool DeclarativeLoginModel::vaultUnreadable() const
+{
+    return CredentialStore::instance()->vaultUnreadable();
 }
 
 bool DeclarativeLoginModel::createVault(const QString &masterPassword)
