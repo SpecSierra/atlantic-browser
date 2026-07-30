@@ -1,8 +1,14 @@
 # Atlantic Browser
 
-Atlantic Browser is the maintained Sailfish OS browser port. It uses the Sailfish Silica Qt browser UI backed by a WPE WebKit 2.52.4 Qt5 bridge.
+Atlantic Browser is the maintained Sailfish OS browser port. It uses the Sailfish Silica Qt browser UI backed by a WPE WebKit 2.52.5 Qt5 bridge.
 
 Maintainer: [SpecSierra](https://github.com/SpecSierra)
+
+This repo holds the UI. The engine, patch stack, packaging and CI live in
+[`SpecSierra/atlantic-engine`](https://github.com/SpecSierra/atlantic-engine), and
+so does the shared documentation — build and CI (`docs/BUILD.md`), device work
+(`docs/DEVICE.md`), benchmarking (`docs/BENCHMARKING.md`), and past
+investigations (`docs/investigations/`). The two repos ship together.
 
 ---
 
