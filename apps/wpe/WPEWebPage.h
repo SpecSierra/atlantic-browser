@@ -87,6 +87,14 @@ class WPEWebPage : public WPEQtView
 {
     Q_OBJECT
 
+public:
+    // Script world the password-autofill bridge lives in. Everything that
+    // touches credentials — the kLoginBridge user script, its message handler
+    // and the fill evaluation — must use this world and not the page's own,
+    // or the page can forge bridge messages and intercept filled values.
+    static constexpr const char* kLoginScriptWorld = "atlantic-login";
+
+private:
     Q_PROPERTY(int tabId READ tabId WRITE setTabId NOTIFY tabIdChanged)
     Q_PROPERTY(bool painted READ painted NOTIFY paintedChanged)
     Q_PROPERTY(bool domContentLoaded READ domContentLoaded NOTIFY domContentLoadedChanged)
@@ -324,9 +332,13 @@ public:
 
     // Password autofill (read path). Called by the loginBridge user script when
     // the user focuses a login field; looks up the credential store and, if a
-    // match exists for this https origin, injects the values into the page.
-    // Never auto-submits. See kLoginBridge in WPEUserScripts.h.
-    void fillLoginForOrigin(const QString &origin);
+    // match exists for the CURRENTLY LOADED https origin, injects the values
+    // into the page. Never auto-submits. See kLoginBridge in WPEUserScripts.h.
+    //
+    // Takes no origin argument by design: the origin is read here from the
+    // committed document URL. A page-supplied origin would let any site ask
+    // for another site's credentials (see onLoginBridgeMessage).
+    void fillLoginForFocusedForm();
 
     // Security
     QObject* security() const { return m_security; }
@@ -346,11 +358,14 @@ public:
 
     // Save-password prompt (Phase 3). offerSaveLogin() is called by the
     // loginBridge capture message; resolveSaveLogin() persists on accept.
+    // Like fillLoginForFocusedForm(), the origin is taken from the committed
+    // document URL, never from the message — otherwise a page could have a
+    // credential of its choosing saved under someone else's host.
     bool saveLoginPending() const { return m_saveLoginPending; }
     QString saveLoginHost() const { return m_saveLoginHost; }
     QString saveLoginUsername() const { return m_saveLoginUsername; }
     bool saveLoginIsUpdate() const { return m_saveLoginExistingUid >= 0; }
-    void offerSaveLogin(const QString &origin, const QString &username, const QString &password);
+    void offerSaveLogin(const QString &username, const QString &password);
     Q_INVOKABLE void resolveSaveLogin(bool save);
     void handlePermissionRequest(void *request); // WebKitPermissionRequest*, takes a ref
 

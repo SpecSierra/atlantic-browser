@@ -1607,11 +1607,19 @@ static const char* const kAdblockClassIdCollector = R"JS(
 )JS";
 
 // Password autofill (read path), Phase 2. Installs window.__atlLogin.fill(u,p),
-// which the native side calls (WPEWebPage::fillLoginForOrigin) after a match is
-// found in the credential store. Gesture-first: credentials are only requested
-// when the user focuses a detected login field — nothing is filled on bare page
-// load, so an invisible/off-screen form can't silently harvest a fill. Injected
-// TOP_FRAME only (no cross-origin iframe fill). Never submits.
+// which the native side calls (WPEWebPage::fillLoginForFocusedForm) after a
+// match is found in the credential store. Gesture-first: credentials are only
+// requested when the user focuses a detected login field — nothing is filled on
+// bare page load, so an invisible/off-screen form can't silently harvest a
+// fill. Injected TOP_FRAME only (no cross-origin iframe fill). Never submits.
+//
+// Injected into the isolated world WPEWebPage::kLoginScriptWorld, so neither
+// __atlLogin nor the loginBridge message handler is reachable from page JS.
+// Note what that does and does not buy: the gesture-first rule above is
+// enforced *here*, in script the page cannot call, which is the only reason it
+// is a real restriction. Nothing in these messages is trusted as identity —
+// the native side derives the origin from the loaded document — because a
+// renderer compromise would put this world in the attacker's hands too.
 static const char* const kLoginBridge = R"JS(
 (function() {
     if (window.__atlLogin) return;
@@ -1671,10 +1679,12 @@ static const char* const kLoginBridge = R"JS(
     };
     window.__atlLogin = api;
 
+    // No origin is sent: the native side reads it from the committed document
+    // URL. Anything posted from here is page-influenced and cannot be identity.
     function requestFill() {
         try {
             window.webkit.messageHandlers.loginBridge.postMessage({
-                type: 'request', origin: location.origin
+                type: 'request'
             });
         } catch (e) {}
     }
@@ -1698,7 +1708,6 @@ static const char* const kLoginBridge = R"JS(
         try {
             window.webkit.messageHandlers.loginBridge.postMessage({
                 type: 'capture',
-                origin: location.origin,
                 username: f.user ? f.user.value : '',
                 password: f.pass.value
             });

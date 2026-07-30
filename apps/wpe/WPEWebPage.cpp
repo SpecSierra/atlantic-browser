@@ -1397,8 +1397,16 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
     webkit_user_script_unref(script);
 }
 
-// Password autofill (read path). The kLoginBridge script posts {type:'request',
-// origin} when the user focuses a login field; we look up the store and inject.
+// Password autofill (read path). The kLoginBridge script posts {type:'request'}
+// when the user focuses a login field; we look up the store and inject.
+//
+// The message carries NO origin. The origin is resolved on this side from the
+// committed document URL, because everything in the message is under the
+// control of whatever page is loaded. When the bridge trusted an `origin`
+// field, any https page could post {type:'request', origin:'https://bank.tld'}
+// and have the bank's stored credentials typed into its own form; the mirror
+// of that on the capture path let a page have an attacker-chosen password
+// saved under another site's host, to be autofilled there later.
 static void onLoginBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
 {
     WPEWebPage* page = static_cast<WPEWebPage*>(userData);
@@ -1417,13 +1425,11 @@ static void onLoginBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpo
 
     const QJsonObject obj = doc.object();
     const QString type = obj.value(QStringLiteral("type")).toString();
-    const QString origin = obj.value(QStringLiteral("origin")).toString();
 
     if (type == QLatin1String("request")) {
-        page->fillLoginForOrigin(origin);
+        page->fillLoginForFocusedForm();
     } else if (type == QLatin1String("capture")) {
-        page->offerSaveLogin(origin,
-                             obj.value(QStringLiteral("username")).toString(),
+        page->offerSaveLogin(obj.value(QStringLiteral("username")).toString(),
                              obj.value(QStringLiteral("password")).toString());
     }
 }
@@ -1432,13 +1438,18 @@ static void onLoginBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
 {
     g_signal_connect(ucm, "script-message-received::loginBridge",
                      G_CALLBACK(onLoginBridgeMessage), page);
-    webkit_user_content_manager_register_script_message_handler(ucm, "loginBridge", nullptr);
+    // Isolated script world (not the page's): page JS can neither reach
+    // window.webkit.messageHandlers.loginBridge to forge a message, nor
+    // replace window.__atlLogin.fill to capture what gets filled in.
+    webkit_user_content_manager_register_script_message_handler(
+        ucm, "loginBridge", WPEWebPage::kLoginScriptWorld);
 
     // TOP_FRAME only: no autofill into cross-origin iframes.
-    WebKitUserScript* script = webkit_user_script_new(
+    WebKitUserScript* script = webkit_user_script_new_for_world(
         WPEUserScripts::kLoginBridge,
         WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
         WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+        WPEWebPage::kLoginScriptWorld,
         nullptr, nullptr);
     webkit_user_content_manager_add_script(ucm, script);
     webkit_user_script_unref(script);
@@ -3896,15 +3907,17 @@ static QString credentialHost(const QString &stored)
     return QUrl(s).host().toLower();
 }
 
-void WPEWebPage::fillLoginForOrigin(const QString &origin)
+void WPEWebPage::fillLoginForFocusedForm()
 {
     WebKitWebView *wv = webView();
-    if (!wv || origin.isEmpty())
+    if (!wv)
         return;
     if (!CredentialStore::instance()->isUnlocked())
         return; // vault locked — nothing to fill from
 
-    const QUrl originUrl(origin);
+    // The document actually loaded in this view (WPEQtView::url() reads
+    // webkit_web_view_get_uri()), NOT anything the page told us it was.
+    const QUrl originUrl = url();
     // Only autofill on secure origins — never leak a credential into an http
     // page where it could be observed or MITM'd.
     if (originUrl.scheme() != QLatin1String("https"))
@@ -3939,11 +3952,13 @@ void WPEWebPage::fillLoginForOrigin(const QString &origin)
         QStringLiteral("(function(a){try{window.__atlLogin&&window.__atlLogin.fill(a[0],a[1]);}catch(e){}})(%1);")
             .arg(args);
 
+    // Evaluated in the bridge's isolated world, where __atlLogin.fill is the
+    // one this browser injected — in the page's world it is page-replaceable.
     webkit_web_view_evaluate_javascript(
-        wv, js.toUtf8().constData(), -1, nullptr, nullptr, nullptr, nullptr, nullptr);
+        wv, js.toUtf8().constData(), -1, kLoginScriptWorld, nullptr, nullptr, nullptr, nullptr);
 }
 
-void WPEWebPage::offerSaveLogin(const QString &origin, const QString &username, const QString &password)
+void WPEWebPage::offerSaveLogin(const QString &username, const QString &password)
 {
     // Nothing to save without a password. (Empty username is allowed — some
     // sites use a single secret field.)
@@ -3952,7 +3967,9 @@ void WPEWebPage::offerSaveLogin(const QString &origin, const QString &username, 
     if (!CredentialStore::instance()->isUnlocked())
         return; // vault locked — can't compare or store; skip the prompt
 
-    const QUrl originUrl(origin);
+    // Same rule as the fill path: the host we save under is the one that is
+    // loaded, not one named by the page.
+    const QUrl originUrl = url();
     // Only capture on secure origins: a credential saved from an http page
     // could never be autofilled anyway (fill is https-only) and storing it
     // just widens the attack surface.
