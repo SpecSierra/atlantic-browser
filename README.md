@@ -1,154 +1,168 @@
-# Atlantic Browser
+# atlantic-browser
 
-Atlantic Browser is the maintained Sailfish OS browser port. It uses the Sailfish Silica Qt browser UI backed by a WPE WebKit 2.52.5 Qt5 bridge.
+Sailfish Silica Qt/QML browser UI for **Atlantic Browser**, backed by a custom
+WPE WebKit Qt5 bridge. The engine, patch stack, packaging and CI live in the
+companion repo `SpecSierra/atlantic-engine`; the two ship together.
 
-Maintainer: [SpecSierra](https://github.com/SpecSierra)
+| | |
+|---|---|
+| Sailfish OS target | **5.1.0.11** (Pispala) |
+| Qt | **5.6.3**, C++17, qmake |
+| WPE WebKit | **2.52.5** via `wpewebkit-2.0` / `wpe-1.0` |
+| Package | `atlantic-browser` **1.0.0.beta7** (`rpm/sailfish-browser.spec`) |
+| Builds | CI in `atlantic-engine` — push to `master` there |
+| Maintainer | [SpecSierra](https://github.com/SpecSierra) |
 
-This repo holds the UI. The engine, patch stack, packaging and CI live in
-[`SpecSierra/atlantic-engine`](https://github.com/SpecSierra/atlantic-engine), and
-so does the shared documentation — build and CI (`docs/BUILD.md`), device work
-(`docs/DEVICE.md`), benchmarking (`docs/BENCHMARKING.md`), and past
-investigations (`docs/investigations/`). The two repos ship together.
+## Documentation
 
----
+Shared docs live in the engine repo, since most work spans both:
+
+| Doc | Read it when |
+|---|---|
+| `atlantic-engine/docs/BUILD.md` | building, packaging, CI, version pins |
+| `atlantic-engine/docs/DEVICE.md` | deploy, launch, screenshots, touch, inspector, `atldbg` |
+| `atlantic-engine/docs/BENCHMARKING.md` | measuring a change or running an A/B |
+| `atlantic-engine/docs/investigations/` | why something is the way it is; which theories are dead |
 
 ## Architecture
 
-The browser is split into four layers:
+| Layer | Contents |
+|---|---|
+| QML UI (Sailfish Silica) | `BrowserPage` → `WebView` → `Overlay`/`ToolBar`; `TabView`, settings, bookmarks, history |
+| Shared library `libsailfishbrowser.so` | `WPEWebContainer` (tab lifecycle), `WPEWebPage` (Qt↔WPE), `BrowserService` (D-Bus), `DownloadManager`, `FaviconManager`, `SettingManager`, `BookmarkManager` |
+| Storage | `DBManager` → `DBWorker` → SQLite; `PersistentTabModel`, `DeclarativeHistoryModel` |
+| Engine (external) | `WPEQtView` ← WPE WebKit 2.52.5, `libWPEWebKit-2.0`, `libwpe-1.0` |
 
-```
-┌────────────────────────────────────────────┐
-│  QML UI Layer (Sailfish Silica)             │
-│  BrowserPage → WebView → Overlay/ToolBar    │
-│  TabView, Settings, Bookmarks, History       │
-├────────────────────────────────────────────┤
-│  Shared Library (libsailfishbrowser.so)     │
-│  ┌──────────────────────────────────────┐   │
-│  │ WPEWebContainer  — tab lifecycle     │   │
-│  │ WPEWebPage       — Qt↔WPE rendering │   │
-│  │ BrowserService   — DBus API          │   │
-│  │ DownloadManager  — TransferEngine    │   │
-│  │ FaviconManager   — icon cache        │   │
-│  │ SettingManager   — dconf settings    │   │
-│  │ BookmarkManager  — bookmark CRUD     │   │
-│  └──────────────────────────────────────┘   │
-├────────────────────────────────────────────┤
-│  Storage Layer                              │
-│  DBManager → DBWorker → SQLite              │
-│  PersistentTabModel, DeclarativeHistoryModel│
-├────────────────────────────────────────────┤
-│  Engine Layer (external)                    │
-│  WPEQtView ← WPE WebKit 2.52.4             │
-│  libWPEWebKit-2.0, libwpe-1.0              │
-└────────────────────────────────────────────┘
-```
+### WPE bridge (`apps/wpe/`)
 
-### WPE WebKit Qt5 Bridge (`apps/wpe/`)
-
-The core rendering bridge is `WPEWebPage`, a `QQuickItem` subclass (via `WPEQtView`) that hosts a `WebKitWebView`. Frames rendered by the WPE WebProcess are posted to the Qt Quick scene graph via `QQuickWindow::update()` — rendering is demand-driven, not a 60fps loop. A 2-second safety watchdog timer (`m_framePump`) ensures the compositor doesn't stall in edge cases.
-
-**Key C++ classes:**
+`WPEWebPage` is a `QQuickItem` (via `WPEQtView`) hosting a `WebKitWebView`. Frames
+from the WPE WebProcess are posted to the Qt Quick scene graph with
+`QQuickWindow::update()` — demand-driven, not a 60 fps loop; a 2 s watchdog
+(`m_framePump`) covers the edge cases where the compositor would otherwise stall.
 
 | Class | Role |
-|-------|------|
-| `WPEWebPage` | Core web page widget. URL loading, scroll, fullscreen, media, text selection, pinch zoom, find-in-page, security info, file choosers, downloads. ~40 Q_PROPERTY values exposed to QML. |
-| `WPEWebContainer` | Tab manager. Creates/activates/destroys `WPEWebPage` instances. Maps tab IDs to pages. Configures sandbox paths and WebProcess memory limits. |
-| `WPEWebPageCreator` | Thin stub for QML `WebPageCreator` compatibility. |
+|---|---|
+| `WPEWebPage` | the page: URL loading, scroll, fullscreen, media, text selection, pinch zoom, find-in-page, security info, file choosers, downloads. ~40 `Q_PROPERTY` values exposed to QML |
+| `WPEWebContainer` | tab manager — creates/activates/destroys pages, maps tab IDs, configures sandbox paths, WebProcess memory limits and tab discarding |
+| `AdBlockEngine`, `AdBlockListUpdater` | Brave/Rust blocker wrapper and the filter-list refresh |
+| `WPEWebPageCreator` | stub for QML `WebPageCreator` compatibility |
 
-**Five JS bridges** are injected into every page via `WebKitUserContentManager`:
+**JS bridges** injected via `WebKitUserContentManager` and handled in `WebView.qml`:
 
 | Bridge | Purpose |
-|--------|---------|
-| `selectBridge` | Intercepts `<select>` touch events, sends options to native `ContextMenu` |
-| `selectionBridge` | Throttled text selection reporter — coordinates for draggable selection handles |
-| `scrollBridge` | Throttled scroll position reporter — drives chrome show/hide gesture |
-| `mediaBridge` | Media playback state, volume sync between native slider (DBus `com.Meego.MainVolume2`) and page elements |
-| `imageLongPressBridge` | Image URLs on long-press for context menu |
+|---|---|
+| `selectBridge` | intercepts `<select>` taps, renders options as a native `ContextMenu` |
+| `selectionBridge` | throttled text-selection reporter — coordinates for draggable handles |
+| `scrollBridge` | throttled scroll position — drives chrome show/hide |
+| `mediaBridge` | playback state; volume sync with the native slider (`com.Meego.MainVolume2`) |
+| `imageLongPressBridge` | image URL on long-press, for the context menu |
+| `pinchBridge` | reports whether the page handled a pinch, so the browser gesture can stand down |
+| `inputPickerBridge` | HTML5 date/time/color inputs → Silica pickers |
+| `loginBridge` | password capture and gesture-first autofill |
+| `editableFocusBridge` | runs inside cross-origin subframes to report editable focus, which the main-frame probe cannot see — keeps the keyboard up for embedded payment/comment fields |
 
-**Input pipeline:** Touch events dispatch to WPE directly. Pinch zoom tracks two-finger gestures via `visualScale` Q_PROPERTY. Virtual keyboard input is dispatched via injected JS (`dispatchTextToFocusedElement`, `dispatchBackspaceToFocusedElement`) rather than WebKit's built-in input method.
+**Site quirks and perf scripts** live in `apps/wpe/WPEUserScripts.h` (extracted
+verbatim from `WPEWebPage.cpp` to keep it manageable): `kYouTubeH264`,
+`kYouTubeIconFix`, `kTwitch`, `kMgpNativeHls`, `kIconHeal`, `kRedditPerf`,
+`kPerfCss`, `kPassiveScroll`, `kMediaBufferCap`, `kCookieScrollUnlock`,
+`kAdblockClassIdCollector`, plus the autoconsent and chrome-reveal scripts. Each
+carries a comment explaining the defect it works around — read it before editing,
+and validate changes through the Web Inspector before pushing to CI.
 
-### QML UI (`apps/browser/qml/`)
+**Input:** touch events dispatch to WPE directly. Pinch zoom is page-driven with the
+browser gesture as fallback (`visualScale`). Virtual-keyboard text goes in through
+injected JS (`dispatchTextToFocusedElement`, `dispatchBackspaceToFocusedElement`),
+except Enter, which needs the native keysym path; the keyboard height is reserved in
+the web viewport via the container's bottom inset.
 
-The UI is built with Sailfish Silica components.
+### QML UI (`apps/browser/qml/`, `apps/shared/`)
 
 | Component | Role |
-|-----------|------|
-| `browser.qml` | Entry point — `BrowserWindow` with `BrowserPage` as `initialPage` |
-| `BrowserPage.qml` | Main page (769 lines): `Overlay`, `WebView`, input regions, file pickers, select menu |
-| `WebView.qml` | Wraps `WPEWebContainer`. Creates `WebPage` dynamically. JS bridge message handler. |
-| `Overlay.qml` | Toolbar + URL/search bar overlay |
-| `OverlayAnimator.qml` | State machine: `chromeVisible`, `fullscreenWebPage`, `startPage`, `secondaryTools`, `draggingOverlay`, `certOverlay`, `noOverlay` |
-| `ResourceController.qml` | Audio/video resource lifecycle. Listens to MCE DBus for screen blank/unblank. Calls `suspendView()`/`resumeView()`. |
+|---|---|
+| `browser.qml` | entry point — `BrowserWindow` with `BrowserPage` as `initialPage` |
+| `BrowserPage.qml` | main page (~800 lines): overlay, web view, input regions, file pickers, select menu |
+| `WebView.qml` | wraps `WPEWebContainer`, creates pages dynamically, routes bridge messages |
+| `Overlay.qml` | toolbar plus URL/search bar |
+| `OverlayAnimator.qml` | state machine: `chromeVisible`, `fullscreenWebPage`, `startPage`, `secondaryTools`, `draggingOverlay`, `certOverlay`, `noOverlay` |
+| `ResourceController.qml` | audio/video lifecycle; listens to MCE D-Bus for screen blank and calls `suspendView()`/`resumeView()` |
+| `Background.qml` | screen-fixed blurred ambience wallpaper (sampled in the shader via `gl_FragCoord`) |
 
-### DBus Services (`apps/browser/`)
+Two QML gotchas that have cost time: `webPageComponent` is dead — pages are created
+in C++, so per-page settings must be pushed with a `Binding` on `contentItem`. And
+`MDConfItem` is a no-op stub; use a QML `ConfigurationValue` or a C++ invokable.
 
-Two DBus services are registered, both implemented by `BrowserService`/`BrowserUIService`:
+### D-Bus
 
 | Service | Methods |
-|---------|---------|
+|---|---|
 | `org.atlantic.browser` | `openUrl`, `activateNewTabView`, `cancelTransfer`, `restartTransfer`, `dumpMemoryInfo` |
 | `org.atlantic.browser.ui` | `openUrl`, `openSettings`, `requestTab`, `closeTab`, `showChrome` |
 
-External DBus inputs consumed:
-- `com.Meego.MainVolume2` — volume slider state (polled every 500ms)
-- `com.nokia.mce` — screen blank/unblank signals
+Consumed: `com.Meego.MainVolume2` (volume, polled every 500 ms) and `com.nokia.mce`
+(screen blank/unblank). Sailjail silently drops any D-Bus name not on the
+allowlist — add it to the RPM `Permissions` line, or the call just never arrives.
 
-### Storage (`apps/storage/`, `apps/history/`)
+### Storage (`apps/storage/`, `apps/history/`, `apps/browser/settings/`)
 
-SQLite-backed via `DBManager` (singleton) and `DBWorker` (runs on a dedicated `QThread`):
+SQLite via `DBManager` (singleton) and `DBWorker` (dedicated `QThread`).
 
 | Model | Backing |
-|-------|---------|
-| `PersistentTabModel` | SQLite — persisted tab state |
-| `PrivateTabModel` | In-memory only |
-| `DeclarativeHistoryModel` | SQLite — browsing history |
+|---|---|
+| `PersistentTabModel` | SQLite — persisted tabs |
+| `PrivateTabModel` | in-memory only |
+| `DeclarativeHistoryModel` | SQLite — history (skipped in private mode) |
 | `DeclarativeBookmarkModel` | SQLite — bookmarks |
-| `DeclarativeLoginModel` | SQLite — saved credentials |
+| `DeclarativeLoginModel` | the password vault — `CredentialStore` over SQLCipher, unlocked by a master password |
+| `SearchEngineModel` | `data/searchEngines/` |
 
-### Shared Library and Bootstrap (`apps/lib/`)
+### Bootstrap (`apps/lib/`)
 
-`libsailfishbrowser.so` is loaded at runtime by `main.cpp`. The entry point `atlanticBrowserRuntimeStart()` creates the `Browser` orchestrator, connects DBus services, and loads QML into the `QQuickView`.
+`main.cpp` loads `libsailfishbrowser.so` at runtime; `atlanticBrowserRuntimeStart()`
+creates the `Browser` orchestrator, connects the D-Bus services, and loads QML into
+the `QQuickView`. Startup probes EGL/GLES via an offscreen `QOpenGLContext` and sets
+`ATLANTIC_GPU_CONSERVATIVE` when GLES < 3 or the external-image extension is
+missing. The runtime is loaded on the first `afterRendering` so the UI paints first.
 
-At startup, `main.cpp` probes GPU capabilities (EGL/GLES extensions) via an offscreen `QOpenGLContext` and sets `ATLANTIC_GPU_CONSERVATIVE` if GLES < 3 or external image extension is missing.
-
----
-
-## Directory Map
+## Layout
 
 | Path | Contents |
-|------|----------|
-| `apps/browser/` | `main.cpp`, DBus services, bookmarks, login models, QML pages |
-| `apps/browser/qml/` | Browser QML UI — `BrowserPage`, `Overlay`, `ToolBar`, `TabView`, `FavoriteGrid`, etc. |
-| `apps/shared/` | Reusable QML — `WebView`, `BrowserWindow`, `OverlayAnimator`, `ResourceController` |
-| `apps/wpe/` | WPE bridge — `WPEWebPage`, `WPEWebContainer`, `WPERuntimePaths` |
-| `apps/lib/` | Shared library bootstrap — `browserruntime.cpp` |
-| `apps/core/` | Core utilities — `Browser`, `DownloadManager`, `FaviconManager`, `SettingManager` |
-| `apps/history/` | Tab and history models |
-| `apps/storage/` | SQLite backend — `DBManager`, `DBWorker`, `Tab`, `Link` |
-| `apps/factories/` | Page factory stubs |
+|---|---|
+| `apps/browser/` | `main.cpp`, D-Bus services, bookmarks, login/search models, QML pages |
+| `apps/browser/qml/` | `BrowserPage`, `Overlay`, `ToolBar`, `TabView`, `FavoriteGrid`, `SettingsPage`, … |
+| `apps/shared/` | reusable QML — `WebView`, `BrowserWindow`, `OverlayAnimator`, `ResourceController`, `Background` |
+| `apps/wpe/` | WPE bridge — `WPEWebPage`, `WPEWebContainer`, `WPEUserScripts.h`, `AdBlockEngine`, `WPERuntimePaths` |
+| `apps/lib/` | shared-library bootstrap (`browserruntime.cpp`) |
+| `apps/core/` | `Browser`, `DownloadManager`, `FaviconManager`, `SettingManager` |
+| `apps/history/`, `apps/storage/` | tab/history models; SQLite backend (`DBManager`, `DBWorker`, `Tab`, `Link`) |
+| `apps/factories/` | page factory stubs |
 | `settings/` | Sailfish Settings plugin |
-| `rpm/` | RPM spec (`sailfish-browser.spec`) |
-| `data/` | Content blocker JSON, prefs, app icon |
-
----
+| `data/` | prefs, search engines, launcher icon |
+| `translations/`, `rpm/` | translation project files (`.ts` are generated, not tracked); RPM spec |
 
 ## Build
 
-Build system: **qmake** (Qt 5.15.13), C++17, targeting `aarch64-linux-gnu`.
+Built by CI in `atlantic-engine` — never build production locally. For a local
+syntax/compile check against the staged engine prefix:
 
+```sh
+qmake sailfish-browser.pro && make
 ```
-qmake sailfish-browser.pro
-make
-```
 
-Key `pkg-config` dependencies: `wpewebkit-2.0`, `wpe-1.0`, `Qt5Core/Qml/Quick/Gui/DBus/Concurrent/Sql`, `nemotransferengine-qt5`, `mlite5`, `sailfishpolicy`, `dsme_dbus_if`, `glib-2.0`, `gio-2.0`.
+`pkg-config` deps: `wpewebkit-2.0`, `wpe-1.0`, `Qt5Core/Qml/Quick/Gui/DBus/Concurrent/Sql`,
+`nemotransferengine-qt5`, `mlite5`, `sailfishpolicy`, `dsme_dbus_if`, `glib-2.0`,
+`gio-2.0`. QML under `/usr/share` can be hot-deployed to the device without a rebuild.
 
-Build and packaging are handled by CI in the companion repo [atlantic-engine](https://github.com/SpecSierra/atlantic-engine).
+## Working rules
 
----
+- **Reproduce on device before changing UI behaviour** — no behaviour change on a theory.
+- **A feature touches every layer in one pass** — engine C++, QML/UI, settings
+  storage, sailjail/D-Bus permissions. List the layers and confirm the list before
+  implementing; finish with an on-device check that the user-visible behaviour works.
+- **Ship engine-side optimizations behind an env flag, default OFF**, then a 5×5
+  interleaved on-device A/B before flipping the default.
+- **Commit to `main`** (this repo; the engine repo uses `master`), no feature
+  branches; push only when asked.
 
 ## License
 
-MPL 2.0 — see `LICENSE.txt`.
-
-Repository: [github.com/SpecSierra/atlantic-browser](https://github.com/SpecSierra/atlantic-browser)
+MPL-2.0 — see `LICENSE.txt`.
