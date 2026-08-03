@@ -133,8 +133,11 @@ bool AdBlockEngine::shouldBlockPopup(const QUrl& pageUrl, const QUrl& popupUrl)
     const QByteArray req = popupUrl.toString().toUtf8();
     const int thirdParty = hostsRelated(pageUrl.host(), popupUrl.host()) ? 0 : 1;
 
-    MatchResult r = atlantic_adblock_match_network(
-        m_engine, src.constData(), req.constData(), "document", thirdParty);
+    // "GET": every caller of this is a document navigation or a popup, which
+    // the engine only ever sees as a GET. $method rules keyed to other verbs
+    // correctly do not match here.
+    MatchResult r = atlantic_adblock_match_network_v2(
+        m_engine, src.constData(), req.constData(), "document", thirdParty, "GET");
     // A popup can't carry a surrogate redirect; only a plain match blocks.
     const bool block = r.matched && !r.redirect;
     atlantic_adblock_free_match_result(r);

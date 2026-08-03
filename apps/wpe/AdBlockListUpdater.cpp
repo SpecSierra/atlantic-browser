@@ -32,7 +32,7 @@ namespace {
 // of re-downloading ~17 MB it will throw away on every refresh.
 // Bump this whenever ADBLOCK_RUST_DAT_VERSION changes, together with the
 // destination_dir in both engine-repo workflows.
-const char kDefaultBaseUrl[] = "https://specsierra.github.io/atlantic-engine/adblock/v3";
+const char kDefaultBaseUrl[] = "https://specsierra.github.io/atlantic-engine/adblock/v5";
 const char kShippedDir[] = "/usr/share/atlantic-browser";
 // Marker whose mtime is the last completed check (successful or "already
 // current"); failures leave it untouched so the next start retries.

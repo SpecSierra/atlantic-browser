@@ -26,9 +26,16 @@ extern "C" {
     CosmeticResult         atlantic_adblock_get_cosmetic(AtlanticAdblockEngine*, const char* url);
     void                   atlantic_adblock_free_cosmetic(CosmeticResult);
     bool                   atlantic_adblock_use_resources_json(AtlanticAdblockEngine*, const uint8_t*, size_t);
-    MatchResult            atlantic_adblock_match_network(AtlanticAdblockEngine*, const char* src_url,
-                                                          const char* req_url, const char* type,
-                                                          int third_party);
+    // These declarations are a SECOND, independent copy of the FFI — the engine
+    // repo has its own in web-extension/atlantic-adblock-extension.c. They must
+    // be updated together. adblock-rust 0.13 added `method` here and only the
+    // engine copy was changed; this side kept calling the 5-argument form, so
+    // the callee read `method` from an uninitialised register and dereferenced
+    // it, which made build 633 unstartable. The symbol now carries a `_v2`
+    // suffix so a stale caller fails to link instead of corrupting memory.
+    MatchResult            atlantic_adblock_match_network_v2(AtlanticAdblockEngine*, const char* src_url,
+                                                             const char* req_url, const char* type,
+                                                             int third_party, const char* method);
     void                   atlantic_adblock_free_match_result(MatchResult);
     char*                  atlantic_adblock_get_generic_hides(AtlanticAdblockEngine*, const char* url,
                                                               const char* classes, const char* ids);
