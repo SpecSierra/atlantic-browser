@@ -521,6 +521,12 @@ private:
     double currentPageZoomLevel() const;
     void setPageZoomLevel(double zoomLevel);
     void rememberDefaultZoomLevel(double zoomLevel);
+    // Push m_pendingPageScale to WebKit as visual-viewport zoom (no relayout).
+    void applyPendingPageScale(WebKitWebView *webView);
+    // Cheap GPU-composited preview of an in-flight viewport pinch, and its
+    // teardown once the real page scale has been committed.
+    void previewViewportPinch(WebKitWebView *webView, double ratio, const QPointF &center);
+    void clearViewportPinchPreview(WebKitWebView *webView);
     double minimumPinchZoomLevel() const;
     double maximumPinchZoomLevel() const;
     bool handleFileChooserRequest(WebKitFileChooserRequest *request);
@@ -583,6 +589,13 @@ private:
     bool m_defaultZoomLevelInitialized = false;
     qreal m_visualScale = 1.0;
     qreal m_pinchStartVisualScale = 1.0;
+    // Viewport-zoom pinch (the default): the page scale the gesture started
+    // from, and the scale/centroid it has reached. Applied once, on finger
+    // lift — a page-scale change is a style rebuild plus a full tile drop on
+    // this port, far too expensive to drive per frame.
+    double m_pinchStartPageScale = 1.0;
+    double m_pendingPageScale = 1.0;
+    QPointF m_pendingPageScaleCenter;
     qreal m_pinchCenterX = 0.0;
     qreal m_pinchCenterY = 0.0;
     QTimer m_framePump;

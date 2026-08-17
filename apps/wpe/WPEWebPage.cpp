@@ -49,10 +49,22 @@
 #include <wpe/webkit.h>
 #include <gio/gio.h>
 
+// Visual-viewport zoom, from the SFOS page-scale patch
+// (atlantic-engine patches/webkit/webkit-wpe-page-scale-api.patch). Page scale
+// magnifies the rendered page without relayouting it, which is what a pinch is
+// expected to do; webkit_web_view_set_zoom_level() is content zoom and reflows.
+extern "C" void wpe_sfos_set_page_scale(WebKitWebView*, double scale, int centerX, int centerY);
+extern "C" double wpe_sfos_get_page_scale(WebKitWebView*);
+
 namespace {
 
 constexpr double kMinimumPinchZoomFactor = 0.5;
 constexpr double kMaximumPinchZoomFactor = 3.0;
+// Viewport-zoom bounds. Unlike content zoom there is no useful scale below 1.0:
+// the page is already laid out to the viewport width, so scaling down just
+// shrinks it away from the edges instead of fitting more text on a line.
+constexpr double kMinimumViewportPinchScale = 1.0;
+constexpr double kMaximumViewportPinchScale = 5.0;
 constexpr int kDefaultFramePumpIntervalMs = 2000;
 constexpr int kMediaInactiveDebounceMs = 400;
 // Ad/tracker network blocking now lives entirely in the WebProcess adblock
@@ -551,6 +563,18 @@ QList<QTouchEvent::TouchPoint> mergeTrackedTouchPoints(
         return lhs.id() < rhs.id();
     });
     return activePoints;
+}
+
+// Pinch magnifies the viewport (page scale) by default. ATLANTIC_PINCH_VIEWPORT=0
+// restores the older content-zoom gesture, which relayouts the page and reflows
+// text the way the desktop zoom setting does.
+bool viewportPinchEnabled()
+{
+    static const bool enabled = []() {
+        const char* env = getenv("ATLANTIC_PINCH_VIEWPORT");
+        return !(env && env[0] == '0');
+    }();
+    return enabled;
 }
 
 void resetPinchZoomState(bool &pinchZoomActive, qreal &pinchStartDistance, double &pinchStartZoomLevel)
@@ -2630,6 +2654,61 @@ void WPEWebPage::rememberDefaultZoomLevel(double zoomLevel)
     m_defaultZoomLevelInitialized = true;
 }
 
+void WPEWebPage::applyPendingPageScale(WebKitWebView *wv)
+{
+    if (!wv || m_pendingPageScale <= 0.0) {
+        return;
+    }
+    // Centroid in view coordinates: scalePageInViewCoordinates() does the
+    // rootView->contents conversion, including the current scroll position and
+    // page scale, so the content under the fingers stays under the fingers.
+    // The engine entry point ignores a scale it already holds.
+    wpe_sfos_set_page_scale(wv,
+                            m_pendingPageScale,
+                            qRound(m_pendingPageScaleCenter.x()),
+                            qRound(m_pendingPageScaleCenter.y()));
+}
+
+void WPEWebPage::previewViewportPinch(WebKitWebView *wv, double ratio, const QPointF &center)
+{
+    if (!wv) {
+        return;
+    }
+    // GPU-composited preview of the pinch, cleared when the gesture commits.
+    // The transform origin has to be a page-coordinate point, not a percentage
+    // of the item: once the page is already zoomed or scrolled, the fingers sit
+    // over a sub-rect of the document, and a percentage would pivot around the
+    // wrong place. visualViewport knows the scroll offset and the committed
+    // page scale, so let the page resolve it. Touch coordinates are view
+    // (device) pixels; CSS pixels are those divided by the page zoom the UI
+    // uses as its device scale.
+    const double zoom = currentPageZoomLevel();
+    const double cssX = zoom > 0.0 ? center.x() / zoom : center.x();
+    const double cssY = zoom > 0.0 ? center.y() / zoom : center.y();
+
+    char js[512];
+    snprintf(js, sizeof(js),
+        "(function(){var v=window.visualViewport,s=v?v.scale:1;"
+        "var ox=(v?v.pageLeft:window.scrollX)+%.2f/s,"
+        "oy=(v?v.pageTop:window.scrollY)+%.2f/s;"
+        "var e=document.documentElement.style;"
+        "e.transformOrigin=ox+'px '+oy+'px';e.transform='scale(%.4f)';})();",
+        cssX, cssY, ratio);
+    webkit_web_view_evaluate_javascript(wv, js, -1, nullptr, nullptr, nullptr, nullptr, nullptr);
+}
+
+void WPEWebPage::clearViewportPinchPreview(WebKitWebView *wv)
+{
+    if (!wv) {
+        return;
+    }
+    webkit_web_view_evaluate_javascript(
+        wv,
+        "document.documentElement.style.transform='';"
+        "document.documentElement.style.transformOrigin='';",
+        -1, nullptr, nullptr, nullptr, nullptr, nullptr);
+}
+
 double WPEWebPage::minimumPinchZoomLevel() const
 {
     return m_defaultZoomLevelInitialized
@@ -3064,10 +3143,14 @@ void WPEWebPage::onLoadingChanged(WPEQtViewLoadRequest *loadRequest)
             }
             emit tlsErrorChanged();
         }
-        // Reset visual pinch zoom so new page starts at 1:1
+        // Reset visual pinch zoom so new page starts at 1:1. WebKit resets the
+        // page scale factor itself on every main-frame commit; this just drops
+        // the stale gesture state that would otherwise seed the next pinch.
         if (!qFuzzyCompare(m_visualScale, 1.0)) {
             m_visualScale = 1.0;
         }
+        m_pinchStartPageScale = 1.0;
+        m_pendingPageScale = 1.0;
         m_pinchMode = PinchMode::Idle;
         m_pagePinchConsumerHint = false;
         setChrome(true);
@@ -3510,6 +3593,11 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
                 m_pinchZoomActive = true;
                 m_pinchStartDistance = pinchDistance;
                 m_pinchStartVisualScale = m_visualScale;
+                // Accumulate on top of whatever the last pinch left committed,
+                // so a second pinch keeps magnifying instead of restarting.
+                m_pinchStartPageScale = viewportPinchEnabled() ? wpe_sfos_get_page_scale(wv) : 1.0;
+                m_pendingPageScale = m_pinchStartPageScale;
+                m_pendingPageScaleCenter = (activePoints.at(0).pos() + activePoints.at(1).pos()) / 2.0;
 
                 QTouchEvent endEvent(QEvent::TouchEnd,
                                      event->device(),
@@ -3519,16 +3607,40 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
                 WPEQtView::touchEvent(&endEvent);
             } else if (m_pinchStartDistance > 0.0) {
                 const qreal ratio = pinchDistance / m_pinchStartDistance;
-                const qreal newVisualScale = std::clamp(
-                    m_pinchStartVisualScale * ratio,
-                    static_cast<qreal>(kMinimumPinchZoomFactor),
-                    static_cast<qreal>(kMaximumPinchZoomFactor));
+                const QPointF center = (activePoints.at(0).pos() + activePoints.at(1).pos()) / 2.0;
 
-                if (!qFuzzyCompare(newVisualScale, m_visualScale)) {
+                if (viewportPinchEnabled()) {
+                    // Visual-viewport zoom, applied once on finger lift. It is
+                    // NOT applied per frame: page scale is undelegated on this
+                    // port, so every change costs a full style rebuild, a
+                    // layout, and a drop of every tile in the backing store
+                    // (Page::setPageScaleFactor / createOrDestroyTiles). The
+                    // gesture is previewed with the same GPU-composited CSS
+                    // transform the old content-zoom pinch used, which costs
+                    // nothing and is cleared on lift.
+                    m_pendingPageScale = std::clamp(
+                        m_pinchStartPageScale * static_cast<double>(ratio),
+                        kMinimumViewportPinchScale,
+                        kMaximumViewportPinchScale);
+                    m_pendingPageScaleCenter = center;
+
+                    // Preview the ratio the commit will actually produce, so
+                    // the page does not jump when the clamp bites.
+                    const double previewRatio = m_pendingPageScale / m_pinchStartPageScale;
+                    if (!qFuzzyCompare(previewRatio, m_visualScale)) {
+                        m_visualScale = previewRatio;
+                        previewViewportPinch(wv, previewRatio, center);
+                    }
+                } else if (const qreal newVisualScale = std::clamp(
+                               m_pinchStartVisualScale * ratio,
+                               static_cast<qreal>(kMinimumPinchZoomFactor),
+                               static_cast<qreal>(kMaximumPinchZoomFactor));
+                           !qFuzzyCompare(newVisualScale, m_visualScale)) {
+                    // ATLANTIC_PINCH_VIEWPORT=0: the old content-zoom gesture,
+                    // previewed as a CSS transform and committed as page zoom.
                     m_visualScale = newVisualScale;
 
                     // Pinch center as percentage of item dimensions for CSS transform-origin
-                    const QPointF center = (activePoints.at(0).pos() + activePoints.at(1).pos()) / 2.0;
                     const double cx_pct = (width()  > 0) ? center.x() / width()  * 100.0 : 50.0;
                     const double cy_pct = (height() > 0) ? center.y() / height() * 100.0 : 50.0;
 
@@ -3553,10 +3665,23 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
 
     if (m_pinchZoomActive) {
         if (activePoints.size() < 2 || event->type() == QEvent::TouchEnd || event->type() == QEvent::TouchCancel) {
+            WebKitWebView *wv = webView();
+            if (wv && viewportPinchEnabled()) {
+                // Commit the gesture as visual-viewport zoom: WebCore scales the
+                // RenderView, so the page magnifies without relayouting, the
+                // document rect (and with it the scroll extents) grows so the
+                // page can be panned, and the coordinated layers re-raster at
+                // pageScale * deviceScale instead of being upscaled. Scale
+                // first, then drop the preview transform, so the page never
+                // flashes back to 1:1 in between.
+                applyPendingPageScale(wv);
+                clearViewportPinchPreview(wv);
+                m_visualScale = 1.0;
+            }
+
             // Commit pinch scale back into WebKit zoom and clear temporary CSS transform so
             // scrolling/hit-testing remain in native coordinates after the gesture ends.
-            WebKitWebView *wv = webView();
-            if (wv && !qFuzzyCompare(m_visualScale, 1.0)) {
+            if (wv && !viewportPinchEnabled() && !qFuzzyCompare(m_visualScale, 1.0)) {
                 const double committedZoom = std::clamp(
                     currentPageZoomLevel() * static_cast<double>(m_visualScale),
                     minimumPinchZoomLevel(),
