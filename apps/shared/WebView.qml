@@ -411,13 +411,9 @@ WebContainer {
 
                     if (!webView.activePortalMode) {
                         grabItem()
-
-                        if (!webView.privateMode) {
-                            // Update the favicon for history items.
-                            FaviconManager.grabIcon("history", webPage,
-                                                    Qt.size(Theme.iconSizeMedium,
-                                                            Theme.iconSizeMedium))
-                        }
+                        // Favicons are grabbed in C++ (WPEWebContainer::
+                        // onPageFaviconChanged): handlers in this component
+                        // never run, see the webPageComponent note above.
                     }
                 }
 
@@ -425,17 +421,6 @@ WebContainer {
                 // suspend the view again explicitly if browser content window is in not visible (background).
                 if (loaded && !webView.visible) {
                     suspendView()
-                }
-            }
-
-            onFaviconChanged: {
-                // The faviconBridge report is debounced and re-fires on late
-                // <head> mutations, so it routinely lands after loaded — and on
-                // SPA route changes, without any load at all.
-                if (loaded && !webView.activePortalMode && !webView.privateMode) {
-                    FaviconManager.grabIcon("history", webPage,
-                                            Qt.size(Theme.iconSizeMedium,
-                                                    Theme.iconSizeMedium))
                 }
             }
 

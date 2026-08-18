@@ -173,6 +173,7 @@ private Q_SLOTS:
     void onTabClosed(int tabId);
     void onPageUrlChanged();
     void onPageTitleChanged();
+    void onPageFaviconChanged();
     void onPageLoadProgressChanged();
     void onPagePaintedChanged();
 

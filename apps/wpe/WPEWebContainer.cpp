@@ -15,6 +15,7 @@
 #include "persistenttabmodel.h"
 #include "privatetabmodel.h"
 #include "dbmanager.h"
+#include "faviconmanager.h"
 #include "tab.h"
 
 #include <QGuiApplication>
@@ -1000,6 +1001,9 @@ void WPEWebContainer::connectPage(WPEWebPage *page)
         connect(page, &WPEWebPage::desktopModeChanged, pageModel, &DeclarativeTabModel::onDesktopModeChanged);
     }
 
+    // Not tied to the tab model: icons are stored per host, for every page.
+    connect(page, &WPEWebPage::faviconChanged, this, &WPEWebContainer::onPageFaviconChanged);
+
     connect(page, &WPEQtView::urlChanged, this, &WPEWebContainer::onPageUrlChanged);
     connect(page, &WPEQtView::titleChanged, this, &WPEWebContainer::onPageTitleChanged);
     // WPEQtView::loadingChanged carries a WPEQtViewLoadRequest* — use a lambda to adapt
@@ -1058,6 +1062,20 @@ void WPEWebContainer::onPageUrlChanged()
             m_historyModel->add(newUrl, page->title());
         }
     }
+}
+
+// Favicon discovery has to be driven from here: the QML webPageComponent that
+// used to call FaviconManager.grabIcon() is never instantiated (pages are
+// created in getOrCreatePage above), so every handler inside it is dead code.
+void WPEWebContainer::onPageFaviconChanged()
+{
+    WPEWebPage *page = qobject_cast<WPEWebPage *>(sender());
+    if (!page || page->privateBrowsing() || page->faviconCandidates().isEmpty())
+        return;
+
+    // Size is only used for the page-thumbnail fallback when no candidate
+    // yields a usable image.
+    FaviconManager::instance()->grabIcon(QStringLiteral("history"), page, QSize(96, 96));
 }
 
 void WPEWebContainer::onPageTitleChanged()
