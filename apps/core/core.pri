@@ -8,7 +8,6 @@ QT += quick
 # C++ sources (Gecko-free)
 SOURCES += \
     $$PWD/browser.cpp \
-    $$PWD/closeeventfilter.cpp \
     $$PWD/datafetcher.cpp \
     $$PWD/declarativewebcontainer.cpp \
     $$PWD/downloadmanager.cpp \
@@ -23,7 +22,6 @@ SOURCES += \
 HEADERS += \
     $$PWD/browser.h \
     $$PWD/browser_p.h \
-    $$PWD/closeeventfilter.h \
     $$PWD/datafetcher.h \
     $$PWD/declarativewebcontainer.h \
     $$PWD/declarativewebutils.h \

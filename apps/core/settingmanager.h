@@ -45,6 +45,11 @@ public:
     Q_INVOKABLE void setAdBlockEnabled(bool enabled);
     Q_INVOKABLE bool isAdBlockEnabled() const;
 
+    // "Close all tabs on exit". Pushed from QML because C++ cannot read dconf
+    // in this build (MDConfItem here is a no-op stub that always returns the
+    // default), which is why the old CloseEventFilter check never fired.
+    Q_INVOKABLE void setCloseAllTabsOnExit(bool enabled);
+
     // Website prefers-color-scheme. The QML root keeps us posted on whether
     // the current ambience is dark; the color_scheme dconf key selects
     // light / dark / follow-ambience.
@@ -55,6 +60,7 @@ signals:
     void toolbarLargeChanged();
 
 private slots:
+    void onAboutToQuit();
     void setSearchEngine();
     void handleObserve(const QString &message, const QVariant &data);
 
@@ -68,6 +74,7 @@ private:
     MDConfItem *m_toolbarLarge;
     MDConfItem *m_colorScheme;
     bool m_ambienceDark = false;
+    bool m_closeAllTabsOnExit = false;
 
     bool m_searchEnginesInitialized;
 

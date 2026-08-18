@@ -9,6 +9,7 @@
 #include "../wpe/AdBlockEngine.h"
 
 #include <MDConfItem>
+#include <QCoreApplication>
 #include <QVariant>
 
 #include <wpe/webkit.h>
@@ -41,6 +42,12 @@ SettingManager::SettingManager(QObject *parent)
     m_toolbarLarge = new MDConfItem("/apps/atlantic-browser/settings/toolbar_large", this);
     connect(m_toolbarSmall, &MDConfItem::valueChanged, this, &SettingManager::toolbarSmallChanged);
     connect(m_toolbarLarge, &MDConfItem::valueChanged, this, &SettingManager::toolbarLargeChanged);
+
+    // "Close all tabs on exit" runs here rather than in CloseEventFilter: that
+    // class is never instantiated, and its MDConfItem read always returned the
+    // default anyway, so the setting silently did nothing. QML pushes the value
+    // via setCloseAllTabsOnExit(); we act on it when the app really quits.
+    connect(qApp, &QCoreApplication::aboutToQuit, this, &SettingManager::onAboutToQuit);
 
     m_colorScheme = new MDConfItem("/apps/atlantic-browser/settings/color_scheme", this);
     connect(m_colorScheme, &MDConfItem::valueChanged, this, &SettingManager::applyColorScheme);
@@ -141,6 +148,22 @@ void SettingManager::clearSitePermissions()
 
 void SettingManager::removeAllTabs()
 {
+    DBManager::instance()->removeAllTabs();
+}
+
+void SettingManager::setCloseAllTabsOnExit(bool enabled)
+{
+    m_closeAllTabsOnExit = enabled;
+}
+
+void SettingManager::onAboutToQuit()
+{
+    if (!m_closeAllTabsOnExit)
+        return;
+
+    // Persistent tabs only — private tabs are never written to the db. The
+    // DBManager worker thread is still running at aboutToQuit, so the
+    // blocking call it makes internally completes normally.
     DBManager::instance()->removeAllTabs();
 }
 

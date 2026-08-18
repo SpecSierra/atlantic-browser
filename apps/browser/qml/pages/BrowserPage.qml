@@ -74,6 +74,18 @@ Page {
     }
 
     ConfigurationValue {
+        id: closeAllTabsOnExit
+        key: "/apps/atlantic-browser/settings/close_all_tabs"
+        defaultValue: false
+        // Same story as the two above: CloseEventFilter read this key with
+        // MDConfItem (a no-op stub) and was never instantiated in the first
+        // place, so tabs were never cleared. SettingManager now does the work
+        // on QCoreApplication::aboutToQuit; QML is the only source of the value.
+        onValueChanged: Settings.setCloseAllTabsOnExit(value)
+        Component.onCompleted: Settings.setCloseAllTabsOnExit(value)
+    }
+
+    ConfigurationValue {
         id: adBlockEngine
         key: "/apps/atlantic-browser/settings/adblock_enabled"
         defaultValue: true
