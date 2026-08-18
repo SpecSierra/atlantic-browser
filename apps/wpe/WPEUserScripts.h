@@ -1728,4 +1728,140 @@ static const char* const kLoginBridge = R"JS(
 })();
 )JS";
 
+// Discovers the page's favicon. WPE's wpe-webkit-2.0 API has no favicon
+// support at all (WebKitFaviconDatabase and the icon-loading client are gated
+// to PLATFORM(GTK) / the deprecated WPE 1.0 API), and the old Gecko-era
+// "Link:SetIcon" async message is a dead path here — so without this bridge
+// WPEWebPage::favicon() is always empty and every history row, suggestion,
+// bookmark and start-page tile falls back to the generic bookmark icon.
+//
+// Reports a ranked candidate list rather than one URL: the winner may 404, be
+// an unsupported format, or decode to garbage, and the native side walks the
+// list until one image actually decodes. /favicon.ico is always appended as
+// the last resort — many sites ship one without ever declaring a <link>.
+//
+// Top frame only, and re-run on late <head> mutations: SPAs routinely swap
+// their icon in after first paint (and some swap it per route).
+static const char* const kFaviconBridge = R"JS(
+(function() {
+    if (window.__wpeFaviconBridgeInstalled) return;
+    window.__wpeFaviconBridgeInstalled = true;
+
+    var ICON_RELS = ['icon', 'shortcut icon', 'apple-touch-icon',
+                     'apple-touch-icon-precomposed', 'fluid-icon', 'mask-icon'];
+    var lastSent = '';
+
+    // "32x32", "16x16 32x32", "any" (scalable). Returns the largest width.
+    function declaredSize(link) {
+        var sizes = (link.getAttribute('sizes') || '').toLowerCase();
+        if (!sizes) return 0;
+        if (sizes.indexOf('any') !== -1) return 1024;
+        var best = 0;
+        var tokens = sizes.split(/\s+/);
+        for (var i = 0; i < tokens.length; i++) {
+            var m = /^(\d+)x(\d+)$/.exec(tokens[i]);
+            if (m) best = Math.max(best, parseInt(m[1], 10));
+        }
+        return best;
+    }
+
+    function isSvg(link, url) {
+        var type = (link.getAttribute('type') || '').toLowerCase();
+        return type.indexOf('svg') !== -1 || /\.svg([?#]|$)/i.test(url);
+    }
+
+    // Icons are drawn at roughly Theme.iconSizeMedium in the lists, so the
+    // ideal source is a little above that. Undersized icons look soft when
+    // scaled up; oversized ones cost a download and a rescale for nothing.
+    function score(link, url, rels) {
+        var size = declaredSize(link);
+        if (!size) {
+            if (rels.indexOf('apple-touch-icon') !== -1 ||
+                rels.indexOf('apple-touch-icon-precomposed') !== -1) size = 180;
+            else if (isSvg(link, url)) size = 1024;
+            else size = 32;
+        }
+        var s = size <= 96 ? size : Math.max(8, 96 - (size - 96) / 16);
+        if (isSvg(link, url)) s += 24;
+        // Monochrome Safari pinned-tab silhouette: usable, but never preferred.
+        if (rels.indexOf('mask-icon') !== -1) s -= 256;
+        return s;
+    }
+
+    function collect() {
+        var found = [];
+        var links = document.querySelectorAll('link[rel][href]');
+        for (var i = 0; i < links.length; i++) {
+            var link = links[i];
+            var rels = (link.getAttribute('rel') || '').toLowerCase().split(/\s+/);
+            var wanted = false;
+            for (var r = 0; r < rels.length && !wanted; r++)
+                wanted = ICON_RELS.indexOf(rels[r]) !== -1;
+            if (!wanted) continue;
+            // .href resolves against the document base for us.
+            var url = link.href;
+            if (!url || !/^https?:/i.test(url)) continue;
+            found.push({ url: url, score: score(link, url, rels) });
+        }
+
+        found.sort(function(a, b) { return b.score - a.score; });
+
+        var urls = [], seen = {};
+        for (var j = 0; j < found.length && urls.length < 4; j++) {
+            if (seen[found[j].url]) continue;
+            seen[found[j].url] = true;
+            urls.push(found[j].url);
+        }
+
+        if (/^https?:/i.test(location.protocol) && location.origin) {
+            var wellKnown = location.origin + '/favicon.ico';
+            if (!seen[wellKnown]) urls.push(wellKnown);
+        }
+        return urls;
+    }
+
+    function report() {
+        try {
+            var urls = collect();
+            if (!urls.length) return;
+            var key = urls.join('|');
+            if (key === lastSent) return;
+            lastSent = key;
+            window.webkit.messageHandlers.faviconBridge.postMessage({
+                pageUrl: location.href,
+                candidates: urls
+            });
+        } catch (e) {}
+    }
+
+    var pending = false;
+    function schedule() {
+        if (pending) return;
+        pending = true;
+        setTimeout(function() { pending = false; report(); }, 250);
+    }
+
+    if (document.readyState === 'loading')
+        document.addEventListener('DOMContentLoaded', schedule, { once: true });
+    else
+        schedule();
+    window.addEventListener('load', schedule);
+
+    // Watch <head> only, and give up after 30s: an always-on subtree observer
+    // on a busy SPA is a real cost, and icons that change after that are not
+    // worth the wakeups.
+    try {
+        var observer = new MutationObserver(schedule);
+        function observeHead() {
+            if (!document.head) return;
+            observer.observe(document.head, { childList: true, subtree: true, attributes: true,
+                                              attributeFilter: ['href', 'rel', 'sizes'] });
+            setTimeout(function() { observer.disconnect(); }, 30000);
+        }
+        if (document.head) observeHead();
+        else document.addEventListener('DOMContentLoaded', observeHead, { once: true });
+    } catch (e) {}
+})();
+)JS";
+
 } // namespace WPEUserScripts

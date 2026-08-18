@@ -30,7 +30,7 @@ class DataFetcher : public QObject
 
 public:
     enum Status { Null, Fetching, Ready, Error };
-    enum Type { Icon, OpenSearch };
+    enum Type { Icon, OpenSearch, Favicon };
 
     explicit DataFetcher(QObject *parent = nullptr);
 
@@ -58,6 +58,7 @@ private:
     void updateStatus(Status status);
     void updateAcceptedTouchIcon(bool acceptedTouchIcon);
     void saveAsImage();
+    void saveAsFavicon();
     void saveAsSearchEngine();
 
     QNetworkAccessManager m_networkAccessManager;

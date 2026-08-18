@@ -275,14 +275,12 @@ WebContainer {
         WebPage {
             id: webPage
 
-            property bool acceptedTouchIcon
             property int frameCounter
             property bool rendered
             // textSelectionActive and textSelectionController are FINAL in WPEWebPage C++
             property Item _selectionUI: null
             readonly property bool activeWebPage: container.tabId == tabId
             property bool userHasDraggedWhileLoading
-            property string favicon
 
             property QtObject pickerOpener: Pickers.PickerOpener {
                 pageStack: window.pageStack
@@ -430,12 +428,21 @@ WebContainer {
                 }
             }
 
+            onFaviconChanged: {
+                // The faviconBridge report is debounced and re-fires on late
+                // <head> mutations, so it routinely lands after loaded — and on
+                // SPA route changes, without any load at all.
+                if (loaded && !webView.activePortalMode && !webView.privateMode) {
+                    FaviconManager.grabIcon("history", webPage,
+                                            Qt.size(Theme.iconSizeMedium,
+                                                    Theme.iconSizeMedium))
+                }
+            }
+
             onLoadingChanged: {
                 if (loading) {
                     userHasDraggedWhileLoading = false
                     webPage.chrome = true
-                    favicon = ""
-                    acceptedTouchIcon = false
                 }
             }
 
@@ -458,11 +465,9 @@ WebContainer {
 
                 switch (message) {
                 case "Link:SetIcon": {
-                    if (acceptedTouchIcon)
-                        return
-
-                    acceptedTouchIcon = data.isRichIcon
-                    favicon = data.url
+                    // Legacy Gecko path, never delivered under WPE. Icons come
+                    // from the faviconBridge user script instead, which drives
+                    // WPEWebPage::favicon / faviconCandidates directly.
                     break
                 }
                 case "Content:SelectionRange": {

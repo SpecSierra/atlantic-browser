@@ -31,6 +31,15 @@ IconGridViewBase {
     function fetchAndSaveBookmark() {
         var webPage = webView && webView.contentItem
         if (webPage) {
+            // Browsing already learned this host's favicon on load; reuse it
+            // rather than re-deriving one, which also avoids replacing a real
+            // icon with a page thumbnail below.
+            var learned = FaviconManager.get("history", webPage.url.toString())
+            if (learned) {
+                bookmarkModel.add(webPage.url, webPage.title || webPage.url, learned, true)
+                return
+            }
+
             // Fetcher itself does async fetching. No need to create this asynchronously.
             var fetcher = iconFetcher.createObject(favoriteGrid,
                                                    {

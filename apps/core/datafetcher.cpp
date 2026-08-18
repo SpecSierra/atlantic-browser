@@ -12,6 +12,7 @@
 #include "faviconmanager.h"
 #include "opensearchconfigs.h"
 
+#include <QBuffer>
 #include <QImage>
 #include <QUrl>
 #include <QDir>
@@ -34,13 +35,28 @@ void DataFetcher::fetch(const QString &url)
     m_url = url;
     QString path = m_url.path();
     updateStatus(Fetching);
-    if (m_type == Icon && (path.endsWith(".ico") || url.isEmpty())) {
+    if (m_type == Favicon && url.isEmpty()) {
+        // Favicon mode reports failure by leaving the data empty; the caller
+        // moves on to the next candidate rather than pinning the default icon.
+        m_data.clear();
+        updateStatus(Error);
+        emit dataChanged();
+    } else if (m_type == Icon && (path.endsWith(".ico") || url.isEmpty())) {
+        // Touch icons are used as launcher icons, where a 16px .ico is useless.
+        // Favicon mode deliberately does not take this path: .ico is by far the
+        // most common favicon format and decodes fine (libqico ships on device).
         m_data = defaultIcon();
         updateStatus(Ready);
         emit dataChanged();
     } else {
         m_networkData.clear();
         QNetworkRequest request(m_url);
+        if (m_type == Favicon) {
+            // Some CDNs 403 icon requests without a Referer, and a few serve
+            // an HTML error page unless an image Accept is sent.
+            request.setRawHeader("Accept", "image/webp,image/png,image/svg+xml,image/*,*/*;q=0.8");
+            request.setAttribute(QNetworkRequest::FollowRedirectsAttribute, true);
+        }
         QNetworkReply *reply = m_networkAccessManager.get(request);
         connect(reply, &QNetworkReply::finished, this, &DataFetcher::dataReady);
         // qOverload(T functionPointer) would be handy to resolve right error method but it is introduced only
@@ -93,6 +109,8 @@ void DataFetcher::dataReady()
 
     if (m_type == OpenSearch)
         saveAsSearchEngine();
+    else if (m_type == Favicon)
+        saveAsFavicon();
     else
         saveAsImage();
 }
@@ -117,6 +135,50 @@ void DataFetcher::saveAsImage()
     emit dataChanged();
 }
 
+// Favicons are drawn small (a history row, a suggestion, a start-page tile), so
+// unlike touch icons they are normalised before storage: decoded here, scaled
+// down to at most kFaviconStoreSize and re-encoded as PNG. Storing the raw
+// bytes instead would put a 512x512 site icon in the favicon JSON for every
+// visited host, and would keep claiming "image/png" for .ico and SVG payloads
+// that QML then fails to decode.
+void DataFetcher::saveAsFavicon()
+{
+    static const int kFaviconStoreSize = 64;
+
+    m_data.clear();
+
+    QImage image;
+    if (!m_networkData.isEmpty()) {
+        // Let Qt sniff the format: the extension lies often enough (.ico files
+        // serving PNG, .png serving SVG) that trusting it costs real icons.
+        image.loadFromData(m_networkData);
+    }
+
+    if (image.isNull()) {
+        updateStatus(Error);
+        emit dataChanged();
+        return;
+    }
+
+    if (image.width() > kFaviconStoreSize || image.height() > kFaviconStoreSize) {
+        image = image.scaled(kFaviconStoreSize, kFaviconStoreSize,
+                             Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    }
+
+    QByteArray png;
+    QBuffer buffer(&png);
+    buffer.open(QIODevice::WriteOnly);
+    if (!image.save(&buffer, "PNG")) {
+        updateStatus(Error);
+        emit dataChanged();
+        return;
+    }
+
+    m_data = QStringLiteral("data:image/png;base64,") + QString::fromLatin1(png.toBase64());
+    updateStatus(Ready);
+    emit dataChanged();
+}
+
 void DataFetcher::error(QNetworkReply::NetworkError)
 {
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
@@ -127,6 +189,9 @@ void DataFetcher::error(QNetworkReply::NetworkError)
     updateStatus(Error);
     if (m_type == Icon) {
         m_data = defaultIcon();
+        emit dataChanged();
+    } else if (m_type == Favicon) {
+        m_data.clear();
         emit dataChanged();
     }
 }

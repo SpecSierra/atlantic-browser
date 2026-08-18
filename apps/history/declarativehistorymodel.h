@@ -55,6 +55,7 @@ signals:
 private slots:
     void historyAvailable(QList<Link> linkList);
     void updateTitle(const QString &url, const QString &title);
+    void updateFavicon(const QString &type, const QString &hostname, const QString &favicon);
 
 private:
     void updateModel(QList<Link> linkList);

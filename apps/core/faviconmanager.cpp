@@ -159,6 +159,8 @@ void FaviconManager::add(const QString &type, const QString &hostname, const QSt
     m_faviconSets.insert(type, faviconSet);
 
     save(type);
+
+    emit iconChanged(type, host, favicon);
 }
 
 void FaviconManager::remove(const QString &type, const QString &hostname)
@@ -173,6 +175,15 @@ void FaviconManager::remove(const QString &type, const QString &hostname)
     save(type);
 }
 
+// Until favicon discovery existed, DataFetcher answered every lookup with the
+// generic launcher icon *name* and grabIcon() stored it as if it were a real
+// icon — which then made grabIcon() skip that host forever. Treat those entries
+// as absent so devices upgrading from an earlier build actually pick up icons.
+bool FaviconManager::isRealIcon(const QString &favicon)
+{
+    return !favicon.isEmpty() && favicon != defaultDesktopBookmarkIcon();
+}
+
 QString FaviconManager::get(const QString &type, const QString &hostname)
 {
     load(type);
@@ -183,37 +194,106 @@ QString FaviconManager::get(const QString &type, const QString &hostname)
     if (m_faviconSets.value(type).favicons.contains(host)) {
         favicon = m_faviconSets.value(type).favicons.value(host).favicon;
     }
-    return favicon;
+    return isRealIcon(favicon) ? favicon : QString();
 }
 
 void FaviconManager::grabIcon(const QString &type, WPEWebPage *webPage, const QSize &size)
 {
-    if (!get(type, webPage->url().toString()).isEmpty()) {
-        return; // favicon was previously already loaded.
+    if (!webPage)
+        return;
+
+    const QString pageUrl = webPage->url().toString();
+    if (pageUrl.isEmpty())
+        return;
+
+    load(type);
+
+    const QString host = sanitizedHostname(pageUrl);
+    const Favicon stored = m_faviconSets.value(type).favicons.value(host);
+    const bool haveStored = isRealIcon(stored.favicon);
+
+    // hasTouchIcon marks a real site icon as opposed to a page thumbnail, so it
+    // doubles as "nothing left to look for here".
+    if (haveStored && stored.hasTouchIcon)
+        return;
+
+    if (haveStored) {
+        // A thumbnail placeholder from an earlier visit (or from a version that
+        // had no favicon discovery at all). Worth one upgrade attempt per
+        // session, not one per page load.
+        const QString key = type + QLatin1Char('|') + host;
+        if (m_thumbnailUpgradeAttempted.contains(key))
+            return;
+        m_thumbnailUpgradeAttempted.insert(key);
+    }
+
+    // The faviconBridge user script reports a ranked list; fall back to the
+    // single favicon property for anything that sets it directly.
+    QStringList candidates = webPage->property("faviconCandidates").toStringList();
+    if (candidates.isEmpty()) {
+        const QString single = webPage->property("favicon").toString();
+        if (!single.isEmpty())
+            candidates.append(single);
+    }
+
+    fetchCandidate(type, pageUrl, candidates, 0, webPage, size, !haveStored);
+}
+
+// Walks the candidate list until one URL yields an image that actually decodes.
+// The top-ranked candidate is regularly a 404, an HTML error page, or a format
+// we cannot read, so a single-shot fetch would leave far too many sites on the
+// generic icon.
+void FaviconManager::fetchCandidate(const QString &type, const QString &pageUrl,
+                                    const QStringList &candidates, int index,
+                                    QPointer<WPEWebPage> webPage, const QSize &size,
+                                    bool allowThumbnailFallback)
+{
+    if (index < 0 || index >= candidates.count()) {
+        if (allowThumbnailFallback)
+            grabThumbnailFallback(type, webPage, size);
+        return;
     }
 
     DataFetcher *dataFetcher = new DataFetcher(this);
+    dataFetcher->setType(DataFetcher::Favicon);
 
     std::shared_ptr<QMetaObject::Connection> dataConn = std::make_shared<QMetaObject::Connection>();
-    *dataConn = connect(dataFetcher, &DataFetcher::dataChanged,
-                        this, [this, dataFetcher, type, webPage, size, dataConn]() {
+    *dataConn = connect(dataFetcher, &DataFetcher::dataChanged, this,
+                        [this, dataFetcher, type, pageUrl, candidates, index, webPage, size,
+                         allowThumbnailFallback, dataConn]() {
         QObject::disconnect(*dataConn);
-        if (dataFetcher->hasAcceptedTouchIcon()) {
-            qCDebug(lcFavoritesLog) << "Storing favicon for" << type;
-            add(type, webPage->url().toString(), dataFetcher->data(), true);
-        } else {
-            std::shared_ptr<QMetaObject::Connection> thumbConn = std::make_shared<QMetaObject::Connection>();
-            *thumbConn = connect(webPage, &WPEWebPage::thumbnailResult,
-                                 [this, type, webPage, thumbConn](const QString &data) {
-                qCDebug(lcFavoritesLog) << "Storing thumbnail for" << type;
-                QObject::disconnect(*thumbConn);
-                add(type, webPage->url().toString(), data, false);
-            });
-            webPage->grabThumbnail(size);
-        }
+        const QString data = dataFetcher->data();
         dataFetcher->deleteLater();
+
+        if (isRealIcon(data)) {
+            qCDebug(lcFavoritesLog) << "Storing favicon for" << type << pageUrl
+                                    << "from" << candidates.at(index);
+            add(type, pageUrl, data, true);
+            return;
+        }
+
+        fetchCandidate(type, pageUrl, candidates, index + 1, webPage, size, allowThumbnailFallback);
     });
-    dataFetcher->fetch(webPage->property("favicon").toString());
+
+    dataFetcher->fetch(candidates.at(index));
+}
+
+void FaviconManager::grabThumbnailFallback(const QString &type, QPointer<WPEWebPage> webPage,
+                                           const QSize &size)
+{
+    if (!webPage)
+        return;
+
+    std::shared_ptr<QMetaObject::Connection> thumbConn = std::make_shared<QMetaObject::Connection>();
+    *thumbConn = connect(webPage.data(), &WPEWebPage::thumbnailResult, this,
+                         [this, type, webPage, thumbConn](const QString &data) {
+        QObject::disconnect(*thumbConn);
+        if (!webPage || data.isEmpty())
+            return;
+        qCDebug(lcFavoritesLog) << "Storing thumbnail for" << type;
+        add(type, webPage->url().toString(), data, false);
+    });
+    webPage->grabThumbnail(size);
 }
 
 void FaviconManager::clear(const QString &type)

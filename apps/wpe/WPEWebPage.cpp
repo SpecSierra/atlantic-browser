@@ -1458,6 +1458,63 @@ static void onLoginBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpo
     }
 }
 
+static void onFaviconBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
+{
+    WPEWebPage* page = static_cast<WPEWebPage*>(userData);
+    if (!page || !value)
+        return;
+
+    gchar* json = jsc_value_to_json(value, 0);
+    if (!json)
+        return;
+
+    QByteArray jsonBytes(json);
+    g_free(json);
+
+    const QJsonDocument doc = QJsonDocument::fromJson(jsonBytes);
+    if (!doc.isObject())
+        return;
+
+    const QJsonObject obj = doc.object();
+
+    // The script is debounced, so a report can land after the user already
+    // navigated away. Compare hosts rather than full URLs: that is the key
+    // favicons are stored under anyway, and it does not throw away a valid
+    // report just because the document URL picked up a fragment or a trailing
+    // slash since the scan ran.
+    const QString pageUrl = obj.value(QStringLiteral("pageUrl")).toString();
+    if (!pageUrl.isEmpty() && QUrl(pageUrl).host() != page->url().host())
+        return;
+
+    QStringList candidates;
+    const QJsonArray array = obj.value(QStringLiteral("candidates")).toArray();
+    for (const QJsonValue &entry : array) {
+        const QString url = entry.toString();
+        if (!url.isEmpty())
+            candidates.append(url);
+    }
+    if (candidates.isEmpty())
+        return;
+
+    page->setFaviconCandidates(candidates);
+}
+
+static void onFaviconBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page)
+{
+    g_signal_connect(ucm, "script-message-received::faviconBridge",
+                     G_CALLBACK(onFaviconBridgeMessage), page);
+    webkit_user_content_manager_register_script_message_handler(ucm, "faviconBridge", nullptr);
+
+    // TOP_FRAME only: a subframe's <link rel=icon> is not the page's icon.
+    WebKitUserScript* script = webkit_user_script_new(
+        WPEUserScripts::kFaviconBridge,
+        WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
+        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+        nullptr, nullptr);
+    webkit_user_content_manager_add_script(ucm, script);
+    webkit_user_script_unref(script);
+}
+
 static void onLoginBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page)
 {
     g_signal_connect(ucm, "script-message-received::loginBridge",
@@ -2248,6 +2305,7 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             onPinchBridgeInstall(ucm, this);
             onMediaBridgeInstall(ucm, this);
             onLoginBridgeInstall(ucm, this);
+            onFaviconBridgeInstall(ucm, this);
 
             WebKitNetworkSession* session = webkit_web_view_get_network_session(wv);
             if (!session) {
@@ -2339,6 +2397,18 @@ void WPEWebPage::setFavicon(const QString &favicon)
         m_favicon = favicon;
         emit faviconChanged();
     }
+}
+
+QStringList WPEWebPage::faviconCandidates() const { return m_faviconCandidates; }
+
+void WPEWebPage::setFaviconCandidates(const QStringList &candidates)
+{
+    if (m_faviconCandidates == candidates)
+        return;
+
+    m_faviconCandidates = candidates;
+    m_favicon = candidates.value(0);
+    emit faviconChanged();
 }
 
 qreal WPEWebPage::fullscreenHeight() const { return m_fullscreenHeight; }
@@ -3112,6 +3182,7 @@ void WPEWebPage::onLoadingChanged(WPEQtViewLoadRequest *loadRequest)
         m_domContentLoaded = false;
         m_loaded = false;
         m_favicon.clear();
+        m_faviconCandidates.clear();
         m_lastScrollY = 0.0;
         m_atYBeginning = true;
         m_atYEnd = false;

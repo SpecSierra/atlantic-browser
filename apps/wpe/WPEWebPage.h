@@ -106,6 +106,7 @@ private:
     Q_PROPERTY(bool atYBeginning READ atYBeginning NOTIFY atYBeginningChanged)
     Q_PROPERTY(bool atYEnd READ atYEnd NOTIFY atYEndChanged)
     Q_PROPERTY(QString favicon READ favicon WRITE setFavicon NOTIFY faviconChanged)
+    Q_PROPERTY(QStringList faviconCandidates READ faviconCandidates NOTIFY faviconChanged)
     Q_PROPERTY(qreal fullscreenHeight READ fullscreenHeight WRITE setFullscreenHeight NOTIFY fullscreenHeightChanged)
     Q_PROPERTY(qreal toolbarHeight READ toolbarHeight WRITE setToolbarHeight NOTIFY toolbarHeightChanged)
     Q_PROPERTY(bool active READ active WRITE setActive NOTIFY activeChanged)
@@ -217,6 +218,8 @@ public:
 
     QString favicon() const;
     void setFavicon(const QString &favicon);
+    QStringList faviconCandidates() const;
+    void setFaviconCandidates(const QStringList &candidates);
 
     qreal fullscreenHeight() const;
     void setFullscreenHeight(qreal height);
@@ -548,6 +551,7 @@ private:
     bool m_atYBeginning = true;
     bool m_atYEnd = false;
     QString m_favicon;
+    QStringList m_faviconCandidates;
     qreal m_fullscreenHeight = 0.0;
     qreal m_toolbarHeight = 0.0;
     bool m_active = false;

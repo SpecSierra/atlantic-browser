@@ -10,12 +10,18 @@
 
 #include "declarativebookmarkmodel.h"
 #include "bookmarkmanager.h"
+#include "faviconmanager.h"
 
 DeclarativeBookmarkModel::DeclarativeBookmarkModel(QObject *parent)
     : QAbstractListModel(parent)
 {
     connect(BookmarkManager::instance(), &BookmarkManager::cleared,
             this, &DeclarativeBookmarkModel::clearBookmarks);
+    // A bookmark is usually created before its site has ever been visited in
+    // this profile, so it starts out with the generic icon. Adopt the real one
+    // as soon as browsing learns it for the same host.
+    connect(FaviconManager::instance(), &FaviconManager::iconChanged,
+            this, &DeclarativeBookmarkModel::updateHostFavicon);
     bookmarks = BookmarkManager::instance()->load();
 
     // Generate mapping URL -> bookmark's index in the loaded list.
@@ -114,6 +120,38 @@ void DeclarativeBookmarkModel::updateFavoriteIcon(const QString &url, const QStr
     }
 }
 
+// Bookmark::Bookmark() substitutes the generic launcher icon when no icon was
+// captured — a bookmark is usually created before its site has been visited in
+// this profile. Returns the icon browsing has since learned for the same host,
+// or an empty string when the bookmark already carries an icon of its own.
+QString DeclarativeBookmarkModel::learnedFavicon(const Bookmark *bookmark)
+{
+    const QString favicon = bookmark->favicon();
+    if (!favicon.isEmpty() && favicon != FaviconManager::defaultDesktopBookmarkIcon())
+        return QString();
+
+    return FaviconManager::instance()->get(QStringLiteral("history"), bookmark->url());
+}
+
+void DeclarativeBookmarkModel::updateHostFavicon(const QString &type, const QString &hostname,
+                                                 const QString &favicon)
+{
+    Q_UNUSED(favicon);
+
+    if (type != QStringLiteral("history"))
+        return;
+
+    const QVector<int> roles { FaviconRole, TouchIconRole };
+    for (int i = 0; i < bookmarks.count(); ++i) {
+        const Bookmark *bookmark = bookmarks.at(i);
+        if (FaviconManager::sanitizedHostname(bookmark->url()) != hostname)
+            continue;
+        if (learnedFavicon(bookmark).isEmpty())
+            continue;
+        emit dataChanged(index(i), index(i), roles);
+    }
+}
+
 void DeclarativeBookmarkModel::edit(int index, const QString& url, const QString& title)
 {
     if (index < 0 || index >= bookmarks.count())
@@ -202,9 +240,12 @@ QVariant DeclarativeBookmarkModel::data(const QModelIndex & index, int role) con
     } else if (role == TitleRole) {
         return bookmark->title();
     } else if (role == FaviconRole) {
-        return bookmark->favicon();
+        const QString learned = learnedFavicon(bookmark);
+        return learned.isEmpty() ? bookmark->favicon() : learned;
     } else if (role == TouchIconRole) {
-        return bookmark->hasTouchIcon();
+        // A learned favicon is a real site icon, not a page thumbnail, so it
+        // must not get the thumbnail mask FavoriteItem applies otherwise.
+        return bookmark->hasTouchIcon() || !learnedFavicon(bookmark).isEmpty();
     }
     return QVariant();
 }

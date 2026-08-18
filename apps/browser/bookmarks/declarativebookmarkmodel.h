@@ -51,8 +51,12 @@ public:
     QVariant data(const QModelIndex & index, int role = Qt::DisplayRole) const override;
     QHash<int, QByteArray> roleNames() const override;
 
+private:
+    static QString learnedFavicon(const Bookmark *bookmark);
+
 private slots:
     void clearBookmarks();
+    void updateHostFavicon(const QString &type, const QString &hostname, const QString &favicon);
 
 signals:
     void countChanged();

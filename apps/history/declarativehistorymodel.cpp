@@ -23,6 +23,11 @@ DeclarativeHistoryModel::DeclarativeHistoryModel(QObject *parent)
             this, &DeclarativeHistoryModel::historyAvailable);
     connect(DBManager::instance(), &DBManager::titleChanged,
             this, &DeclarativeHistoryModel::updateTitle);
+    // Favicons are fetched asynchronously and usually land after the rows are
+    // already on screen; without this the list keeps the generic icon until it
+    // is rebuilt.
+    connect(FaviconManager::instance(), &FaviconManager::iconChanged,
+            this, &DeclarativeHistoryModel::updateFavicon);
 }
 
 QHash<int, QByteArray> DeclarativeHistoryModel::roleNames() const
@@ -140,6 +145,21 @@ void DeclarativeHistoryModel::historyAvailable(QList<Link> linkList)
     if (!m_populated) {
         m_populated = true;
         emit populated();
+    }
+}
+
+void DeclarativeHistoryModel::updateFavicon(const QString &type, const QString &hostname,
+                                            const QString &favicon)
+{
+    Q_UNUSED(favicon);
+
+    if (type != QStringLiteral("history"))
+        return;
+
+    const QVector<int> roles { FaviconRole };
+    for (int i = 0; i < m_links.count(); ++i) {
+        if (FaviconManager::sanitizedHostname(m_links.at(i).url()) == hostname)
+            emit dataChanged(index(i), index(i), roles);
     }
 }
 
