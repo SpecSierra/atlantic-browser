@@ -172,6 +172,32 @@ bool DownloadManager::prepareDownload(WebKitDownload *download, const QString &s
     return true;
 }
 
+void DownloadManager::confirmDownloadToDirectory(int downloadId, const QString &directory,
+                                                 const QString &fileName)
+{
+    QString dir = directory;
+    while (dir.length() > 1 && dir.endsWith(QLatin1Char('/')))
+        dir.chop(1);
+    if (dir.isEmpty())
+        dir = BrowserPaths::downloadLocation();
+
+    const QString safeName = sanitizeFileName(fileName);
+    const QFileInfo nameInfo(safeName);
+    const QString base = nameInfo.completeBaseName();
+    const QString suffix = nameInfo.suffix();
+
+    // Never clobber: the directory was chosen once in settings, so a repeat
+    // download of the same name must not destroy the earlier file.
+    QString candidate = dir + QLatin1Char('/') + safeName;
+    for (int n = 1; QFile::exists(candidate) && n < 1000; ++n) {
+        candidate = suffix.isEmpty()
+                ? QStringLiteral("%1/%2(%3)").arg(dir, base).arg(n)
+                : QStringLiteral("%1/%2(%3).%4").arg(dir, base).arg(n).arg(suffix);
+    }
+
+    confirmDownload(downloadId, candidate);
+}
+
 void DownloadManager::confirmDownload(int downloadId, const QString &destinationPath)
 {
     WebKitDownload *download = m_downloadIdToObject.value(downloadId, nullptr);

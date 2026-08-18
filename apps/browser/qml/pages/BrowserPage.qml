@@ -304,14 +304,37 @@ Page {
 
     Browser.DownloadRemorsePopup { id: downloadPopup }
 
-    // Prompt the user for a "Save As" destination before a download starts.
+    // "Save destination" setting. Both keys were write-only: SettingsPage wrote
+    // them and nothing read them, so downloads always prompted and the chosen
+    // folder was ignored even as the dialog's starting directory.
+    ConfigurationValue {
+        id: useDownloadDirConf
+        key: "/apps/atlantic-browser/settings/use_download_dir"
+        defaultValue: false
+    }
+
+    ConfigurationValue {
+        id: downloadDirConf
+        key: "/apps/atlantic-browser/settings/download_dir"
+        defaultValue: ""
+    }
+
+    // Prompt the user for a "Save As" destination before a download starts,
+    // unless the settings page says to always save to a fixed folder.
     Connections {
         target: DownloadManager
         onSaveAsRequested: {
+            var dir = downloadDirConf.value || defaultDir
+            if (useDownloadDirConf.value && dir) {
+                // Auto-save: C++ sanitises and uniquifies the name so a repeat
+                // download cannot overwrite the previous file.
+                DownloadManager.confirmDownloadToDirectory(downloadId, dir, suggestedFileName)
+                return
+            }
             pageStack.animatorPush(Qt.resolvedUrl("components/SaveDownloadDialog.qml"),
                                    { "downloadId": downloadId,
                                      "suggestedFileName": suggestedFileName,
-                                     "folder": defaultDir })
+                                     "folder": dir })
         }
     }
 

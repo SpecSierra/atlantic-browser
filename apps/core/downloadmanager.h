@@ -52,6 +52,11 @@ public slots:
 
     // Called by the QML "Save As" prompt once the user has chosen (or declined).
     Q_INVOKABLE void confirmDownload(int downloadId, const QString &destinationPath);
+    // Auto-save path for the "Save destination" setting: the user picked a
+    // directory once, not this file name, so the name is sanitised here and
+    // uniquified rather than silently overwriting an existing file.
+    Q_INVOKABLE void confirmDownloadToDirectory(int downloadId, const QString &directory,
+                                                const QString &fileName);
     Q_INVOKABLE void cancelPendingDownload(int downloadId);
 
 public:
