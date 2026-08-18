@@ -412,6 +412,21 @@ Shared.Background {
                     text = url === "about:blank" ? "" : url || ""
                     _resetting = false
                     edited = false
+                    // Assigning text drops the selection and parks the cursor. If the
+                    // field is already focused for editing (late urlChanged from a
+                    // redirect or a replaceState while the overlay is open), re-select
+                    // so typing still replaces the whole url.
+                    if (activeFocus) {
+                        selectUrl()
+                    }
+                }
+
+                // Select the whole url so the next keystroke replaces it.
+                function selectUrl() {
+                    if (text.length > 0) {
+                        cursorPosition = text.length
+                        selectAll()
+                    }
                 }
 
                 function hasMoved() {
@@ -481,7 +496,13 @@ Shared.Background {
 
                 onRequestingFocusChanged: {
                     if (requestingFocus) {
+                        // When focus is already held (overlay reopened without the field
+                        // ever blurring) onFocusChanged does not fire, so select here too.
+                        var hadFocus = activeFocus
                         forceActiveFocus()
+                        if (hadFocus) {
+                            selectUrl()
+                        }
                     }
                 }
 
@@ -493,10 +514,7 @@ Shared.Background {
 
                 onFocusChanged: {
                     if (focus) {
-                        cursorPosition = text.length
-                        if (text.length > 0) {
-                            searchField.selectAll()
-                        }
+                        selectUrl()
                         dragArea.moved = false
                     }
                 }
