@@ -145,9 +145,11 @@ BrowserUIService::BrowserUIService(QObject *parent)
     fprintf(stderr, "[BROWSER] UIServiceDBusAdaptor start\n"); fflush(stderr);
     new UIServiceDBusAdaptor(this);
     QDBusConnection connection = QDBusConnection::sessionBus();
-    // Name is pre-registered in main() to avoid D-Bus reentrancy during activation.
-    // Do NOT call registerService or isServiceRegistered here — either will process
-    // pending D-Bus messages during construction, causing reentrancy crashes.
+    // Register only the object here. The caller acquires the bus name AFTER
+    // this returns, so a cold activation cannot deliver openUrl into a window
+    // where the name exists but /ui does not. Do NOT call registerService or
+    // isServiceRegistered here — either will process pending D-Bus messages
+    // during construction, causing reentrancy crashes.
     if (!connection.registerObject("/ui", this)) {
         d->registered = false;
     }

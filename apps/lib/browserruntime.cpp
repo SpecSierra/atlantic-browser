@@ -377,12 +377,22 @@ extern "C" Q_DECL_EXPORT bool atlanticBrowserRuntimeStart(QQuickView *view,
     Browser *browser = new Browser(view, QString::fromLocal8Bit(dataPath ? dataPath : ""), app);
     static const QString kBrowserUiServiceName = QStringLiteral("org.atlantic.browser.ui");
     QDBusConnection sessionBus = QDBusConnection::sessionBus();
+
+    // Object BEFORE name, like BrowserService does for "/" — never the reverse.
+    // On a cold D-Bus activation ("open link in Atlantic" with no instance
+    // running) dbus-daemon holds the caller's openUrl until this name appears
+    // and delivers it the instant it does. Registering the name first opened a
+    // window where the name was owned but /ui did not exist yet, so the call
+    // came back UnknownObject, the URL was dropped, and the browser finished
+    // starting on a blank tab — the "it opens but the link doesn't load" bug.
+    // The ctor still must not call registerService itself: that dispatches
+    // pending messages during construction and reenters.
+    BrowserUIService *uiService = new BrowserUIService(app);
     const bool uiServiceNameRegistered = sessionBus.registerService(kBrowserUiServiceName);
     if (!uiServiceNameRegistered) {
         fprintf(stderr, "[ATLANTIC-RUNTIME] BrowserUIService name registration failed for %s\n",
                 qPrintable(kBrowserUiServiceName));
     }
-    BrowserUIService *uiService = new BrowserUIService(app);
     if (uiServiceNameRegistered && uiService->registered()) {
         fprintf(stderr, "[ATLANTIC-RUNTIME] BrowserUIService registered\n");
     } else if (!uiService->registered()) {
