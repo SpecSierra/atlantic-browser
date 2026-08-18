@@ -43,7 +43,14 @@ FaviconManager *FaviconManager::instance()
 QString FaviconManager::sanitizedHostname(const QString &hostname)
 {
     // Should port should be included too?
-    const QUrl url(hostname);
+    // Accepts both a full URL (history, bookmarks) and the bare host the
+    // credential vault stores: QUrl("example.com") parses as a relative path
+    // with no scheme and no host, so without this every login collapsed onto
+    // the same "://" key and they all shared one icon.
+    const QString input = hostname.contains(QStringLiteral("://"))
+                              ? hostname
+                              : QStringLiteral("https://") + hostname;
+    const QUrl url(input);
     return QStringLiteral("%1://%2").arg(url.scheme(), url.host());
 }
 

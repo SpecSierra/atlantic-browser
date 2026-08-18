@@ -45,6 +45,7 @@
 
 #include "WPEQtViewLoadRequest.h"
 #include "WPEUserScripts.h"
+#include "faviconmanager.h"
 
 #include <wpe/webkit.h>
 #include <gio/gio.h>
@@ -4214,6 +4215,11 @@ void WPEWebPage::resolveSaveLogin(bool save)
             CredentialStore::instance()->update(m_saveLoginExistingUid, fields);
         else
             CredentialStore::instance()->insert(fields);
+
+        // Grab the site icon for the logins list. Like the history icons, this
+        // has to be driven from C++: the QML handler that used to call it lives
+        // in WebView.qml's webPageComponent, which is never instantiated.
+        FaviconManager::instance()->grabIcon(QStringLiteral("logins"), this, QSize(96, 96));
     }
 
     m_saveLoginPending = false;

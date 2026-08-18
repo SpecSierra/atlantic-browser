@@ -26,6 +26,9 @@ DeclarativeLoginModel::DeclarativeLoginModel(QObject *parent)
             this, &DeclarativeLoginModel::onStoreLockedChanged);
     connect(CredentialStore::instance(), &CredentialStore::vaultUnreadableChanged,
             this, &DeclarativeLoginModel::vaultUnreadableChanged);
+    // Icons arrive asynchronously, after the rows are already on screen.
+    connect(FaviconManager::instance(), &FaviconManager::iconChanged,
+            this, &DeclarativeLoginModel::updateFavicon);
 }
 
 void DeclarativeLoginModel::classBegin()
@@ -184,10 +187,32 @@ QVariant DeclarativeLoginModel::data(const QModelIndex &index, int role) const
         return m_logins.at(index.row()).second.username();
     case PasswordRole:
         return m_logins.at(index.row()).second.password();
-    case FavIconRole:
-        return FaviconManager::instance()->get("logins", m_logins.at(index.row()).second.hostname());
+    case FavIconRole: {
+        // A login is normally saved for a site that has also been browsed, so
+        // fall back to the icon history already learned for the same host —
+        // that fills in entries saved before there was any icon to capture.
+        const QString host = m_logins.at(index.row()).second.hostname();
+        const QString icon = FaviconManager::instance()->get(QStringLiteral("logins"), host);
+        return icon.isEmpty() ? FaviconManager::instance()->get(QStringLiteral("history"), host)
+                              : icon;
+    }
     default:
         return QVariant();
+    }
+}
+
+void DeclarativeLoginModel::updateFavicon(const QString &type, const QString &hostname,
+                                          const QString &favicon)
+{
+    Q_UNUSED(favicon);
+
+    if (type != QStringLiteral("logins") && type != QStringLiteral("history"))
+        return;
+
+    const QVector<int> roles { FavIconRole };
+    for (int i = 0; i < m_logins.count(); ++i) {
+        if (FaviconManager::sanitizedHostname(m_logins.at(i).second.hostname()) == hostname)
+            emit dataChanged(index(i), index(i), roles);
     }
 }
 

@@ -85,6 +85,7 @@ signals:
 private slots:
     // Reacts to the store locking/unlocking (incl. auto-lock on background).
     void onStoreLockedChanged();
+    void updateFavicon(const QString &type, const QString &hostname, const QString &favicon);
 
 private:
     void requestLogins();
