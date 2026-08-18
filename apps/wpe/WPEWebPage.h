@@ -303,6 +303,10 @@ public:
     Q_INVOKABLE void setMediaMuted(bool muted);
 
     Q_INVOKABLE void loadTab(const QString &url, bool force = false);
+    // Warm the connection for a navigation the UI expects (link under the
+    // finger, URL-bar completion). Fetches nothing; rate-limited per origin;
+    // inert unless ATLANTIC_PRECONNECT is set.
+    Q_INVOKABLE void preconnect(const QString &url);
     Q_INVOKABLE void grabToFile(const QSize &size);
     Q_INVOKABLE void grabThumbnail(const QSize &size);
     Q_INVOKABLE void forceChrome(bool forced);
@@ -658,6 +662,9 @@ private:
     QString m_permissionHost;
     QString m_permissionType;
     QHash<QString, bool> m_permissionDecisions; // "host|type", session-only
+    // Origins this page has already asked the network process to connect to,
+    // with the wall-clock time of the request; see WPEWebPage::preconnect().
+    QHash<QString, qint64> m_preconnectSeen;
 
     // Save-password prompt state (Phase 3).
     bool m_saveLoginPending = false;

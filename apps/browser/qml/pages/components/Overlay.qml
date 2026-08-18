@@ -523,6 +523,38 @@ Shared.Background {
                     if (!_resetting && !edited && text !== webView.url) {
                         edited = true
                     }
+                    if (edited) {
+                        preconnectTimer.restart()
+                    }
+                }
+
+                // Warm the connection for what the user is typing, so the tap
+                // on "go" (or on the first completion) does not start from a
+                // cold DNS + TCP + TLS. Debounced: one keystroke is not a
+                // prediction, a pause after several is.
+                //
+                // Only the ORIGIN is ever used — WPEWebPage::preconnect()
+                // reduces the URL to scheme/host/port before the engine sees
+                // it, and the engine's PreconnectTask sends no request at all.
+                // So for a search query this warms the search engine and
+                // reveals nothing about the query, and a typed address only
+                // becomes a host once UrlUtils.isUrl() accepts it — which
+                // needs a host-shaped string, not a first letter.
+                Timer {
+                    id: preconnectTimer
+
+                    interval: 300
+                    onTriggered: {
+                        var typed = searchField.text
+                        if (!typed || !webView || !webView.contentItem) {
+                            return
+                        }
+                        var template = SearchEngineModel.searchUrlTemplate(searchEngineConf.value)
+                        var target = UrlUtils.normalize(typed, template)
+                        if (target) {
+                            webView.contentItem.preconnect(target)
+                        }
+                    }
                 }
 
                 Timer {

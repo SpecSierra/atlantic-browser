@@ -1,0 +1,98 @@
+{
+  "_comment": [
+    "Performance interventions applied by kPerfInterventions (apps/wpe/WPEUserScripts.h),",
+    "loaded by WPEWebPage and gated on ATLANTIC_PERF_INTERVENTIONS.",
+    "",
+    "Everything here DELAYS work; nothing here drops it. Blocking is the adblocker's",
+    "job and it has a filter list behind it — this file exists for the work a page",
+    "legitimately asks for and the user never sees.",
+    "",
+    "Shipped at /usr/share/atlantic-browser/perf-interventions.json. The loader",
+    "prefers a newer copy in the adblock cache dir, so the same weekly gh-pages",
+    "refresh that carries engine.dat can carry this file later without a rebuild.",
+    "",
+    "Fields:",
+    "  defaults.deferScripts   hold matching JS-inserted third-party scripts",
+    "  defaults.lazyImages     loading=lazy + decoding=async on untagged <img>",
+    "  defaults.lazyFrames     loading=lazy on untagged <iframe>",
+    "  defaults.pauseAnims     pause infinite CSS animations outside the viewport",
+    "  defaults.eagerImages    images left eager, in document order, to protect LCP",
+    "  deferPatterns           substrings matched against a script's src",
+    "  deferUntil.idleMs       release deadline after window load; a user gesture",
+    "                          always releases first",
+    "  sites[].match           hostname or parent domain",
+    "  sites[].disable/enable  intervention names to force off/on for that site",
+    "  sites[].defer           extra defer patterns for that site",
+    "  sites[].eagerImages     per-site LCP budget",
+    "  sites[].css             per-site 'lite' stylesheet (appended to the page)"
+  ],
+
+  "version": 1,
+
+  "defaults": {
+    "deferScripts": true,
+    "lazyImages": true,
+    "lazyFrames": true,
+    "pauseAnims": true,
+    "eagerImages": 3
+  },
+
+  "deferUntil": {
+    "idleMs": 2500
+  },
+
+  "deferPatterns": [
+    "googletagmanager.com",
+    "google-analytics.com",
+    "analytics.google.com",
+    "googletagservices.com",
+    "connect.facebook.net",
+    "static.hotjar.com",
+    "script.hotjar.com",
+    "cdn.matomo.cloud",
+    "matomo.js",
+    "piwik.js",
+    "plausible.io/js",
+    "cdn.segment.com",
+    "cdn.mxpnl.com",
+    "js.hs-scripts.com",
+    "js.hsforms.net",
+    "static.ads-twitter.com",
+    "snap.licdn.com",
+    "sc-static.net",
+    "cdn.onesignal.com",
+    "chartbeat.js",
+    "static.chartbeat.com",
+    "cdn.parsely.com",
+    "quantserve.com",
+    "scorecardresearch.com",
+    "outbrain.com",
+    "taboola.com",
+    "widgets.outbrain.com",
+    "newrelic.com",
+    "nr-data.net",
+    "bam.nr-data.net",
+    "cdn.branch.io",
+    "clarity.ms",
+    "tiqcdn.com",
+    "krxd.net",
+    "adobedtm.com",
+    "demdex.net",
+    "omtrdc.net",
+    "cdn.cookielaw.org",
+    "cdn.privacy-mgmt.com",
+    "sdk.privacy-center.org"
+  ],
+
+  "sites": [
+    {
+      "_why": "Style resolution dominates these two profiles (34% / 44%); every byte of third-party JS competes with it on the main thread. One eager image: both lead with a single hero.",
+      "match": "cnn.com",
+      "eagerImages": 1
+    },
+    {
+      "match": "francetvinfo.fr",
+      "eagerImages": 1
+    }
+  ]
+}

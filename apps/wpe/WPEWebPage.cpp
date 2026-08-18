@@ -57,6 +57,12 @@
 extern "C" void wpe_sfos_set_page_scale(WebKitWebView*, double scale, int centerX, int centerY);
 extern "C" double wpe_sfos_get_page_scale(WebKitWebView*);
 
+// Speculative connection, from the SFOS preconnect patch
+// (atlantic-engine patches/webkit/webkit-wpe-preconnect-api.patch). Opens the
+// socket and completes TLS for an origin without fetching anything, so a
+// navigation the UI can see coming does not pay DNS + TCP + TLS after the tap.
+extern "C" void wpe_sfos_preconnect(WebKitWebView*, const char* uri);
+
 namespace {
 
 constexpr double kMinimumPinchZoomFactor = 0.5;
@@ -68,6 +74,11 @@ constexpr double kMinimumViewportPinchScale = 1.0;
 constexpr double kMaximumViewportPinchScale = 5.0;
 constexpr int kDefaultFramePumpIntervalMs = 2000;
 constexpr int kMediaInactiveDebounceMs = 400;
+// Speculative connections: don't re-issue for the same origin inside this
+// window (an idle keep-alive connection outlives it comfortably), and never
+// track more origins than this in one page.
+constexpr qint64 kPreconnectRepeatMs = 10000;
+constexpr int kPreconnectMaxTracked = 64;
 // Ad/tracker network blocking now lives entirely in the WebProcess adblock
 // extension (atlantic-engine/web-extension), which runs the Brave/Rust engine
 // against every resource request. The old per-tab WebKit content-filter path
@@ -1422,6 +1433,149 @@ static void onMediaBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
     webkit_user_script_unref(script);
 }
 
+// ---------------------------------------------------------------------------
+// Speculative connections (lever 1)
+// ---------------------------------------------------------------------------
+// The engine can open a connection before a navigation commits, but only the UI
+// knows a navigation is coming. Two predictors feed it: this bridge (finger
+// down on a link) and the URL bar's completion (Overlay.qml). Default OFF —
+// flip after the interleaved on-device A/B, per docs/BENCHMARKING.md.
+static bool preconnectEnabled()
+{
+    static const bool enabled = envVarEnabled(qgetenv("ATLANTIC_PRECONNECT"));
+    return enabled;
+}
+
+static void onPreconnectBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
+{
+    WPEWebPage* page = static_cast<WPEWebPage*>(userData);
+    if (!page || !value)
+        return;
+
+    gchar* json = jsc_value_to_json(value, 0);
+    if (!json)
+        return;
+    QByteArray jsonBytes(json);
+    g_free(json);
+
+    const QJsonDocument doc = QJsonDocument::fromJson(jsonBytes);
+    if (!doc.isObject())
+        return;
+
+    page->preconnect(doc.object().value(QStringLiteral("url")).toString());
+}
+
+static void onPreconnectBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page)
+{
+    if (!preconnectEnabled())
+        return;
+
+    g_signal_connect(ucm, "script-message-received::preconnectBridge",
+                     G_CALLBACK(onPreconnectBridgeMessage), page);
+    webkit_user_content_manager_register_script_message_handler(ucm, "preconnectBridge", nullptr);
+
+    WebKitUserScript* script = webkit_user_script_new(
+        WPEUserScripts::kPreconnectBridge,
+        WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+        nullptr, nullptr);
+    webkit_user_content_manager_add_script(ucm, script);
+    webkit_user_script_unref(script);
+}
+
+// ---------------------------------------------------------------------------
+// Performance interventions (lever 5)
+// ---------------------------------------------------------------------------
+// Rule-driven, same shape as the adblock payload: a JSON file shipped in
+// /usr/share/atlantic-browser, overridable by a newer copy in the adblock cache
+// dir so the existing weekly refresh can carry it later. The C++ side is only a
+// loader — every decision (per-site rules, which interventions run) is made in
+// kPerfInterventions from the config object baked in below.
+static bool perfInterventionsEnabled()
+{
+    static const bool enabled = envVarEnabled(qgetenv("ATLANTIC_PERF_INTERVENTIONS"));
+    return enabled;
+}
+
+// The shipped file is heavily commented (it is the documentation for the rule
+// format). Strip the comment keys before baking it into every page: they are
+// ~1.5 KB of payload per document that no code reads.
+static QByteArray perfInterventionsConfig()
+{
+    static const QByteArray config = [] () -> QByteArray {
+        const QString shipped = QString::fromLatin1(WPERuntimePaths::kAtlanticShareDir)
+                                + QStringLiteral("/perf-interventions.json");
+        // A refreshed copy, if the updater ever publishes one, wins over the
+        // shipped file — matching how engine.dat is picked up.
+        const QString cached = AdBlockListUpdater::cacheDir()
+                               + QStringLiteral("/perf-interventions.json");
+
+        QByteArray data;
+        for (const QString &path : { cached, shipped }) {
+            QFile f(path);
+            if (!f.open(QIODevice::ReadOnly))
+                continue;
+            data = f.readAll();
+            if (!data.isEmpty()) {
+                qInfo() << "[PERF-INTERVENTIONS] rules loaded from" << path
+                        << data.size() << "bytes";
+                break;
+            }
+        }
+        if (data.isEmpty()) {
+            qWarning() << "[PERF-INTERVENTIONS] no rule file found; interventions inert";
+            return QByteArray();
+        }
+
+        QJsonParseError err {};
+        QJsonDocument doc = QJsonDocument::fromJson(data, &err);
+        if (!doc.isObject()) {
+            qWarning() << "[PERF-INTERVENTIONS] rule file is not valid JSON:" << err.errorString();
+            return QByteArray();
+        }
+
+        QJsonObject obj = doc.object();
+        obj.remove(QStringLiteral("_comment"));
+        QJsonArray sites = obj.value(QStringLiteral("sites")).toArray();
+        QJsonArray stripped;
+        for (const QJsonValue &v : sites) {
+            QJsonObject site = v.toObject();
+            site.remove(QStringLiteral("_why"));
+            stripped.append(site);
+        }
+        if (!stripped.isEmpty())
+            obj.insert(QStringLiteral("sites"), stripped);
+
+        return QJsonDocument(obj).toJson(QJsonDocument::Compact);
+    }();
+    return config;
+}
+
+static void installPerfInterventions(WebKitUserContentManager* ucm)
+{
+    if (!perfInterventionsEnabled())
+        return;
+
+    const QByteArray config = perfInterventionsConfig();
+    if (config.isEmpty())
+        return;
+
+    QByteArray source(WPEUserScripts::kPerfInterventions);
+    source.replace(QByteArrayLiteral("__ATL_PERF_CONFIG__"), config);
+
+    // Top frame only. The interventions reason about the viewport, the LCP
+    // budget and the page's own third-party loaders; running a second copy
+    // inside every ad iframe would re-run all of that against a document whose
+    // "viewport" is a 300x250 box.
+    WebKitUserScript* script = webkit_user_script_new(
+        source.constData(),
+        WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
+        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+        nullptr, nullptr);
+    webkit_user_content_manager_add_script(ucm, script);
+    webkit_user_script_unref(script);
+}
+
 // Password autofill (read path). The kLoginBridge script posts {type:'request'}
 // when the user focuses a login field; we look up the store and inject.
 //
@@ -2305,6 +2459,8 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             onScrollBridgeInstall(ucm, this);
             onPinchBridgeInstall(ucm, this);
             onMediaBridgeInstall(ucm, this);
+            onPreconnectBridgeInstall(ucm, this);
+            installPerfInterventions(ucm);
             onLoginBridgeInstall(ucm, this);
             onFaviconBridgeInstall(ucm, this);
 
@@ -2800,6 +2956,59 @@ void WPEWebPage::loadTab(const QString &url, bool force)
     if (force || newUrl != this->url()) {
         setUrl(newUrl);
     }
+}
+
+// Open the connection for a navigation we think is coming (finger down on a
+// link, or the URL bar's current completion). No request is made: the engine
+// entry point runs WebKit's PreconnectTask, which stops after TLS, so the only
+// thing that leaves the device is the DNS query, the TCP connect and the SNI.
+// Guessing wrong therefore costs one idle socket, and the network layer
+// coalesces a real load onto the same connection.
+//
+// Rate-limited per origin because the callers are cheap to trigger: dragging a
+// finger down a list of links fires touchstart on each one, and every keystroke
+// in the URL bar re-resolves a completion. Without this the browser would open
+// sockets faster than it closes them on exactly the pages that are already
+// struggling.
+void WPEWebPage::preconnect(const QString &url)
+{
+    if (!preconnectEnabled() || url.isEmpty())
+        return;
+
+    const QUrl target(url);
+    if (!target.isValid() || target.host().isEmpty())
+        return;
+    const QString scheme = target.scheme();
+    if (scheme != QLatin1String("http") && scheme != QLatin1String("https"))
+        return;
+
+    WebKitWebView *wv = webView();
+    if (!wv)
+        return;
+
+    // The connection is keyed by origin, so that is what we rate-limit on. The
+    // engine strips the path itself; doing it here too keeps the dedupe key
+    // from being defeated by two links into the same host.
+    QUrl originUrl;
+    originUrl.setScheme(scheme);
+    originUrl.setHost(target.host());
+    if (target.port() != -1)
+        originUrl.setPort(target.port());
+    const QString origin = originUrl.toString();
+
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const auto seen = m_preconnectSeen.constFind(origin);
+    if (seen != m_preconnectSeen.constEnd() && (now - seen.value()) < kPreconnectRepeatMs)
+        return;
+
+    // Bounded: a long session must not accumulate an entry per origin ever
+    // touched. Dropping the whole table costs at most one redundant preconnect
+    // per origin afterwards, which the network layer coalesces anyway.
+    if (m_preconnectSeen.size() >= kPreconnectMaxTracked)
+        m_preconnectSeen.clear();
+    m_preconnectSeen.insert(origin, now);
+
+    wpe_sfos_preconnect(wv, origin.toUtf8().constData());
 }
 
 // Convert a WebKitImage (BGRA8 premultiplied) to a scaled/cropped QImage.
