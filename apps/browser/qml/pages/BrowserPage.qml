@@ -62,6 +62,18 @@ Page {
     }
 
     ConfigurationValue {
+        id: privateBrowsingAutostart
+        key: "/apps/atlantic-browser/settings/browser_privatebrowsing_autostart"
+        defaultValue: false
+        // "Start browser in private browsing mode". The settings page only ever
+        // wrote this key — nothing read it, so the switch did nothing. C++ can't
+        // read dconf here (MDConfItem is a no-op stub), so QML applies it.
+        // Startup only, deliberately no onValueChanged: flipping the switch
+        // mid-session must not yank the current session into private mode.
+        Component.onCompleted: if (value) webView.privateMode = true
+    }
+
+    ConfigurationValue {
         id: adBlockEngine
         key: "/apps/atlantic-browser/settings/adblock_enabled"
         defaultValue: true
