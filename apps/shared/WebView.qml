@@ -182,6 +182,88 @@ WebContainer {
 
     onForwardButtonPressed: webView.goForward()
 
+    // ── History preview ("instant Back") ───────────────────────────────────
+    // During a back/forward navigation the engine keeps presenting the OUTGOING
+    // page's last frame until the incoming page paints, while the chrome
+    // switches to the destination URL at once — so the viewport shows one page
+    // and the URL bar names another. On edition.cnn.com that gap is the whole
+    // load (DCL ~15 s, load ~24 s, measured 2026-08-19) because bfcache is
+    // capacity 0 under ATLANTIC_CACHE_MODEL=viewer.
+    //
+    // Cover the gap with the destination entry's own last-seen pixels. This
+    // buys no load time; it stops the browser showing a page it has left.
+    Image {
+        id: historyPreview
+
+        anchors.fill: parent
+        // Never distort: the capture is taken at this same viewport size, so
+        // PreserveAspectFit fills exactly in the normal case and letterboxes
+        // rather than squashing if the viewport changed (rotation, toolbar
+        // inset) between capture and replay. Image has no alignment
+        // properties — fitting is centred, which is what we want here.
+        fillMode: Image.PreserveAspectFit
+        z: 90
+        opacity: 0
+        visible: opacity > 0
+        asynchronous: true
+        cache: false        // one-shot, and the file is rewritten in place
+
+        // Hard ceiling. If the incoming page never reports DOMContentLoaded
+        // (dead network, blocked main document) the user must not be left
+        // staring at a frozen screenshot forever.
+        readonly property int maxHoldMs: 10000
+
+        function showPreview(path) {
+            source = "file://" + path
+            opacity = 1
+            holdTimer.restart()
+        }
+
+        function dismiss() {
+            holdTimer.stop()
+            opacity = 0
+        }
+
+        // Release the pixmap only once faded out, or the preview vanishes
+        // instantly instead of fading.
+        onOpacityChanged: {
+            if (opacity === 0)
+                source = ""
+        }
+
+        Behavior on opacity { NumberAnimation { duration: 150 } }
+
+        Timer {
+            id: holdTimer
+            interval: historyPreview.maxHoldMs
+            onTriggered: historyPreview.dismiss()
+        }
+
+        // A touch means the user wants the live page, however unfinished. The
+        // press is consumed rather than forwarded: the preview is a different
+        // document from the one now loading, so replaying the tap into it would
+        // hit whatever happens to sit at those coordinates.
+        MouseArea {
+            anchors.fill: parent
+            enabled: historyPreview.opacity > 0
+            onPressed: historyPreview.dismiss()
+        }
+    }
+
+    Connections {
+        target: webView.contentItem
+        onHistoryPreviewReady: historyPreview.showPreview(imagePath)
+        // First real milestone of the incoming document. Not first paint —
+        // WPEWebPage.painted is a one-shot "has ever painted" flag and
+        // QQuickWindow::frameSwapped counts window frames, not web frames, so
+        // neither can gate this. DCL is the earliest per-navigation signal the
+        // page already exposes.
+        onDomContentLoadedChanged: {
+            if (webView.contentItem && webView.contentItem.domContentLoaded)
+                historyPreview.dismiss()
+        }
+    }
+
     // WPE selection drag handles (at container level so contentItem is available)
     Item {
         id: selHandles

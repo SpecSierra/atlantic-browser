@@ -28,7 +28,10 @@
 #include <QJsonObject>
 #include <QKeyEvent>
 #include <QLineF>
+#include <QCryptographicHash>
 #include <QPointer>
+#include <QRunnable>
+#include <QThreadPool>
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDBusVariant>
@@ -3040,6 +3043,171 @@ void WPEWebPage::grabThumbnail(const QSize &size)
         nullptr,
         onSnapshotThumbnailReady,
         ctx);
+}
+
+// ── History preview ("instant Back") ────────────────────────────────────────
+//
+// Why this exists: on a back/forward navigation the compositor keeps presenting
+// the OUTGOING page's last frame until the incoming page paints, but the chrome
+// (URL bar, progress) switches to the destination immediately. On a heavy site
+// that mismatch lasts the whole load — measured on edition.cnn.com 2026-08-19:
+// back_forward, DCL 14 988 ms, load 23 774 ms, 188 resources re-run, main doc
+// served from the HTTP cache but nothing else reused, because bfcache capacity
+// is pinned to 0 by ATLANTIC_CACHE_MODEL=viewer. So Back is not cheaper than a
+// cold load, and for ~15 s the screen shows a page the URL bar says we left.
+//
+// This does not make Back faster — it makes it honest: cover the gap with the
+// destination entry's own last-seen pixels, so screen and chrome agree.
+
+namespace {
+
+QString historyPreviewDir()
+{
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
+                        + QStringLiteral("/history-preview");
+    QDir().mkpath(dir);
+    return dir;
+}
+
+// Key on tab + entry URL. Two history entries sharing a URL share a preview,
+// which is the right answer: it is the same document.
+QString historyPreviewFile(int tabId, const QUrl &url)
+{
+    if (!url.isValid() || url.isEmpty())
+        return QString();
+    const QByteArray key = QByteArray::number(tabId) + '|' + url.toEncoded();
+    return historyPreviewDir() + QLatin1Char('/')
+           + QString::fromLatin1(QCryptographicHash::hash(key, QCryptographicHash::Sha1).toHex())
+           + QStringLiteral(".jpg");
+}
+
+// Encoding a full-screen image is hundreds of milliseconds on this device, and
+// this runs at the instant the user presses Back — precisely the moment that
+// must not stall. Hand it to the pool; nothing waits on the result.
+// QtConcurrent would need a new module for one call, and QRunnable::create() is
+// Qt 5.15+ while the device ships Qt 5.6.3, so this is a plain QRunnable.
+class HistoryPreviewWriter : public QRunnable
+{
+public:
+    HistoryPreviewWriter(const QImage &image, const QString &path)
+        : m_image(image), m_path(path) { setAutoDelete(true); }
+
+    void run() override
+    {
+        // Write-then-rename: a reader must never open a half-encoded file.
+        const QString tmp = m_path + QStringLiteral(".tmp");
+        if (!m_image.save(tmp, "JPEG", 80)) {
+            QFile::remove(tmp);
+            return;
+        }
+        QFile::remove(m_path); // rename() will not clobber on POSIX
+        if (!QFile::rename(tmp, m_path))
+            QFile::remove(tmp);
+    }
+
+private:
+    QImage m_image;
+    QString m_path;
+};
+
+struct HistoryPreviewData {
+    QPointer<WPEWebPage> page;
+    QString filePath;
+};
+
+void onHistoryPreviewSnapshot(GObject *object, GAsyncResult *result, gpointer userData)
+{
+    std::unique_ptr<HistoryPreviewData> ctx(static_cast<HistoryPreviewData *>(userData));
+
+    GError *error = nullptr;
+    WebKitImage *wkImage = webkit_web_view_get_snapshot_finish(WEBKIT_WEB_VIEW(object), result, &error);
+    if (!wkImage) {
+        if (error)
+            g_error_free(error);
+        return;
+    }
+
+    QImage img = snapshotToQImage(wkImage, QSize());
+    g_object_unref(wkImage);
+    if (img.isNull())
+        return;
+
+    // Half resolution: the preview is shown full-bleed but only ever briefly and
+    // never interacted with, and dpr is 3 on this device — half-res is still
+    // 1.5x the CSS pixel grid. Keeps each entry around 100 KB.
+    const QImage scaled = img.scaled(img.size() / 2, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    QThreadPool::globalInstance()->start(new HistoryPreviewWriter(scaled, ctx->filePath));
+}
+
+} // namespace
+
+void WPEWebPage::captureHistoryPreview()
+{
+    WebKitWebView *wv = webView();
+    if (!wv)
+        return;
+
+    const QString path = historyPreviewFile(m_tabId, url());
+    if (path.isEmpty())
+        return;
+
+    auto *ctx = new HistoryPreviewData { this, path };
+    webkit_web_view_get_snapshot(wv,
+        WEBKIT_SNAPSHOT_REGION_VISIBLE,
+        WEBKIT_SNAPSHOT_OPTIONS_NONE,
+        nullptr,
+        onHistoryPreviewSnapshot,
+        ctx);
+}
+
+QString WPEWebPage::historyPreviewFor(const QUrl &url) const
+{
+    const QString path = historyPreviewFile(m_tabId, url);
+    return (!path.isEmpty() && QFile::exists(path)) ? path : QString();
+}
+
+void WPEWebPage::announceHistoryPreview(bool forward)
+{
+    WebKitWebView *wv = webView();
+    if (!wv)
+        return;
+
+    WebKitBackForwardList *list = webkit_web_view_get_back_forward_list(wv);
+    if (!list)
+        return;
+
+    // The adjacent item is the destination for the default configuration.
+    // ATLANTIC_STRICT_HISTORY_NAV (default OFF) can make the engine skip
+    // gesture-less pushState entries, in which case the destination may differ
+    // and we simply show nothing — a missing preview degrades to today's
+    // behaviour, never to a wrong picture.
+    WebKitBackForwardListItem *item = forward
+        ? webkit_back_forward_list_get_forward_item(list)
+        : webkit_back_forward_list_get_back_item(list);
+    if (!item)
+        return;
+
+    const gchar *uri = webkit_back_forward_list_item_get_uri(item);
+    if (!uri || !*uri)
+        return;
+
+    const QString path = historyPreviewFor(QUrl(QString::fromUtf8(uri)));
+    if (!path.isEmpty())
+        emit historyPreviewReady(path);
+}
+
+void WPEWebPage::goBack()
+{
+    captureHistoryPreview();   // so a later Forward is covered too
+    announceHistoryPreview(false);
+    WPEQtView::goBack();
+}
+
+void WPEWebPage::goForward()
+{
+    captureHistoryPreview();
+    announceHistoryPreview(true);
+    WPEQtView::goForward();
 }
 
 void WPEWebPage::forceChrome(bool forced)

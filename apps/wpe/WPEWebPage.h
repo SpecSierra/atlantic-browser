@@ -309,6 +309,22 @@ public:
     Q_INVOKABLE void preconnect(const QString &url);
     Q_INVOKABLE void grabToFile(const QSize &size);
     Q_INVOKABLE void grabThumbnail(const QSize &size);
+
+    // History preview ("instant Back"). During a back/forward navigation the
+    // engine keeps presenting the OUTGOING page's last frame until the incoming
+    // page paints, while the chrome switches to the destination URL immediately
+    // — so the viewport shows one page and the URL bar names another. Measured
+    // on edition.cnn.com (2026-08-19): back_forward navigation, DCL 14 988 ms,
+    // load 23 774 ms, 188 resources re-run, because bfcache capacity is 0 under
+    // ATLANTIC_CACHE_MODEL=viewer. These overrides capture the page being left
+    // and hand the UI the destination entry's last-seen pixels to cover the gap.
+    //
+    // Deliberately NOT virtual in the base: WPEWebContainer calls through a
+    // WPEWebPage*, so name hiding is enough and the engine plugin stays untouched.
+    Q_INVOKABLE void goBack();
+    Q_INVOKABLE void goForward();
+    // Cached preview file for a history entry, or empty when none was stored.
+    Q_INVOKABLE QString historyPreviewFor(const QUrl &url) const;
     Q_INVOKABLE void forceChrome(bool forced);
     Q_INVOKABLE void suspendView();
     Q_INVOKABLE void resumeView();
@@ -476,6 +492,9 @@ signals:
     void recvAsyncMessage(const QString &message, const QVariant &data);
     void fileGrabWritten(const QString &fileName);
     void thumbnailResult(const QString &data);
+    // Emitted at the start of a history navigation when the destination entry
+    // has a stored preview. The UI shows it until the live page takes over.
+    void historyPreviewReady(const QString &imagePath);
     void afterRendering();
 
     void selectMenuActiveChanged();
@@ -516,6 +535,13 @@ protected:
 private slots:
     void onLoadingChanged(WPEQtViewLoadRequest *loadRequest);
     void onFrameSwapped();
+    // Snapshot the page currently on screen, keyed by its own URL, so a later
+    // Back/Forward to this entry can be covered. Encode happens off the UI
+    // thread — see the implementation.
+    void captureHistoryPreview();
+    // Publish the destination entry's preview, if we have one, before the
+    // navigation starts.
+    void announceHistoryPreview(bool forward);
     void updateSecurityInfo();
 
 private:
