@@ -1483,99 +1483,6 @@ static void onPreconnectBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage*
     webkit_user_script_unref(script);
 }
 
-// ---------------------------------------------------------------------------
-// Performance interventions (lever 5)
-// ---------------------------------------------------------------------------
-// Rule-driven, same shape as the adblock payload: a JSON file shipped in
-// /usr/share/atlantic-browser, overridable by a newer copy in the adblock cache
-// dir so the existing weekly refresh can carry it later. The C++ side is only a
-// loader — every decision (per-site rules, which interventions run) is made in
-// kPerfInterventions from the config object baked in below.
-static bool perfInterventionsEnabled()
-{
-    static const bool enabled = envVarEnabled(qgetenv("ATLANTIC_PERF_INTERVENTIONS"));
-    return enabled;
-}
-
-// The shipped file is heavily commented (it is the documentation for the rule
-// format). Strip the comment keys before baking it into every page: they are
-// ~1.5 KB of payload per document that no code reads.
-static QByteArray perfInterventionsConfig()
-{
-    static const QByteArray config = [] () -> QByteArray {
-        const QString shipped = QString::fromLatin1(WPERuntimePaths::kAtlanticShareDir)
-                                + QStringLiteral("/perf-interventions.json");
-        // A refreshed copy, if the updater ever publishes one, wins over the
-        // shipped file — matching how engine.dat is picked up.
-        const QString cached = AdBlockListUpdater::cacheDir()
-                               + QStringLiteral("/perf-interventions.json");
-
-        QByteArray data;
-        for (const QString &path : { cached, shipped }) {
-            QFile f(path);
-            if (!f.open(QIODevice::ReadOnly))
-                continue;
-            data = f.readAll();
-            if (!data.isEmpty()) {
-                qInfo() << "[PERF-INTERVENTIONS] rules loaded from" << path
-                        << data.size() << "bytes";
-                break;
-            }
-        }
-        if (data.isEmpty()) {
-            qWarning() << "[PERF-INTERVENTIONS] no rule file found; interventions inert";
-            return QByteArray();
-        }
-
-        QJsonParseError err {};
-        QJsonDocument doc = QJsonDocument::fromJson(data, &err);
-        if (!doc.isObject()) {
-            qWarning() << "[PERF-INTERVENTIONS] rule file is not valid JSON:" << err.errorString();
-            return QByteArray();
-        }
-
-        QJsonObject obj = doc.object();
-        obj.remove(QStringLiteral("_comment"));
-        QJsonArray sites = obj.value(QStringLiteral("sites")).toArray();
-        QJsonArray stripped;
-        for (const QJsonValue &v : sites) {
-            QJsonObject site = v.toObject();
-            site.remove(QStringLiteral("_why"));
-            stripped.append(site);
-        }
-        if (!stripped.isEmpty())
-            obj.insert(QStringLiteral("sites"), stripped);
-
-        return QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    }();
-    return config;
-}
-
-static void installPerfInterventions(WebKitUserContentManager* ucm)
-{
-    if (!perfInterventionsEnabled())
-        return;
-
-    const QByteArray config = perfInterventionsConfig();
-    if (config.isEmpty())
-        return;
-
-    QByteArray source(WPEUserScripts::kPerfInterventions);
-    source.replace(QByteArrayLiteral("__ATL_PERF_CONFIG__"), config);
-
-    // Top frame only. The interventions reason about the viewport, the LCP
-    // budget and the page's own third-party loaders; running a second copy
-    // inside every ad iframe would re-run all of that against a document whose
-    // "viewport" is a 300x250 box.
-    WebKitUserScript* script = webkit_user_script_new(
-        source.constData(),
-        WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
-        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
-        nullptr, nullptr);
-    webkit_user_content_manager_add_script(ucm, script);
-    webkit_user_script_unref(script);
-}
-
 // Password autofill (read path). The kLoginBridge script posts {type:'request'}
 // when the user focuses a login field; we look up the store and inject.
 //
@@ -2460,7 +2367,6 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             onPinchBridgeInstall(ucm, this);
             onMediaBridgeInstall(ucm, this);
             onPreconnectBridgeInstall(ucm, this);
-            installPerfInterventions(ucm);
             onLoginBridgeInstall(ucm, this);
             onFaviconBridgeInstall(ucm, this);
 
