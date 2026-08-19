@@ -2169,6 +2169,34 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             // redirectors straight onto an unlisted lander. Check every hop
             // against the network filters (document type) and abort the load
             // on a hit — the previous page stays up.
+            // Capture the outgoing page on an ORDINARY navigation too, not just
+            // on goBack()/goForward(). Without this the first Back after a link
+            // click or a typed URL has nothing stored for its destination and
+            // silently falls back to showing the page being left — which is the
+            // common case, so the feature looked dead in normal use.
+            //
+            // WEBKIT_LOAD_STARTED is the last moment the outgoing document is
+            // still the one on screen: the new document has not committed, and
+            // paint-holding keeps the old frame up until it paints. Key on
+            // m_lastCommittedUrl, not webkit_web_view_get_uri(), which by now
+            // names the destination.
+            g_signal_connect(
+                wv, "load-changed",
+                G_CALLBACK(+[](WebKitWebView* view, WebKitLoadEvent event, gpointer userData) {
+                    if (event != WEBKIT_LOAD_STARTED)
+                        return;
+                    WPEWebPage* page = static_cast<WPEWebPage*>(userData);
+                    const QUrl& leaving = page->m_lastCommittedUrl;
+                    if (leaving.isEmpty())
+                        return;
+                    const gchar* uri = webkit_web_view_get_uri(view);
+                    // Same-document or reload: nothing to preview.
+                    if (uri && QUrl(QString::fromUtf8(uri)) == leaving)
+                        return;
+                    page->captureHistoryPreview(leaving);
+                }),
+                this);
+
             g_signal_connect(
                 wv, "load-changed",
                 G_CALLBACK(+[](WebKitWebView* view, WebKitLoadEvent event, gpointer userData) {
@@ -3143,11 +3171,16 @@ void onHistoryPreviewSnapshot(GObject *object, GAsyncResult *result, gpointer us
 
 void WPEWebPage::captureHistoryPreview()
 {
+    captureHistoryPreview(url());
+}
+
+void WPEWebPage::captureHistoryPreview(const QUrl &key)
+{
     WebKitWebView *wv = webView();
     if (!wv)
         return;
 
-    const QString path = historyPreviewFile(m_tabId, url());
+    const QString path = historyPreviewFile(m_tabId, key);
     if (path.isEmpty())
         return;
 

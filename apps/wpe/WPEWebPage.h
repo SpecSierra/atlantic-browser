@@ -539,6 +539,9 @@ private slots:
     // Back/Forward to this entry can be covered. Encode happens off the UI
     // thread — see the implementation.
     void captureHistoryPreview();
+    // Same, but for a page that is no longer the current URL — used when an
+    // ordinary navigation has already retargeted the view.
+    void captureHistoryPreview(const QUrl &key);
     // Publish the destination entry's preview, if we have one, before the
     // navigation starts.
     void announceHistoryPreview(bool forward);
