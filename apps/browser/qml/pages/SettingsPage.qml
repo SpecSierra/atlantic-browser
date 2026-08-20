@@ -152,10 +152,21 @@ Page {
                                 }
                             }
 
-                            Component.onCompleted: {
+                            function syncCurrentIndex() {
                                 if (text && (text === searchEngineConfig.value)) {
                                     searchEngine.currentIndex = index
                                 }
+                            }
+
+                            // An engine installed from a website changes both
+                            // its title (guess -> <ShortName>) and the setting,
+                            // so neither can be checked once at creation.
+                            onTextChanged: syncCurrentIndex()
+                            Component.onCompleted: syncCurrentIndex()
+
+                            Connections {
+                                target: searchEngineConfig
+                                onValueChanged: syncCurrentIndex()
                             }
                         }
                     }
@@ -527,8 +538,19 @@ Page {
         target: SearchEngineModel
 
         onInstalled: {
+            // Installing happens because the user picked the engine in "Search
+            // with", so finish that choice: the title here is the description's
+            // own <ShortName>, which is what the setting stores.
+            searchEngineConfig.value = title
             //% "%1 search installed"
             searchInstalledNotice.text = qsTrId("sailfish_browser-la-search_installed").arg(title)
+            searchInstalledNotice.show()
+        }
+
+        onInstallFailed: {
+            //: Shown when a search engine offered by a website could not be installed
+            //% "Could not install %1 search"
+            searchInstalledNotice.text = qsTrId("sailfish_browser-la-search_install_failed").arg(title)
             searchInstalledNotice.show()
         }
     }

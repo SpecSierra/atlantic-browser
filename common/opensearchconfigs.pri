@@ -1,11 +1,6 @@
-isEmpty(EMBEDLITE_CONTENT_PATH) {
-  DEFINES += EMBEDLITE_CONTENT_PATH=\"\\\"$$[QT_INSTALL_LIBS]/mozembedlite/chrome/embedlite/content/\\\"\"
-} else {
-  DEFINES += EMBEDLITE_CONTENT_PATH=\"\\\"$$EMBEDLITE_CONTENT_PATH\\\"\"
-}
-
-# Engines shipped by the browser package itself (in addition to the
-# mozembedlite system set), e.g. Brave
+# Engines shipped by the browser package itself. (There used to be a second
+# system path, $$[QT_INSTALL_LIBS]/mozembedlite/chrome/embedlite/content/, that
+# held Gecko's set; that directory does not exist on a WPE install.)
 DEFINES += BROWSER_OPENSEARCH_PATH=\"\\\"/usr/share/atlantic-browser/searchEngines/\\\"\"
 
 isEmpty(USER_OPENSEARCH_PATH) {

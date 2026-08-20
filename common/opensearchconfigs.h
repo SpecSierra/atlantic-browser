@@ -21,6 +21,9 @@ public:
     static const StringMap getAvailableOpenSearchConfigs();
     static const QStringList getSearchEngineList();
     static const QString getOpenSearchConfigPath();
+    // <ShortName> of a single description file, or empty if it has none
+    // (or does not parse). This is the engine's identity everywhere else.
+    static const QString getShortName(const QString &configFile);
     // Search URL for the named engine with a {searchTerms} placeholder,
     // built from the engine's OpenSearch <Url type="text/html"> element.
     static const QString getSearchUrlTemplate(const QString &engineName);

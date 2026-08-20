@@ -1864,6 +1864,96 @@ static const char* const kFaviconBridge = R"JS(
 })();
 )JS";
 
+// OpenSearch discovery. A site advertises its own search service with
+//   <link rel="search" type="application/opensearchdescription+xml" href="...">
+// and the browser is supposed to offer it under Settings -> Search with. Under
+// Gecko that offer arrived as the "embed:search" async message; nothing in
+// wpe-webkit-2.0 replaces it, so without this bridge SearchEngineModel::add()
+// has no caller and the whole install path (Tap to install ->
+// DataFetcher::OpenSearch -> ~/.local/share/.../searchEngines/*.xml) is
+// unreachable code.
+//
+// Only the description URL is reported here; nothing is fetched until the user
+// actually taps the entry in settings.
+//
+// Top frame only (an ad iframe's search service is not this page's), and
+// re-run on late <head> mutations the same way the favicon bridge does.
+static const char* const kSearchEngineBridge = R"JS(
+(function() {
+    if (window.__wpeSearchEngineBridgeInstalled) return;
+    window.__wpeSearchEngineBridgeInstalled = true;
+
+    var OPENSEARCH_TYPE = 'application/opensearchdescription+xml';
+    var lastSent = '';
+
+    function collect() {
+        var found = [], seen = {};
+        var links = document.querySelectorAll('link[rel][href]');
+        for (var i = 0; i < links.length && found.length < 4; i++) {
+            var link = links[i];
+            var rels = (link.getAttribute('rel') || '').toLowerCase().split(/\s+/);
+            if (rels.indexOf('search') === -1) continue;
+            var type = (link.getAttribute('type') || '').toLowerCase().trim();
+            if (type !== OPENSEARCH_TYPE) continue;
+            // .href resolves against the document base for us.
+            var url = link.href;
+            if (!url || !/^https?:/i.test(url) || seen[url]) continue;
+            seen[url] = true;
+            // The link's own title is the engine name the site wants shown;
+            // the document title is a poor but serviceable stand-in, and the
+            // real <ShortName> from the description replaces whatever we guess
+            // here once the file is actually installed.
+            var title = (link.getAttribute('title') || '').trim()
+                        || (document.title || '').trim()
+                        || location.hostname;
+            found.push({ title: title, url: url });
+        }
+        return found;
+    }
+
+    function report() {
+        try {
+            var engines = collect();
+            if (!engines.length) return;
+            var key = engines.map(function(e) { return e.title + ' ' + e.url; }).join('|');
+            if (key === lastSent) return;
+            lastSent = key;
+            window.webkit.messageHandlers.searchEngineBridge.postMessage({
+                pageUrl: location.href,
+                engines: engines
+            });
+        } catch (e) {}
+    }
+
+    var pending = false;
+    function schedule() {
+        if (pending) return;
+        pending = true;
+        setTimeout(function() { pending = false; report(); }, 250);
+    }
+
+    if (document.readyState === 'loading')
+        document.addEventListener('DOMContentLoaded', schedule, { once: true });
+    else
+        schedule();
+    window.addEventListener('load', schedule);
+
+    // <head> only, and give up after 30s -- same reasoning as the favicon
+    // bridge: an always-on subtree observer is a real cost on a busy SPA.
+    try {
+        var observer = new MutationObserver(schedule);
+        function observeHead() {
+            if (!document.head) return;
+            observer.observe(document.head, { childList: true, subtree: true, attributes: true,
+                                              attributeFilter: ['href', 'rel', 'type', 'title'] });
+            setTimeout(function() { observer.disconnect(); }, 30000);
+        }
+        if (document.head) observeHead();
+        else document.addEventListener('DOMContentLoaded', observeHead, { once: true });
+    } catch (e) {}
+})();
+)JS";
+
 // Speculative-connection bridge (lever 1). A tap on a link currently pays for
 // DNS + TCP + TLS only AFTER the finger lifts and the navigation commits; on a
 // phone radio that is commonly 200-500 ms of dead time before the first request

@@ -18,7 +18,6 @@ OpenSearchConfigs *OpenSearchConfigs::openSearchConfigs = 0;
 
 OpenSearchConfigs::OpenSearchConfigs(QObject *parent):QObject(parent)
 {
-    m_openSearchPathList << QString(EMBEDLITE_CONTENT_PATH);
     m_openSearchPathList << QString(BROWSER_OPENSEARCH_PATH);
     m_openSearchPathList << getOpenSearchConfigPath();
 }
@@ -33,26 +32,11 @@ const StringMap OpenSearchConfigs::parseOpenSearchConfigs()
 
         const QStringList configFiles = configDir.entryList(QStringList("*.xml"));
         for (const QString &fileName : configFiles) {
-            QFile xmlFile(openSearchPath + fileName);
-            xmlFile.open(QIODevice::ReadOnly | QIODevice::Text);
-            QXmlStreamReader xml(&xmlFile);
-            QString searchEngine;
-
-            while (!xml.atEnd()) {
-                xml.readNext();
-                if (xml.isStartElement() && xml.name() == "ShortName") {
-                    xml.readNext();
-                    if (xml.isCharacters()) {
-                        searchEngine = xml.text().toString();
-                    }
-                }
+            const QString path = openSearchPath + fileName;
+            const QString searchEngine = getShortName(path);
+            if (!searchEngine.isEmpty()) {
+                configs.insert(searchEngine, path);
             }
-
-            if (!xml.hasError()) {
-                configs.insert(searchEngine, openSearchPath + fileName);
-            }
-
-            xmlFile.close();
         }
     }
     return configs;
@@ -120,6 +104,31 @@ const QString OpenSearchConfigs::getSearchUrlTemplate(const QString &engineName)
         }
     }
     return QString();
+}
+
+// <ShortName> is the engine's identity everywhere else in the browser: it is
+// the key of the config map, the value stored in the search_engine setting and
+// the label in the settings combo box. Empty means "not a usable description".
+const QString OpenSearchConfigs::getShortName(const QString &configFile)
+{
+    QFile xmlFile(configFile);
+    if (!xmlFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return QString();
+    }
+
+    QXmlStreamReader xml(&xmlFile);
+    QString shortName;
+    while (!xml.atEnd()) {
+        xml.readNext();
+        if (xml.isStartElement() && xml.name() == QLatin1String("ShortName")) {
+            xml.readNext();
+            if (xml.isCharacters()) {
+                shortName = xml.text().toString().trimmed();
+            }
+        }
+    }
+
+    return xml.hasError() ? QString() : shortName;
 }
 
 const QString OpenSearchConfigs::getOpenSearchConfigPath()

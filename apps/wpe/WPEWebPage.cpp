@@ -12,6 +12,7 @@
 #include "AdBlockEngine.h"
 #include "AdBlockListUpdater.h"
 #include "credentialstore.h"
+#include "searchenginemodel.h"
 
 #include <QBuffer>
 #include <QClipboard>
@@ -1564,6 +1565,56 @@ static void onFaviconBridgeMessage(WebKitUserContentManager*, JSCValue* value, g
     page->setFaviconCandidates(candidates);
 }
 
+static void onSearchEngineBridgeMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
+{
+    WPEWebPage* page = static_cast<WPEWebPage*>(userData);
+    if (!page || !value)
+        return;
+
+    gchar* json = jsc_value_to_json(value, 0);
+    if (!json)
+        return;
+
+    QByteArray jsonBytes(json);
+    g_free(json);
+
+    const QJsonDocument doc = QJsonDocument::fromJson(jsonBytes);
+    if (!doc.isObject())
+        return;
+
+    const QJsonObject obj = doc.object();
+
+    // Debounced script: the report can land after the user navigated away.
+    // Same host check as the favicon bridge -- do not attribute one site's
+    // search service to whatever page happens to be loaded now.
+    const QString pageUrl = obj.value(QStringLiteral("pageUrl")).toString();
+    if (!pageUrl.isEmpty() && QUrl(pageUrl).host() != page->url().host())
+        return;
+
+    const QJsonArray engines = obj.value(QStringLiteral("engines")).toArray();
+    for (const QJsonValue &entry : engines) {
+        const QJsonObject engine = entry.toObject();
+        page->offerSearchEngine(engine.value(QStringLiteral("title")).toString(),
+                                engine.value(QStringLiteral("url")).toString());
+    }
+}
+
+static void onSearchEngineBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page)
+{
+    g_signal_connect(ucm, "script-message-received::searchEngineBridge",
+                     G_CALLBACK(onSearchEngineBridgeMessage), page);
+    webkit_user_content_manager_register_script_message_handler(ucm, "searchEngineBridge", nullptr);
+
+    // TOP_FRAME only: an embedded frame's search service is not this page's.
+    WebKitUserScript* script = webkit_user_script_new(
+        WPEUserScripts::kSearchEngineBridge,
+        WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
+        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+        nullptr, nullptr);
+    webkit_user_content_manager_add_script(ucm, script);
+    webkit_user_script_unref(script);
+}
+
 static void onFaviconBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page)
 {
     g_signal_connect(ucm, "script-message-received::faviconBridge",
@@ -2404,6 +2455,7 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             onPreconnectBridgeInstall(ucm, this);
             onLoginBridgeInstall(ucm, this);
             onFaviconBridgeInstall(ucm, this);
+            onSearchEngineBridgeInstall(ucm, this);
 
             WebKitNetworkSession* session = webkit_web_view_get_network_session(wv);
             if (!session) {
@@ -2498,6 +2550,25 @@ void WPEWebPage::setFavicon(const QString &favicon)
 }
 
 QStringList WPEWebPage::faviconCandidates() const { return m_faviconCandidates; }
+
+// A page told us it has an OpenSearch description. Offer it in the settings
+// list; nothing is downloaded until the user taps it there. Private tabs are
+// excluded: an offer would outlive the private session in a UI list.
+void WPEWebPage::offerSearchEngine(const QString &title, const QString &url)
+{
+    if (title.isEmpty() || url.isEmpty() || privateBrowsing())
+        return;
+
+    const QUrl descriptionUrl(url);
+    if (!descriptionUrl.isValid())
+        return;
+    const QString scheme = descriptionUrl.scheme();
+    if (scheme != QLatin1String("http") && scheme != QLatin1String("https"))
+        return;
+
+    if (SearchEngineModel *model = SearchEngineModel::instance())
+        model->add(title, descriptionUrl.toString());
+}
 
 void WPEWebPage::setFaviconCandidates(const QStringList &candidates)
 {

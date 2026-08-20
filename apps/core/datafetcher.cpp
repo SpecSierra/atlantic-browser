@@ -219,20 +219,30 @@ void DataFetcher::saveAsSearchEngine()
         return;
     }
 
-    QUrl url = QUrl::fromLocalFile(OpenSearchConfigs::getOpenSearchConfigPath() + m_url.host() + ".xml");
-    QDir dir;
-    if (dir.mkpath(url.toString(QUrl::RemoveScheme | QUrl::RemoveFilename))) {
-        QFile file(url.path());
-        if (file.open(QIODevice::WriteOnly)) {
-            if (file.write(m_networkData) > 0) {
-                file.close();
-
-                // Inform WebEngine there's a new search xml (WPE: no-op, search engine managed differently)
-                updateStatus(Ready);
-            } else {
-                file.close();
-                updateStatus(Error);
-            }
-        }
+    // One description per host: the file name is the key SearchEngineModel
+    // recomputes when it reconciles the download with the engine's own
+    // <ShortName>, so the two must agree.
+    const QString directory = OpenSearchConfigs::getOpenSearchConfigPath();
+    if (!QDir().mkpath(directory)) {
+        updateStatus(Error);
+        return;
     }
+
+    QFile file(directory + m_url.host() + QStringLiteral(".xml"));
+    if (!file.open(QIODevice::WriteOnly)) {
+        updateStatus(Error);
+        return;
+    }
+
+    const bool written = file.write(m_networkData) == m_networkData.size();
+    file.close();
+    if (!written) {
+        file.remove();
+        updateStatus(Error);
+        return;
+    }
+
+    // Whether this is really an OpenSearch description is checked by
+    // SearchEngineModel once it can parse the file.
+    updateStatus(Ready);
 }

@@ -220,6 +220,8 @@ public:
     void setFavicon(const QString &favicon);
     QStringList faviconCandidates() const;
     void setFaviconCandidates(const QStringList &candidates);
+    // A page advertised an OpenSearch description; offer it in settings.
+    void offerSearchEngine(const QString &title, const QString &url);
 
     qreal fullscreenHeight() const;
     void setFullscreenHeight(qreal height);

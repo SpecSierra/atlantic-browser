@@ -39,6 +39,11 @@ public:
     explicit SearchEngineModel(QObject *parent = 0);
     virtual ~SearchEngineModel();
 
+    // The QML singleton, so the OpenSearch discovery bridge in WPEWebPage can
+    // offer a page's search service without routing it through QML. Null until
+    // the singleton is constructed (and again after it is destroyed).
+    static SearchEngineModel *instance();
+
     QStringList searchEngines();
     Q_INVOKABLE void add(const QString &title, const QString &url);
     Q_INVOKABLE QString searchUrlTemplate(const QString &title) const;
@@ -57,6 +62,8 @@ public:
 signals:
     void countChanged();
     void installed(const QString &title);
+    // The description did not download, or was not a usable OpenSearch file.
+    void installFailed(const QString &title);
 
 private:
     struct SearchEngine {
@@ -71,7 +78,11 @@ private:
         Status status;
     };
 
+    int indexOfTitle(const QString &title) const;
+    void finishInstall(const QString &title, const QUrl &descriptionUrl);
+
     QList<SearchEngine> m_searchEngines;
+    static SearchEngineModel *s_instance;
 };
 
 #endif
