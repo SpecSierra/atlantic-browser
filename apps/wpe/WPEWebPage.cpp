@@ -2110,6 +2110,30 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                 // which would stall the WebProcess main thread and compete for CPU.
                 webkit_settings_set_media_playback_requires_user_gesture(settings, TRUE);
 
+                // Three upstream runtime features that ship default-OFF in WPE
+                // but that sites feature-detect, so their absence silently
+                // downgrades a page rather than breaking it visibly. All three
+                // are plain preferences — no cmake flag, no platform work — and
+                // are present in the shipped engine (2.52.6,
+                // libWPEWebKit-2.0.so.1.9.10). Identifiers drop the "Enabled"
+                // suffix, per setRuntimeFeature above.
+                //
+                //  - DataListElement: without it <datalist> parses as
+                //    HTMLUnknownElement and input.list stays null, so
+                //    <input list=...> autocomplete does nothing whatsoever.
+                //    The native suggestion popup would still need a QML bridge
+                //    of the kInputPickerBridge shape; this turns on the element
+                //    and the IDL surface pages actually test for.
+                //  - RequestIdleCallback: widely feature-detected (React's
+                //    scheduler among others); when it is missing the fallback
+                //    is setTimeout, which lands work in the middle of a frame
+                //    instead of after it.
+                //  - LinkPrefetch: honours <link rel=prefetch> next-navigation
+                //    hints.
+                setRuntimeFeature(settings, "DataListElement", TRUE);
+                setRuntimeFeature(settings, "RequestIdleCallback", TRUE);
+                setRuntimeFeature(settings, "LinkPrefetch", TRUE);
+
                 // FIX (hybris/Adreno blank page): keep DOM rendering in the
                 // WebProcess. On this device the GPU process cannot export
                 // composited frames — there is no GBM / DRM render node
