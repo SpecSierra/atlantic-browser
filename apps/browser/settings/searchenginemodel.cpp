@@ -18,8 +18,16 @@
 
 SearchEngineModel *SearchEngineModel::s_instance = nullptr;
 
+// Created on demand rather than only when QML first touches the singleton: the
+// discovery bridge can offer an engine before any QML has, and a dropped offer
+// is invisible -- the site simply never appears under "Search with". This is
+// the same shape as FaviconManager::instance(); the QML factory hands out this
+// object too, so there is exactly one model either way.
 SearchEngineModel *SearchEngineModel::instance()
 {
+    if (!s_instance) {
+        s_instance = new SearchEngineModel;
+    }
     return s_instance;
 }
 

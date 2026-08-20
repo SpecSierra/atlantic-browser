@@ -2566,8 +2566,7 @@ void WPEWebPage::offerSearchEngine(const QString &title, const QString &url)
     if (scheme != QLatin1String("http") && scheme != QLatin1String("https"))
         return;
 
-    if (SearchEngineModel *model = SearchEngineModel::instance())
-        model->add(title, descriptionUrl.toString());
+    SearchEngineModel::instance()->add(title, descriptionUrl.toString());
 }
 
 void WPEWebPage::setFaviconCandidates(const QStringList &candidates)

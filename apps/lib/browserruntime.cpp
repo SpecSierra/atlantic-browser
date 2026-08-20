@@ -166,7 +166,7 @@ void installRenderRecoveryHooks(QQuickView *view, QGuiApplication *app)
 
 static QObject *search_model_factory(QQmlEngine *, QJSEngine *)
 {
-    return new SearchEngineModel;
+    return SearchEngineModel::instance();
 }
 
 static QObject *faviconmanager_factory(QQmlEngine *, QJSEngine *)
