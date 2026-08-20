@@ -2766,8 +2766,10 @@ void WPEWebPage::setDesktopMode(bool desktop)
     applyUserAgentForUrl(url());
     if (changed) {
         emit desktopModeChanged();
-        // Reload so the server sends the correct page variant.
-        setUrl(url());
+        // Reload so the server sends the correct page variant. Not setUrl():
+        // that dedupes against the URL the view is already on and would do
+        // nothing here.
+        loadCurrentUrlAgain();
     }
 }
 
@@ -2894,9 +2896,25 @@ double WPEWebPage::maximumPinchZoomLevel() const
 void WPEWebPage::loadTab(const QString &url, bool force)
 {
     QUrl newUrl(url);
-    if (force || newUrl != this->url()) {
+    if (newUrl != this->url()) {
         setUrl(newUrl);
+    } else if (force) {
+        // Same URL: setUrl() is a no-op by design, so re-request it explicitly.
+        loadCurrentUrlAgain();
     }
+}
+
+// Re-request whatever the view is currently showing. setUrl() cannot express
+// this -- it deliberately ignores an assignment of the URL already loaded --
+// and reload() is not the same thing either (it revalidates rather than
+// starting a fresh navigation).
+void WPEWebPage::loadCurrentUrlAgain()
+{
+    WebKitWebView *wv = webView();
+    const QUrl current = url();
+    if (!wv || current.isEmpty())
+        return;
+    webkit_web_view_load_uri(wv, current.toString().toUtf8().constData());
 }
 
 // Open the connection for a navigation we think is coming (finger down on a

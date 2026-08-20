@@ -303,6 +303,8 @@ public:
     Q_INVOKABLE void setMediaMuted(bool muted);
 
     Q_INVOKABLE void loadTab(const QString &url, bool force = false);
+    // Re-request the URL already showing (setUrl() dedupes such an assignment away).
+    void loadCurrentUrlAgain();
     // Warm the connection for a navigation the UI expects (link under the
     // finger, URL-bar completion). Fetches nothing; rate-limited per origin;
     // inert unless ATLANTIC_PRECONNECT is set.
