@@ -9,7 +9,7 @@ companion repo `SpecSierra/atlantic-engine`; the two ship together.
 | Sailfish OS target | **5.1.0.11** (Pispala) |
 | Qt | **5.6.3**, C++17, qmake |
 | WPE WebKit | **2.52.6** via `wpewebkit-2.0` / `wpe-1.0` |
-| Package | `atlantic-browser` **1.0.0.stable** (set by `ATLANTIC_BROWSER_VERSION` in atlantic-engine `versions.env`; `rpm/sailfish-browser.spec` is the unused upstream spec) |
+| Package | `atlantic-browser` **1.1.0** (set by `ATLANTIC_BROWSER_VERSION` in atlantic-engine `versions.env`; `rpm/sailfish-browser.spec` is the unused upstream spec) |
 | Builds | CI in `atlantic-engine` — push to `master` there |
 | Maintainer | [SpecSierra](https://github.com/SpecSierra) |
 
