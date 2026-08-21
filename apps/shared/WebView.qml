@@ -221,10 +221,17 @@ WebContainer {
         opacity: 0
         visible: opacity > 0
 
-        // Hard ceiling. If the incoming page never reports DOMContentLoaded
-        // (dead network, blocked main document) the user must not be left
-        // staring at a frozen screenshot forever.
-        readonly property int maxHoldMs: 10000
+        // Stall watchdog, NOT a lifetime. A flat 10 s ceiling expired mid-load
+        // on exactly the navigations this exists for — Back to CNN is ~15 s to
+        // DCL — and the failure was worse than no preview: the picture of the
+        // destination (n-1) faded out, uncovering the compositor's held frame
+        // of the page we had just left (n), and n-1 painted seconds after that.
+        // The user saw destination, then source, then destination. So restart
+        // this on every load-progress tick: it fires only when nothing at all
+        // is happening (dead network, blocked main document).
+        readonly property int stallMs: 10000
+        // Absolute ceiling, for a load that keeps reporting progress forever.
+        readonly property int maxHoldMs: 45000
 
         // The URL bar has to be on screen for the whole covered navigation:
         // the preview exists so that chrome and viewport agree, which is only
@@ -261,11 +268,20 @@ WebContainer {
             previewImage.source = "file://" + path
             navigating = true
             opacity = 1
+            stallTimer.restart()
             holdTimer.restart()
             chromeHoldGuard.restart()
         }
 
+        // Called on every load-progress tick: a load that is still moving must
+        // not trip the stall watchdog.
+        function noteProgress() {
+            if (opacity > 0)
+                stallTimer.restart()
+        }
+
         function dismiss() {
+            stallTimer.stop()
             holdTimer.stop()
             opacity = 0
         }
@@ -311,6 +327,12 @@ WebContainer {
         }
 
         Timer {
+            id: stallTimer
+            interval: historyPreview.stallMs
+            onTriggered: historyPreview.dismiss()
+        }
+
+        Timer {
             id: holdTimer
             interval: historyPreview.maxHoldMs
             onTriggered: historyPreview.dismiss()
@@ -321,20 +343,29 @@ WebContainer {
         // stalled main document) must not pin the toolbar for the session.
         Timer {
             id: chromeHoldGuard
-            interval: 30000
+            // Must outlast the preview's own ceiling, or the URL bar would be
+            // released while the picture is still up.
+            interval: historyPreview.maxHoldMs + 15000
             onTriggered: historyPreview.navigating = false
         }
     }
 
-    // The load this preview covers has finished (or failed): stop pinning the
-    // URL bar. Not a plain onLoadingChanged handler — BrowserPage.qml declares
-    // one on this same instance, which would override it.
+    // Not plain onLoadingChanged/onLoadProgressChanged handlers — BrowserPage.qml
+    // declares onLoadingChanged on this same instance, which would override one
+    // written here.
     Connections {
         target: webView
         onLoadingChanged: {
-            if (!webView.loading)
-                historyPreview.navigating = false
+            if (webView.loading)
+                return
+            // The load this preview covers has ended: the live page is whatever
+            // it is going to be, so stop covering it and stop pinning the bar.
+            historyPreview.navigating = false
+            historyPreview.dismiss()
         }
+        // Progress is the proof that the load is alive; it holds off the stall
+        // watchdog for as long as the page keeps moving.
+        onLoadProgressChanged: historyPreview.noteProgress()
     }
 
     Connections {
