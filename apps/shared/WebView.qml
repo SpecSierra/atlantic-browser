@@ -45,6 +45,13 @@ WebContainer {
         resourceController._htmlAudioActive = contentItem ? contentItem.mediaAudioActive : false
         resourceController._htmlVideoActive = contentItem ? contentItem.mediaVideoActive : false
         resourceController.calculateStatus()
+
+        // A preview belongs to the tab it was captured in: drop it, and the
+        // URL-bar hold that goes with it, when the active page changes.
+        if (typeof historyPreview !== "undefined" && historyPreview) {
+            historyPreview.navigating = false
+            historyPreview.dismiss()
+        }
     }
 
     property var _webPageCreator: WebPageCreator {
@@ -192,31 +199,70 @@ WebContainer {
     //
     // Cover the gap with the destination entry's own last-seen pixels. This
     // buys no load time; it stops the browser showing a page it has left.
-    Image {
+    Item {
         id: historyPreview
 
-        anchors.fill: parent
-        // Never distort: the capture is taken at this same viewport size, so
-        // PreserveAspectFit fills exactly in the normal case and letterboxes
-        // rather than squashing if the viewport changed (rotation, toolbar
-        // inset) between capture and replay. Image has no alignment
-        // properties — fitting is centred, which is what we want here.
-        fillMode: Image.PreserveAspectFit
+        // Cover exactly the live web content rect, not the whole container.
+        // The page item is parented at the container's top-left and shortened
+        // by the bottom inset (WPEWebContainer::insetPageHeight), so a preview
+        // filling the container is taller than the pixels it replaces: with
+        // PreserveAspectFit centring the shorter capture, the picture sat half
+        // a toolbar too low and its bottom ran under the URL bar. Track the
+        // page item instead — top-anchored, ending where the content does.
+        anchors {
+            left: parent.left
+            right: parent.right
+            top: parent.top
+        }
+        height: webView.contentItem ? webView.contentItem.height : parent.height
+        clip: true                  // crop the surplus, never letterbox it
+
         z: 90
         opacity: 0
         visible: opacity > 0
-        asynchronous: true
-        cache: false        // one-shot, and the file is rewritten in place
 
         // Hard ceiling. If the incoming page never reports DOMContentLoaded
         // (dead network, blocked main document) the user must not be left
         // staring at a frozen screenshot forever.
         readonly property int maxHoldMs: 10000
 
+        // The URL bar has to be on screen for the whole covered navigation:
+        // the preview exists so that chrome and viewport agree, which is only
+        // true if the chrome is actually visible. Held from the moment the
+        // preview appears until the load ends — the picture is dismissed at
+        // DOMContentLoaded, long before the page has finished.
+        property bool navigating
+        property bool holdingChrome
+        // Remember which page was pinned: switching tabs mid-load must not
+        // leave the outgoing page's toolbar forced open forever.
+        property var chromeHeldPage: null
+        readonly property bool wantsChrome: navigating || opacity > 0
+        onWantsChromeChanged: setChromeHold(wantsChrome)
+
+        function setChromeHold(hold) {
+            if (hold === holdingChrome)
+                return
+            holdingChrome = hold
+            if (hold) {
+                chromeHeldPage = webView.contentItem
+                if (chromeHeldPage)
+                    chromeHeldPage.forceChrome(true)
+                return
+            }
+            var page = chromeHeldPage
+            chromeHeldPage = null
+            // Find-in-page pins the toolbar through the same flag; releasing
+            // here while it is up would drop its hold too.
+            if (page && !page.findInPageHasResult)
+                page.forceChrome(false)
+        }
+
         function showPreview(path) {
-            source = "file://" + path
+            previewImage.source = "file://" + path
+            navigating = true
             opacity = 1
             holdTimer.restart()
+            chromeHoldGuard.restart()
         }
 
         function dismiss() {
@@ -228,15 +274,30 @@ WebContainer {
         // instantly instead of fading.
         onOpacityChanged: {
             if (opacity === 0)
-                source = ""
+                previewImage.source = ""
         }
 
         Behavior on opacity { NumberAnimation { duration: 150 } }
 
-        Timer {
-            id: holdTimer
-            interval: historyPreview.maxHoldMs
-            onTriggered: historyPreview.dismiss()
+        Image {
+            id: previewImage
+
+            anchors {
+                left: parent.left
+                right: parent.right
+                top: parent.top    // glued to the top: never re-centre
+            }
+            // Fit the width and let the aspect decide the height, so the
+            // capture is never squashed. It matches the viewport exactly in
+            // the normal case; if the viewport changed between capture and
+            // replay (rotation, toolbar inset, keyboard) the difference is
+            // clipped off the bottom, where the user is not looking.
+            height: sourceSize.width > 0
+                    ? parent.width * sourceSize.height / sourceSize.width
+                    : parent.height
+            fillMode: Image.PreserveAspectFit
+            asynchronous: true
+            cache: false            // one-shot, and the file is rewritten in place
         }
 
         // A touch means the user wants the live page, however unfinished. The
@@ -247,6 +308,32 @@ WebContainer {
             anchors.fill: parent
             enabled: historyPreview.opacity > 0
             onPressed: historyPreview.dismiss()
+        }
+
+        Timer {
+            id: holdTimer
+            interval: historyPreview.maxHoldMs
+            onTriggered: historyPreview.dismiss()
+        }
+
+        // Ceiling on the URL-bar hold as well. The hold is normally released by
+        // loadingChanged, but a load that never reports an end (killed process,
+        // stalled main document) must not pin the toolbar for the session.
+        Timer {
+            id: chromeHoldGuard
+            interval: 30000
+            onTriggered: historyPreview.navigating = false
+        }
+    }
+
+    // The load this preview covers has finished (or failed): stop pinning the
+    // URL bar. Not a plain onLoadingChanged handler — BrowserPage.qml declares
+    // one on this same instance, which would override it.
+    Connections {
+        target: webView
+        onLoadingChanged: {
+            if (!webView.loading)
+                historyPreview.navigating = false
         }
     }
 
