@@ -372,6 +372,50 @@ static const char* const kEditableFocusBridge = R"JS(
 })();
 )JS";
 
+// Posts a token whenever the DOM moves focus to a *different* editable
+// element, in any frame. Qt has one focus object for the whole page (the web
+// view item), so without this the input method never learns that the caret
+// moved to another field and keeps composing the old word — its pending
+// preedit then lands in whichever field is focused when it finally commits.
+// The UI process answers by ending the composition; the in-page guard in
+// dispatchTextToFocusedElement() is what actually protects the new field.
+static const char* const kEditableFocusTracker = R"JS(
+(function() {
+    if (window.__wpeEditableFocusTrackerInstalled) return;
+    window.__wpeEditableFocusTrackerInstalled = true;
+    var seq = 0;
+    function isEditable(e) {
+        if (!e) return false;
+        if (e.isContentEditable) return true;
+        var tag = (e.tagName || '').toLowerCase();
+        if (tag === 'textarea') return !e.readOnly && !e.disabled;
+        if (tag === 'input') {
+            var t = (e.type || 'text').toLowerCase();
+            var blocked = {button:1,submit:1,reset:1,checkbox:1,radio:1,file:1,image:1,range:1,color:1,hidden:1};
+            return !blocked[t] && !e.readOnly && !e.disabled;
+        }
+        return false;
+    }
+    // Focus events from a shadow tree retarget to the host, which is not
+    // editable — composedPath()[0] is the control that actually took focus.
+    function origin(ev) {
+        try { var p = ev.composedPath && ev.composedPath(); if (p && p.length) return p[0]; } catch (e) {}
+        return ev.target;
+    }
+    document.addEventListener('focusin', function(ev) {
+        var el = origin(ev);
+        if (!isEditable(el)) return;
+        var token;
+        try {
+            token = el.__wpeFocusToken || (el.__wpeFocusToken = 'f' + (++seq) + '-' + Math.random().toString(36).slice(2));
+        } catch (e) {
+            token = 'f?';
+        }
+        try { window.webkit.messageHandlers.editableFocusMoved.postMessage(token); } catch (e) {}
+    }, true);
+})();
+)JS";
+
 static const char* const kPerfCss = R"JS(
 (function() {
     if (document.getElementById('__wpe_perf_style')) return;

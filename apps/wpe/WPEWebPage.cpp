@@ -1050,6 +1050,19 @@ static void onEditableFocusMessage(WebKitUserContentManager*, JSCValue* value, g
     page->handleSubframeEditableFocus(focused);
 }
 
+static void onEditableFocusMovedMessage(WebKitUserContentManager*, JSCValue* value, gpointer userData)
+{
+    WPEWebPage* page = static_cast<WPEWebPage*>(userData);
+    if (!page || !value || !jsc_value_is_string(value))
+        return;
+
+    char* token = jsc_value_to_string(value);
+    if (!token)
+        return;
+    page->handleEditableFocusMoved(QString::fromUtf8(token));
+    g_free(token);
+}
+
 // --- Cookie-banner blocking (DuckDuckGo autoconsent) ---
 // The standalone autoconsent bundle self-initializes with autoAction=optOut
 // and its embedded CMP rules: it detects the site's consent dialog (Didomi,
@@ -1134,6 +1147,18 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
     g_signal_connect(ucm, "script-message-received::editableFocus",
                      G_CALLBACK(onEditableFocusMessage), page);
     webkit_user_content_manager_register_script_message_handler(ucm, "editableFocus", nullptr);
+
+    g_signal_connect(ucm, "script-message-received::editableFocusMoved",
+                     G_CALLBACK(onEditableFocusMovedMessage), page);
+    webkit_user_content_manager_register_script_message_handler(ucm, "editableFocusMoved", nullptr);
+
+    WebKitUserScript* editableFocusTracker = webkit_user_script_new(
+        WPEUserScripts::kEditableFocusTracker,
+        WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+        nullptr, nullptr);
+    webkit_user_content_manager_add_script(ucm, editableFocusTracker);
+    webkit_user_script_unref(editableFocusTracker);
 
     WebKitUserScript* editableFocusScript = webkit_user_script_new(
         WPEUserScripts::kEditableFocusBridge,
@@ -1747,6 +1772,22 @@ bool dispatchTextToFocusedElement(WPEWebPage* page, const QString& text, int rep
         "  }"
         "  var el=deepActive(document);"
         "  if(!isEditable(el)) return false;"
+        // An IM commit or preedit update with replaceBefore>0 continues a
+        // composition that started in some *other* element. Qt sees a single
+        // focus object (this item) for the whole page, so moving the DOM focus
+        // does not end Maliit's composition: tapping the password field after
+        // typing a username delivered the pending preedit into the password
+        // field ("filled with the last 3 characters of my username",
+        // device-reported on reddit.com/login). Bind the composition to the
+        // element it started in and drop the tail once focus has moved — the
+        // text is already in the old field, mirrored there as literal
+        // characters by the preedit updates that came before.
+        "  if(replaceBefore>0){"
+        "    if(!window.__wpeImeTarget || el.__wpeImeToken!==window.__wpeImeTarget) return false;"
+        "  } else {"
+        "    window.__wpeImeTarget=(window.__wpeImeSeq=(window.__wpeImeSeq||0)+1);"
+        "    try{ el.__wpeImeToken=window.__wpeImeTarget; }catch(_e){}"
+        "  }"
         "  var doc=el.ownerDocument||document;"
         "  var win=doc.defaultView||window;"
         "  if(el.isContentEditable){"
@@ -3570,6 +3611,26 @@ void WPEWebPage::handleSubframeEditableFocus(bool focused)
 
     if (QInputMethod* inputMethod = QGuiApplication::inputMethod())
         inputMethod->show();
+}
+
+void WPEWebPage::handleEditableFocusMoved(const QString& token)
+{
+    if (token.isEmpty() || token == m_lastEditableFocusToken)
+        return;
+
+    const bool hadPreviousFocus = !m_lastEditableFocusToken.isEmpty();
+    m_lastEditableFocusToken = token;
+    if (!hadPreviousFocus)
+        return;
+
+    // The caret moved to a different field. Qt still reports the same focus
+    // object, so the input method would happily go on composing the previous
+    // word and commit it here; end the composition instead. The pending
+    // preedit is not lost — every update was mirrored into the old field as
+    // literal text as it was typed.
+    m_lastPreeditText.clear();
+    if (QInputMethod* inputMethod = QGuiApplication::inputMethod())
+        inputMethod->reset();
 }
 
 void WPEWebPage::moveSelectionStart(qreal cssX, qreal cssY)

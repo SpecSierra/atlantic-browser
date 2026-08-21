@@ -349,6 +349,7 @@ public:
     // Editable focus reported from cross-origin subframes (editableFocus bridge)
     void handleSubframeEditableFocus(bool focused);
     bool subframeEditableFocused() const { return m_subframeEditableFocus; }
+    void handleEditableFocusMoved(const QString& token);
     void sendNativeTextViaKeys(const QString& text, int replaceBefore);
 
     // Find-in-page
@@ -662,6 +663,7 @@ private:
     QHash<int, QTouchEvent::TouchPoint> m_trackedTouchPoints;
     QString m_lastSoftKeyboardText;
     QString m_lastPreeditText;
+    QString m_lastEditableFocusToken;
     qint64 m_lastSoftKeyboardTextTimeMs = 0;
     qint64 m_lastSoftBackspaceTimeMs = 0;
     qint64 m_lastSoftEnterTimeMs = 0;
