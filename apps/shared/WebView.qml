@@ -316,14 +316,18 @@ WebContainer {
             cache: false            // one-shot, and the file is rewritten in place
         }
 
-        // A touch means the user wants the live page, however unfinished. The
-        // press is consumed rather than forwarded: the preview is a different
-        // document from the one now loading, so replaying the tap into it would
-        // hit whatever happens to sit at those coordinates.
+        // Swallow touches while the preview is up, and do NOT dismiss on one.
+        // Dismissing was worse than useless: it uncovered a page that has not
+        // painted yet, so an accidental brush of the screen threw away the only
+        // honest picture on offer. Forwarding is not an option either — the
+        // preview is a different document from the one loading, so replaying
+        // the tap would hit whatever happens to sit at those coordinates.
+        // The user is not trapped: the URL bar is pinned visible for the whole
+        // load (separate chrome window, above this), so back, reload, tabs and
+        // the address field all still work.
         MouseArea {
             anchors.fill: parent
             enabled: historyPreview.opacity > 0
-            onPressed: historyPreview.dismiss()
         }
 
         Timer {
