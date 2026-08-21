@@ -67,6 +67,75 @@ extern "C" double wpe_sfos_get_page_scale(WebKitWebView*);
 // navigation the UI can see coming does not pay DNS + TCP + TLS after the tap.
 extern "C" void wpe_sfos_preconnect(WebKitWebView*, const char* uri);
 
+// --- Shared JS for "which element has the caret?" ------------------------------
+//
+// Every keyboard path (show/hide probe, text dispatch, backspace dispatch,
+// reveal-on-inset) has to answer the same question, and every one of them used
+// to answer it with `document.activeElement` plus an IFRAME descent. That misses
+// **shadow DOM**: when the focused control lives in an open shadow root the top
+// document reports the *host* element as active (device-verified on
+// reddit.com/login, whose fields are <input>s inside <faceplate-text-input>
+// shadow roots), so isEditable() said "not editable" and the keyboard never came
+// up -- and, had it come up, the keystrokes would have been dropped too.
+//
+// deepActive() descends both boundaries: contentDocument for frames and
+// shadowRoot.activeElement for open shadow roots, alternating until neither
+// applies. hitTest() mirrors that for the touch fallback -- elementFromPoint()
+// stops at the host, so it recurses into shadowRoot.elementFromPoint() (same
+// coordinate space; only frames need the rect translation).
+//
+// Closed shadow roots stay invisible to script by design; nothing can be done
+// for those from here.
+#define WPE_EDITABLE_JS_HELPERS \
+    "  function isEditable(e){" \
+    "    if(!e) return false;" \
+    "    if(e.isContentEditable) return true;" \
+    "    var tag=(e.tagName||'').toLowerCase();" \
+    "    if(tag==='textarea') return !e.readOnly && !e.disabled;" \
+    "    if(tag==='input'){" \
+    "      var t=(e.type||'text').toLowerCase();" \
+    "      var blocked={button:1,submit:1,reset:1,checkbox:1,radio:1,file:1,image:1,range:1,color:1,hidden:1};" \
+    "      return !blocked[t] && !e.readOnly && !e.disabled;" \
+    "    }" \
+    "    return false;" \
+    "  }" \
+    "  function deepActive(doc){" \
+    "    var a=doc&&doc.activeElement;" \
+    "    for(var i=0;a&&i<16;i++){" \
+    "      var tg=a.tagName;" \
+    "      if(tg==='IFRAME'||tg==='FRAME'){" \
+    "        try{ var d=a.contentDocument; if(!d) return null; a=d.activeElement; continue; }catch(_e){ return null; }" \
+    "      }" \
+    "      if(a.shadowRoot && a.shadowRoot.activeElement){ a=a.shadowRoot.activeElement; continue; }" \
+    "      break;" \
+    "    }" \
+    "    return a;" \
+    "  }" \
+    "  function hitTest(root,hx,hy,depth){" \
+    "    if(!root || !root.elementFromPoint || depth>8) return null;" \
+    "    var e=root.elementFromPoint(hx,hy);" \
+    "    if(!e) return null;" \
+    "    if((e.tagName==='IFRAME'||e.tagName==='FRAME') && depth<4){" \
+    "      try{" \
+    "        var d=e.contentDocument;" \
+    "        if(d){" \
+    "          var r=e.getBoundingClientRect();" \
+    "          var inner=hitTest(d,hx-r.left,hy-r.top,depth+1);" \
+    "          if(inner) return inner;" \
+    "        }" \
+    "      }catch(_e){}" \
+    "    }" \
+    "    if(e.shadowRoot){" \
+    "      var s=hitTest(e.shadowRoot,hx,hy,depth+1);" \
+    "      if(s && s!==e) e=s;" \
+    "    }" \
+    "    if(e.closest){" \
+    "      var n=e.closest('input,textarea,[contenteditable=\"\"],[contenteditable=\"true\"]');" \
+    "      if(n) e=n;" \
+    "    }" \
+    "    return e;" \
+    "  }"
+
 namespace {
 
 constexpr double kMinimumPinchZoomFactor = 0.5;
@@ -1665,18 +1734,7 @@ bool dispatchTextToFocusedElement(WPEWebPage* page, const QString& text, int rep
         "(function(args){"
         "  var t=args[0];"
         "  var replaceBefore=(args[1]||0)|0;"
-        "  function isEditable(e){"
-        "    if(!e) return false;"
-        "    if(e.isContentEditable) return true;"
-        "    var tag=(e.tagName||'').toLowerCase();"
-        "    if(tag==='textarea') return !e.readOnly && !e.disabled;"
-        "    if(tag==='input'){"
-        "      var tp=(e.type||'text').toLowerCase();"
-        "      var blocked={button:1,submit:1,reset:1,checkbox:1,radio:1,file:1,image:1,range:1,color:1,hidden:1};"
-        "      return !blocked[tp] && !e.readOnly && !e.disabled;"
-        "    }"
-        "    return false;"
-        "  }"
+        WPE_EDITABLE_JS_HELPERS
         "  function fireInput(el,data,inputType){"
         "    try {"
         "      if (typeof InputEvent === 'function')"
@@ -1687,10 +1745,7 @@ bool dispatchTextToFocusedElement(WPEWebPage* page, const QString& text, int rep
         "      el.dispatchEvent(new Event('input',{bubbles:true}));"
         "    }"
         "  }"
-        "  var el=document.activeElement;"
-        "  while(el && el.tagName==='IFRAME'){"
-        "    try{ var d=el.contentDocument; if(!d){ el=null; break; } el=d.activeElement; }catch(_e){ el=null; break; }"
-        "  }"
+        "  var el=deepActive(document);"
         "  if(!isEditable(el)) return false;"
         "  var doc=el.ownerDocument||document;"
         "  var win=doc.defaultView||window;"
@@ -1759,18 +1814,7 @@ bool dispatchBackspaceToFocusedElement(WPEWebPage* page)
 
     page->runJavaScript(QStringLiteral(
         "(function(){"
-        "  function isEditable(e){"
-        "    if(!e) return false;"
-        "    if(e.isContentEditable) return true;"
-        "    var tag=(e.tagName||'').toLowerCase();"
-        "    if(tag==='textarea') return !e.readOnly && !e.disabled;"
-        "    if(tag==='input'){"
-        "      var tp=(e.type||'text').toLowerCase();"
-        "      var blocked={button:1,submit:1,reset:1,checkbox:1,radio:1,file:1,image:1,range:1,color:1,hidden:1};"
-        "      return !blocked[tp] && !e.readOnly && !e.disabled;"
-        "    }"
-        "    return false;"
-        "  }"
+        WPE_EDITABLE_JS_HELPERS
         "  function fireInput(el){"
         "    try {"
         "      if (typeof InputEvent === 'function')"
@@ -1781,10 +1825,7 @@ bool dispatchBackspaceToFocusedElement(WPEWebPage* page)
         "      el.dispatchEvent(new Event('input',{bubbles:true}));"
         "    }"
         "  }"
-        "  var el=document.activeElement;"
-        "  while(el && el.tagName==='IFRAME'){"
-        "    try{ var d=el.contentDocument; if(!d){ el=null; break; } el=d.activeElement; }catch(_e){ el=null; break; }"
-        "  }"
+        "  var el=deepActive(document);"
         "  if(!isEditable(el)) return false;"
         "  var doc=el.ownerDocument||document;"
         "  var win=doc.defaultView||window;"
@@ -4299,22 +4340,8 @@ void WPEWebPage::revealFocusedEditable()
     // the inset is applied — hence the retries in the caller, not here.
     static const char* kRevealScript =
         "(function(){"
-        "  function isEditable(e){"
-        "    if(!e) return false;"
-        "    if(e.isContentEditable) return true;"
-        "    var tag=(e.tagName||'').toLowerCase();"
-        "    if(tag==='textarea') return !e.readOnly && !e.disabled;"
-        "    if(tag==='input'){"
-        "      var t=(e.type||'text').toLowerCase();"
-        "      var blocked={button:1,submit:1,reset:1,checkbox:1,radio:1,file:1,image:1,range:1,color:1,hidden:1};"
-        "      return !blocked[t] && !e.readOnly && !e.disabled;"
-        "    }"
-        "    return false;"
-        "  }"
-        "  var el=document.activeElement;"
-        "  while(el && el.tagName==='IFRAME'){"
-        "    try{ var d=el.contentDocument; if(!d){ el=null; break; } el=d.activeElement; }catch(_e){ el=null; break; }"
-        "  }"
+        WPE_EDITABLE_JS_HELPERS
+        "  var el=deepActive(document);"
         "  if(!isEditable(el)) return false;"
         "  try{ el.scrollIntoView({block:'nearest',inline:'nearest'}); }catch(_e){ try{ el.scrollIntoView(false); }catch(_e2){} }"
         "  return true;"
@@ -4331,44 +4358,7 @@ void WPEWebPage::syncVirtualKeyboardToFocusedElement()
 
     const QString editableProbeScript = QStringLiteral(
         "(function(x,y){"
-        "  function isEditable(e){"
-        "    if(!e) return false;"
-        "    if(e.isContentEditable) return true;"
-        "    var tag=(e.tagName||'').toLowerCase();"
-        "    if(tag==='textarea') return !e.readOnly && !e.disabled;"
-        "    if(tag==='input'){"
-        "      var t=(e.type||'text').toLowerCase();"
-        "      var blocked={button:1,submit:1,reset:1,checkbox:1,radio:1,file:1,image:1,range:1,color:1,hidden:1};"
-        "      return !blocked[t] && !e.readOnly && !e.disabled;"
-        "    }"
-        "    return false;"
-        "  }"
-        "  function deepActive(doc){"
-        "    var a=doc.activeElement;"
-        "    while(a && a.tagName==='IFRAME'){"
-        "      try{ var d=a.contentDocument; if(!d) break; a=d.activeElement; }catch(_e){ break; }"
-        "    }"
-        "    return a;"
-        "  }"
-        "  function hitTest(doc,hx,hy,depth){"
-        "    var e=doc.elementFromPoint(hx,hy);"
-        "    if(!e) return null;"
-        "    if(e.tagName==='IFRAME' && depth<4){"
-        "      try{"
-        "        var d=e.contentDocument;"
-        "        if(d){"
-        "          var r=e.getBoundingClientRect();"
-        "          var inner=hitTest(d,hx-r.left,hy-r.top,depth+1);"
-        "          if(inner) return inner;"
-        "        }"
-        "      }catch(_e){}"
-        "    }"
-        "    if(e.closest){"
-        "      var n=e.closest('input,textarea,[contenteditable=\"\"],[contenteditable=\"true\"]');"
-        "      if(n) e=n;"
-        "    }"
-        "    return e;"
-        "  }"
+        WPE_EDITABLE_JS_HELPERS
         "  var active=deepActive(document);"
         "  if(isEditable(active)) return true;"
         "  if(!(x>=0 && y>=0)) return false;"

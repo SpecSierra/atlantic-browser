@@ -356,11 +356,17 @@ static const char* const kEditableFocusBridge = R"JS(
         focused = v;
         try { window.webkit.messageHandlers.editableFocus.postMessage(v ? 1 : 0); } catch (e) {}
     }
+    // A focus event that originated inside a shadow root is retargeted to the
+    // host, which is not editable — composedPath()[0] is the real control.
+    function origin(ev) {
+        try { var p = ev.composedPath && ev.composedPath(); if (p && p.length) return p[0]; } catch (e) {}
+        return ev.target;
+    }
     document.addEventListener('focusin', function(ev) {
-        if (isEditable(ev.target)) post(true);
+        if (isEditable(origin(ev))) post(true);
     }, true);
     document.addEventListener('focusout', function(ev) {
-        if (isEditable(ev.target)) post(false);
+        if (isEditable(origin(ev))) post(false);
     }, true);
     window.addEventListener('pagehide', function() { post(false); }, true);
 })();
