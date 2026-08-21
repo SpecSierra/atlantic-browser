@@ -1760,14 +1760,20 @@ bool dispatchTextToFocusedElement(WPEWebPage* page, const QString& text, int rep
         "  var t=args[0];"
         "  var replaceBefore=(args[1]||0)|0;"
         WPE_EDITABLE_JS_HELPERS
+        // composed:true matters as much as bubbles:true here. An event
+        // without it stops at the shadow boundary, so a component that keeps
+        // its <input> in a shadow root (reddit's <faceplate-text-input>) never
+        // tells the surrounding form that the field has a value — the site
+        // kept "Log In" disabled while Enter, which uses WebKit's own implicit
+        // submission and reads the real value, logged in fine.
         "  function fireInput(el,data,inputType){"
         "    try {"
         "      if (typeof InputEvent === 'function')"
-        "        el.dispatchEvent(new InputEvent('input',{bubbles:true,data:data,inputType:inputType}));"
+        "        el.dispatchEvent(new InputEvent('input',{bubbles:true,composed:true,data:data,inputType:inputType}));"
         "      else"
-        "        el.dispatchEvent(new Event('input',{bubbles:true}));"
+        "        el.dispatchEvent(new Event('input',{bubbles:true,composed:true}));"
         "    } catch(_e) {"
-        "      el.dispatchEvent(new Event('input',{bubbles:true}));"
+        "      el.dispatchEvent(new Event('input',{bubbles:true,composed:true}));"
         "    }"
         "  }"
         "  var el=deepActive(document);"
@@ -1859,11 +1865,11 @@ bool dispatchBackspaceToFocusedElement(WPEWebPage* page)
         "  function fireInput(el){"
         "    try {"
         "      if (typeof InputEvent === 'function')"
-        "        el.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'deleteContentBackward'}));"
+        "        el.dispatchEvent(new InputEvent('input',{bubbles:true,composed:true,inputType:'deleteContentBackward'}));"
         "      else"
-        "        el.dispatchEvent(new Event('input',{bubbles:true}));"
+        "        el.dispatchEvent(new Event('input',{bubbles:true,composed:true}));"
         "    } catch(_e) {"
-        "      el.dispatchEvent(new Event('input',{bubbles:true}));"
+        "      el.dispatchEvent(new Event('input',{bubbles:true,composed:true}));"
         "    }"
         "  }"
         "  var el=deepActive(document);"
@@ -4990,8 +4996,8 @@ void WPEWebPage::resolveInputPicker(const QString &value)
         "  var el=window.__wpePendingInput;"
         "  if(!el) return;"
         "  el.value=(%1)[0];"
-        "  el.dispatchEvent(new Event('input',{bubbles:true}));"
-        "  el.dispatchEvent(new Event('change',{bubbles:true}));"
+        "  el.dispatchEvent(new Event('input',{bubbles:true,composed:true}));"
+        "  el.dispatchEvent(new Event('change',{bubbles:true,composed:true}));"
         "  window.__wpePendingInput=null;"
         "})();"
     ).arg(QString::fromUtf8(enc));
@@ -5042,8 +5048,8 @@ void WPEWebPage::selectMenuOption(int index)
         "  var el=window.__wpePendingSelect;"
         "  if(!el) return;"
         "  el.selectedIndex=%1;"
-        "  el.dispatchEvent(new Event('change',{bubbles:true}));"
-        "  el.dispatchEvent(new Event('input',{bubbles:true}));"
+        "  el.dispatchEvent(new Event('change',{bubbles:true,composed:true}));"
+        "  el.dispatchEvent(new Event('input',{bubbles:true,composed:true}));"
         "  window.__wpePendingSelect=null;"
         "})();"
     ).arg(index);

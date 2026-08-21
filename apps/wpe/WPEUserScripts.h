@@ -1716,8 +1716,11 @@ static const char* const kLoginBridge = R"JS(
             if (desc && desc.set) desc.set.call(el, v);
             else el.value = v;
         } catch (e) { try { el.value = v; } catch (_e) {} }
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-        el.dispatchEvent(new Event('change', { bubbles: true }));
+        // composed: true or the event never leaves a shadow root, and a
+        // component that keeps its <input> in one (reddit's
+        // <faceplate-text-input>) never sees the value change.
+        el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
     }
 
     var api = {};
