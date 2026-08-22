@@ -699,17 +699,42 @@ Page {
         onClosed: overlay.dismiss(true)
     }
 
+    // CoverAction itself has no enabled/visible property, so the two action
+    // sets are two lists and the tab count picks between them.
+    readonly property bool _coverActionsEnabled: browserPage.status === PageStatus.Active
+                                                 || browserPage.tabPageActive
+                                                 || !webView.tabModel
+                                                 || webView.tabModel.count === 0
+    readonly property bool _hasTabs: webView.tabModel && webView.tabModel.count > 0
+
     CoverActionList {
-        enabled: browserPage.status === PageStatus.Active
-                 || browserPage.tabPageActive
-                 || !webView.tabModel
-                 || webView.tabModel.count === 0
+        enabled: browserPage._coverActionsEnabled && !browserPage._hasTabs
         iconBackground: true
         window: webView.chromeWindow
 
         CoverAction {
             iconSource: "image://theme/icon-cover-new"
             onTriggered: activateNewTabView()
+        }
+    }
+
+    CoverActionList {
+        enabled: browserPage._coverActionsEnabled && browserPage._hasTabs
+        iconBackground: true
+        window: webView.chromeWindow
+
+        CoverAction {
+            iconSource: "image://theme/icon-cover-new"
+            onTriggered: activateNewTabView()
+        }
+
+        CoverAction {
+            iconSource: "image://theme/icon-cover-cancel"
+            onTriggered: {
+                if (webView.tabModel && webView.tabModel.count > 0) {
+                    webView.tabModel.closeActiveTab()
+                }
+            }
         }
     }
 

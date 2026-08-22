@@ -14,6 +14,7 @@ import Sailfish.Silica 1.0
 import Nemo.Configuration 1.0
 import "pages"
 import "shared"
+import "cover"
 
 BrowserWindow {
     id: window
@@ -36,14 +37,45 @@ BrowserWindow {
         defaultValue: 2
     }
 
+    // Covers are instantiated by Silica from ApplicationWindow's own context, so
+    // a cover loaded by url cannot see anything in this file. Loaders keep them
+    // in this context, where the web view can be bound to them.
+    //
+    // They are also handed over as ready-made Items rather than as a url or a
+    // Component: CoverLoader.js incubates those, and its incubation callback
+    // dies with "TypeError: Cannot read property 'Ready' of undefined" (the
+    // Component type does not resolve inside that callback on this Qt), so the
+    // cover object is never installed and lipstick falls back to its default
+    // icon tile. Passing an existing Item takes CoverLoader's non-incubating
+    // branch and actually shows the cover.
+    Loader {
+        id: noTabsCoverLoader
+
+        active: false
+        sourceComponent: NoTabsCover {
+            visible: false
+        }
+    }
+
+    Loader {
+        id: browserCoverLoader
+
+        active: false
+        sourceComponent: BrowserCover {
+            visible: false
+            webView: window.webView
+        }
+    }
+
     function setBrowserCover(model) {
         if (!model || model.count === 0 || !WebUtils.firstUseDone) {
-            cover = Qt.resolvedUrl("cover/NoTabsCover.qml")
+            noTabsCoverLoader.active = true
+            cover = noTabsCoverLoader.item
+            browserCoverLoader.active = false
         } else {
-            if (cover != null && window.webView) {
-                // clearSurface is Gecko-specific, not available in WPE
-            }
-            cover = null
+            browserCoverLoader.active = true
+            cover = browserCoverLoader.item
+            noTabsCoverLoader.active = false
         }
     }
 
