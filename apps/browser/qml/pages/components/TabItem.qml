@@ -20,12 +20,18 @@ import QtQuick 2.1
 import QtGraphicalEffects 1.0
 import Sailfish.Silica 1.0
 import Sailfish.Silica.private 1.0 as Private
+import Sailfish.Browser 1.0
 
 Private.SwipeItem {
     id: root
 
     // Expose GridView for all items
     property Item view: GridView.view
+
+    // Favicons are learned asynchronously while browsing: read the stored
+    // icon when the url changes, and pick it up if it arrives later.
+    readonly property string tabUrl: url
+    property string favicon: ""
     property bool destroying
     property color highlightColor: Theme.colorScheme == Theme.LightOnDark
                                    ? Theme.highlightColor
@@ -35,6 +41,18 @@ Private.SwipeItem {
     implicitHeight: height
 
     enabled: !destroying
+
+    function refreshFavicon() {
+        favicon = tabUrl ? FaviconManager.get("history", tabUrl) : ""
+    }
+
+    onTabUrlChanged: refreshFavicon()
+    Component.onCompleted: refreshFavicon()
+
+    Connections {
+        target: FaviconManager
+        onIconChanged: root.refreshFavicon()
+    }
 
     // Left only: a rightwards drag is the Silica page-back gesture.
     drag {
@@ -108,11 +126,29 @@ Private.SwipeItem {
             width: root.implicitWidth
             height: Theme.iconSizeSmall + Theme.paddingMedium * 2
 
+            FavoriteIcon {
+                id: faviconIcon
+
+                anchors {
+                    left: parent.left
+                    leftMargin: Theme.paddingMedium
+                    verticalCenter: parent.verticalCenter
+                }
+                width: Theme.iconSizeExtraSmall
+                height: Theme.iconSizeExtraSmall
+                sourceSize.width: Theme.iconSizeExtraSmall
+                sourceSize.height: Theme.iconSizeExtraSmall
+                icon: root.favicon
+                // No stored icon means no icon: the bookmark placeholder
+                // FavoriteIcon falls back to would be a lie on a tab card.
+                visible: root.favicon !== ""
+            }
+
             Label {
                 id: titleLabel
 
                 anchors {
-                    left: parent.left
+                    left: faviconIcon.visible ? faviconIcon.right : parent.left
                     leftMargin: Theme.paddingMedium
                     // The close button has a wide touch area with its cross
                     // shifted right, so close.left is far from the visible
