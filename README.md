@@ -163,6 +163,21 @@ qmake sailfish-browser.pro && make
 - **Commit to `main`** (this repo; the engine repo uses `master`), no feature
   branches; push only when asked.
 
+## Upstream
+
+Atlantic Browser is a fork of [sailfishos/sailfish-browser](https://github.com/sailfishos/sailfish-browser)
+(Jolla Ltd. / Open Mobile Platform LLC, MPL-2.0). Most of the QML UI, the storage
+and history models and the D-Bus plumbing originate there; the WPE bridge in
+`apps/wpe/` replaces the original Gecko/EmbedLite one and is our own.
+
+When a change is ported from upstream, keep the attribution intact:
+
+- retain (and extend, if the upstream change is newer) the copyright header of
+  the file, and note in it which upstream commit the code came from;
+- credit the upstream author with a `Co-authored-by:` trailer in the commit, and
+  link the upstream commit with an `Origin:` trailer.
+
 ## License
 
-MPL-2.0 — see `LICENSE.txt`.
+MPL-2.0 — see `LICENSE.txt`. The same licence as upstream, so code moves between
+the two projects freely as long as the notices above travel with it.
