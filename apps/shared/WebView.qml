@@ -359,6 +359,15 @@ WebContainer {
     // written here.
     Connections {
         target: webView
+        // Same-document history traversals change the URL without starting a
+        // main-frame load or firing DOMContentLoaded. The live page is already
+        // restored, so the preview must no longer block touch input.
+        onUrlChanged: {
+            if (historyPreview.navigating && !webView.loading) {
+                historyPreview.navigating = false
+                historyPreview.dismiss()
+            }
+        }
         onLoadingChanged: {
             if (webView.loading)
                 return
