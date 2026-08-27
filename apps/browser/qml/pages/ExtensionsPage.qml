@@ -45,14 +45,16 @@ Page {
                 onClicked: WebExtensionManager.reload()
             }
             MenuItem {
-                //% "Get extensions"
-                text: qsTrId("atlantic-me-extensions_browse")
-                onClicked: pageStack.push("ExtensionStorePage.qml")
-            }
-            MenuItem {
                 //% "Install from file…"
                 text: qsTrId("atlantic-me-extensions_install")
                 onClicked: pageStack.animatorPush(filePickerPage)
+            }
+            // Declared last so it sits nearest the content edge: browsing the
+            // catalogue is the common way in, sideloading a file is not.
+            MenuItem {
+                //% "Get extensions"
+                text: qsTrId("atlantic-me-extensions_browse")
+                onClicked: pageStack.push("ExtensionStorePage.qml")
             }
         }
 
