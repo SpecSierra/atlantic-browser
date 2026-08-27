@@ -35,6 +35,7 @@
 
 class WPEWebPage;
 class WebExtensionBackground;
+class WebExtensionBackgroundView;
 
 // The tab-facing half of browser.tabs, implemented by WPEWebContainer. Kept as
 // an interface so the manager never has to include the container (and so the
@@ -211,6 +212,9 @@ private:
         bool enabled = true;
         QStringList warnings;
         WebExtensionBackground *background = nullptr;
+        // Preferred: a real (never displayed) page. `background` is the
+        // JSC fallback for when an offscreen backend cannot be made.
+        WebExtensionBackgroundView *backgroundView = nullptr;
         // browser.action state, per extension (we have one window).
         QString badgeText;
         QString badgeColor;

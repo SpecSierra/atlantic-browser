@@ -10,6 +10,7 @@
 
 #include "WebExtensionArchive.h"
 #include "WebExtensionBackground.h"
+#include "WebExtensionBackgroundView.h"
 #include "WebExtensionScripts.h"
 #include "WPEWebPage.h"
 
@@ -578,6 +579,21 @@ void WebExtensionManager::startBackground(Entry &entry)
     if (!entry.extension.hasBackground())
         return;
 
+    // A real page first: extensions written against Firefox event pages expect
+    // a document, and the JSC host cannot give them one. Only if the offscreen
+    // backend cannot be created do we fall back to it, which still serves
+    // service-worker-shaped extensions.
+    const QString pageShim = buildShim(entry, QStringLiteral("page"),
+                                       QStringLiteral("atlExtBg_") + sanitize(entry.extension.id()));
+    auto *view = new WebExtensionBackgroundView(this, entry.extension, pageShim, this);
+    if (view->start()) {
+        entry.backgroundView = view;
+        return;
+    }
+    delete view;
+    qWarning() << "[WEBEXT]" << entry.extension.id()
+               << "no offscreen background page; falling back to the JSC host";
+
     const QString shim = buildShim(entry, QStringLiteral("background"), QString());
     auto *background = new WebExtensionBackground(this, entry.extension, shim, this);
     if (!background->start()) {
@@ -589,10 +605,14 @@ void WebExtensionManager::startBackground(Entry &entry)
 
 void WebExtensionManager::stopBackground(Entry &entry)
 {
-    if (!entry.background)
-        return;
-    entry.background->deleteLater();
-    entry.background = nullptr;
+    if (entry.backgroundView) {
+        entry.backgroundView->deleteLater();
+        entry.backgroundView = nullptr;
+    }
+    if (entry.background) {
+        entry.background->deleteLater();
+        entry.background = nullptr;
+    }
 }
 
 // --- URI scheme -------------------------------------------------------------
@@ -653,6 +673,27 @@ void WebExtensionManager::handleSchemeRequest(WebKitURISchemeRequest *request, g
         relative.remove(0, 1);
     if (relative.isEmpty())
         relative = QStringLiteral("index.html");
+
+    // An extension declaring background.scripts has no HTML of its own, so the
+    // page that hosts them is synthesised here - the same thing Chrome and
+    // Firefox do, down to the name.
+    if (relative == QLatin1String("_generated_background_page.html")) {
+        QString html = QStringLiteral("<!doctype html><meta charset=\"utf-8\">"
+                                      "<title>%1</title>\n").arg(entry->extension.name().toHtmlEscaped());
+        const QStringList scripts = entry->extension.backgroundScripts();
+        for (const QString &script : scripts) {
+            QString src = script;
+            while (src.startsWith(QLatin1Char('/')))
+                src.remove(0, 1);
+            html += QStringLiteral("<script src=\"%1\"></script>\n").arg(src.toHtmlEscaped());
+        }
+        const QByteArray body = html.toUtf8();
+        GInputStream *stream = g_memory_input_stream_new_from_data(
+            g_memdup2(body.constData(), body.size()), body.size(), g_free);
+        webkit_uri_scheme_request_finish(request, stream, body.size(), "text/html");
+        g_object_unref(stream);
+        return;
+    }
 
     // Path traversal guard: resolve, then require the result to stay inside the
     // extension directory.
@@ -991,7 +1032,7 @@ WebExtensionManager::contextsFor(const QString &extensionId, const ExtContext &e
     QVector<ExtContext> contexts;
 
     const Entry *entry = entryFor(extensionId);
-    if (entry && entry->background) {
+    if (entry && (entry->background || entry->backgroundView)) {
         const ExtContext background;
         if (!(background == except))
             contexts.append(background);
@@ -1031,7 +1072,11 @@ void WebExtensionManager::deliver(const QString &extensionId, const ExtContext &
 
     if (target.isBackground()) {
         Entry *entry = entryFor(extensionId);
-        if (entry && entry->background)
+        if (!entry)
+            return;
+        if (entry->backgroundView)
+            entry->backgroundView->dispatch(json);
+        else if (entry->background)
             entry->background->dispatch(json);
         return;
     }
@@ -1081,7 +1126,7 @@ void WebExtensionManager::broadcastEvent(const QString &name, const QJsonArray &
         if (!entry.enabled)
             continue;
         const QString extensionId = entry.extension.id();
-        if (entry.background)
+        if (entry.background || entry.backgroundView)
             emitEvent(extensionId, ExtContext(), name, args);
         for (WPEWebPage *page : m_pageOrder) {
             if (isExtensionPage(extensionId, page))
@@ -2297,7 +2342,7 @@ void WebExtensionManager::notifyNavigation(int tabId, const QString &url, const 
     // Only extensions that could see the page get to hear about it navigating.
     const QUrl target(url);
     for (const Entry &entry : m_entries) {
-        if (!entry.enabled || !entry.background)
+        if (!entry.enabled || (!entry.background && !entry.backgroundView))
             continue;
         if (!entry.extension.hasHostAccess(target)
             && !entry.extension.hasPermission(QStringLiteral("webNavigation"))) {
