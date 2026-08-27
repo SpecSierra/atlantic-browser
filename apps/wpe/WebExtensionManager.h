@@ -131,6 +131,13 @@ public:
 
     void setHost(WebExtensionHost *host) { m_host = host; }
 
+    // Called once a real web view exists. Until then libwpe has not been
+    // pointed at the fdo backend, and creating any wpe_view_backend makes it
+    // try to load libWPEBackend-default.so, which this deployment does not
+    // ship — a FATAL that takes the whole browser down at startup. Background
+    // pages therefore cannot be started before this.
+    void setEngineReady();
+
     // Tab lifecycle, forwarded to browser.tabs.on* in every extension context.
     // Called by WPEWebContainer; no-ops when nothing is listening.
     void notifyTabCreated(int tabId, const QString &url);
@@ -273,6 +280,7 @@ private:
     void loadRegistry();
     void saveRegistry() const;
     void startBackground(Entry &entry);
+    void announceLifecycleEvents();
     void stopBackground(Entry &entry);
     void setLastError(const QString &error);
 
@@ -336,6 +344,7 @@ private:
     QString m_lastError;
     quint64 m_nextToken = 1;
     bool m_schemeRegistered = false;
+    bool m_engineReady = false;
 
     friend class WebExtensionBackground;
 };

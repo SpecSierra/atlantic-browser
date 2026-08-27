@@ -2585,6 +2585,9 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             // style sheet, each in the extension's own isolated world. Must come
             // after the built-in bridges so an extension cannot shadow them.
             WebExtensionManager::instance()->installIntoPage(ucm, this);
+            // A real view exists, so libwpe is now pointed at the fdo backend
+            // and extension background pages can safely create their own.
+            WebExtensionManager::instance()->setEngineReady();
 
             // browser.webNavigation, off the load states we already get. Only
             // the main frame is reported; WebKit gives us no per-subframe

@@ -15,6 +15,7 @@
 #include "WPEWebPage.h"
 
 #include <QDateTime>
+#include <QTimer>
 #include <QDebug>
 #include <QDir>
 #include <QFile>
@@ -372,30 +373,7 @@ void WebExtensionManager::reload()
             startBackground(entry);
     }
 
-    // Only now, with every background context up and its listeners registered.
-    // onInstalled is where extensions do first-run setup — seed storage, open a
-    // welcome page — so getting this wrong makes them look simply broken.
-    bool registryNeedsWriting = false;
-    for (Entry &entry : m_entries) {
-        if (!entry.enabled)
-            continue;
-        if (!entry.installReason.isEmpty()) {
-            QJsonObject details{ { QStringLiteral("reason"), entry.installReason } };
-            if (!entry.previousVersion.isEmpty())
-                details.insert(QStringLiteral("previousVersion"), entry.previousVersion);
-            emitEvent(entry.extension.id(), ExtContext(),
-                      QStringLiteral("runtime.onInstalled"), QJsonArray{ details });
-            registryNeedsWriting = true;
-        }
-        emitEvent(entry.extension.id(), ExtContext(),
-                  QStringLiteral("runtime.onStartup"), QJsonArray());
-        entry.installReason.clear();
-        entry.previousVersion.clear();
-    }
-    // Record the versions we just announced, so the same install or update is
-    // not reported again on the next launch.
-    if (registryNeedsWriting)
-        saveRegistry();
+    announceLifecycleEvents();
 
     endResetModel();
     Q_EMIT countChanged();
@@ -573,16 +551,76 @@ void WebExtensionManager::openOptionsPage(const QString &extensionId)
 
 // --- background contexts ----------------------------------------------------
 
+void WebExtensionManager::announceLifecycleEvents()
+{
+    // Only meaningful once a background context exists — before the engine is
+    // ready there is nothing listening, and an onInstalled fired into nothing
+    // is worse than a late one: the registry would record it as delivered.
+    bool registryNeedsWriting = false;
+    for (Entry &entry : m_entries) {
+        if (!entry.enabled || (!entry.background && !entry.backgroundView))
+            continue;
+        if (!entry.installReason.isEmpty()) {
+            QJsonObject details{ { QStringLiteral("reason"), entry.installReason } };
+            if (!entry.previousVersion.isEmpty())
+                details.insert(QStringLiteral("previousVersion"), entry.previousVersion);
+            emitEvent(entry.extension.id(), ExtContext(),
+                      QStringLiteral("runtime.onInstalled"), QJsonArray{ details });
+            registryNeedsWriting = true;
+        }
+        emitEvent(entry.extension.id(), ExtContext(),
+                  QStringLiteral("runtime.onStartup"), QJsonArray());
+        entry.installReason.clear();
+        entry.previousVersion.clear();
+    }
+    if (registryNeedsWriting)
+        saveRegistry();
+}
+
+void WebExtensionManager::setEngineReady()
+{
+    if (m_engineReady)
+        return;
+    m_engineReady = true;
+
+    // Spawning a WebProcess per background page competes with the first page
+    // load, so let the browser settle first. Extensions are not so urgent that
+    // they should slow the thing the user is actually waiting for.
+    QTimer::singleShot(1500, this, [this]() {
+        for (Entry &entry : m_entries) {
+            if (entry.enabled && entry.extension.hasBackground()
+                && !entry.background && !entry.backgroundView) {
+                startBackground(entry);
+            }
+        }
+        // The page needs a moment to load before its listeners exist.
+        QTimer::singleShot(1500, this, [this]() { announceLifecycleEvents(); });
+    });
+}
+
 void WebExtensionManager::startBackground(Entry &entry)
 {
     stopBackground(entry);
     if (!entry.extension.hasBackground())
         return;
 
+    // Deferred until a real view exists; setEngineReady() comes back for these.
+    if (!m_engineReady)
+        return;
+
     // A real page first: extensions written against Firefox event pages expect
     // a document, and the JSC host cannot give them one. Only if the offscreen
     // backend cannot be created do we fall back to it, which still serves
     // service-worker-shaped extensions.
+    //
+    // ATLANTIC_EXT_BACKGROUND_PAGE=0 forces the fallback. This path creates a
+    // wpe_view_backend, and getting that wrong once already cost a startup
+    // crash — an escape hatch that needs no rebuild is worth the two lines.
+    static const bool backgroundPagesEnabled =
+        qgetenv("ATLANTIC_EXT_BACKGROUND_PAGE").trimmed() != QByteArray("0");
+    if (!backgroundPagesEnabled) {
+        qDebug() << "[WEBEXT] background pages disabled by environment; using the JSC host";
+    } else {
     const QString pageShim = buildShim(entry, QStringLiteral("page"),
                                        QStringLiteral("atlExtBg_") + sanitize(entry.extension.id()));
     auto *view = new WebExtensionBackgroundView(this, entry.extension, pageShim, this);
@@ -593,6 +631,7 @@ void WebExtensionManager::startBackground(Entry &entry)
     delete view;
     qWarning() << "[WEBEXT]" << entry.extension.id()
                << "no offscreen background page; falling back to the JSC host";
+    }
 
     const QString shim = buildShim(entry, QStringLiteral("background"), QString());
     auto *background = new WebExtensionBackground(this, entry.extension, shim, this);
