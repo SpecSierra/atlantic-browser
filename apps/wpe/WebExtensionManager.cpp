@@ -127,10 +127,16 @@ QStringList expandPatterns(const QStringList &patterns)
 {
     QStringList out;
     for (const QString &pattern : patterns) {
-        if (pattern == QLatin1String("<all_urls>"))
-            out << QStringLiteral("http://*/*") << QStringLiteral("https://*/*");
-        else
+        if (pattern == QLatin1String("<all_urls>")) {
+            // Every scheme <all_urls> covers that WebKit will match on. file://
+            // was missing, which quietly excluded local pages from every
+            // content script declaring <all_urls> — found while testing an
+            // extension against a file:// page and getting no injection at all.
+            out << QStringLiteral("http://*/*") << QStringLiteral("https://*/*")
+                << QStringLiteral("file:///*") << QStringLiteral("ftp://*/*");
+        } else {
             out << pattern;
+        }
     }
     out.removeDuplicates();
     return out;
