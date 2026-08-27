@@ -31,6 +31,7 @@
 #pragma push_macro("signals")
 #undef signals
 #include <jsc/jsc.h>
+#include <libsoup/soup.h>
 #pragma pop_macro("signals")
 
 
@@ -646,7 +647,28 @@ void WebExtensionManager::handleSchemeRequest(WebKitURISchemeRequest *request, g
 
     const qint64 size = QFileInfo(resolved).size();
     const QByteArray mimeType = mimeTypeForPath(resolved).toUtf8();
-    webkit_uri_scheme_request_finish(request, G_INPUT_STREAM(stream), size, mimeType.constData());
+
+    // Served through a response object rather than plain _finish() so the CORS
+    // header can be set. An extension page is a different origin from the page
+    // a content script runs in, and an ES module is *always* fetched in CORS
+    // mode — so the loader pattern (a content script doing
+    // `import(runtime.getURL("main.js"))`, which is how LanguageTool and many
+    // bundled extensions start) is blocked outright without this, as is any
+    // fetch() of an extension resource from a page world. Registering the
+    // scheme as cors-enabled only permits the check; it does not answer it.
+    WebKitURISchemeResponse *response =
+        webkit_uri_scheme_response_new(G_INPUT_STREAM(stream), size);
+    webkit_uri_scheme_response_set_content_type(response, mimeType.constData());
+    webkit_uri_scheme_response_set_status(response, 200, "OK");
+
+    SoupMessageHeaders *headers = soup_message_headers_new(SOUP_MESSAGE_HEADERS_RESPONSE);
+    soup_message_headers_append(headers, "Access-Control-Allow-Origin", "*");
+    // Only what a resource fetch needs; extension resources are read-only.
+    soup_message_headers_append(headers, "Access-Control-Allow-Methods", "GET");
+    webkit_uri_scheme_response_set_http_headers(response, headers);
+
+    webkit_uri_scheme_request_finish_with_response(request, response);
+    g_object_unref(response);
     g_object_unref(stream);
     g_object_unref(file);
 }

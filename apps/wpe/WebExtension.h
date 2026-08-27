@@ -64,7 +64,10 @@ public:
     // otherwise a slug of the name plus a hash of it. Used as the directory
     // name and as the host of atlantic-extension:// URLs, so it is always
     // restricted to [a-z0-9._-].
-    static QString deriveId(const QJsonObject &manifest);
+    // `resolvedName` is the manifest name after __MSG_ substitution; pass it
+    // so a localized manifest does not derive its id from "__MSG_appName__".
+    static QString deriveId(const QJsonObject &manifest,
+                            const QString &resolvedName = QString());
     // The id an extension declaring this gecko id will get. Lets the store tell
     // whether an AMO add-on is already installed without downloading it.
     static QString idForGeckoId(const QString &geckoId);
@@ -124,6 +127,10 @@ private:
     void parseBackground(const QJsonObject &manifest);
     void parseAction(const QJsonObject &manifest);
     void loadLocaleMessages();
+    // Resolves a "__MSG_key__" placeholder against localeMessages(). Manifest
+    // fields (name, description, action title) may be written that way, and an
+    // unresolved one otherwise reaches the UI verbatim.
+    QString resolveMessages(const QString &text) const;
 
     QString m_id;
     QString m_name;

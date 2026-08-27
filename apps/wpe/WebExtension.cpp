@@ -186,7 +186,7 @@ QString WebExtension::idForName(const QString &name)
     return slug + QLatin1Char('-') + QString::fromLatin1(digest.toHex().left(8));
 }
 
-QString WebExtension::deriveId(const QJsonObject &manifest)
+QString WebExtension::deriveId(const QJsonObject &manifest, const QString &resolvedName)
 {
     // Firefox-style explicit id wins — it is what the extension's own code and
     // any published options URLs expect.
@@ -201,7 +201,9 @@ QString WebExtension::deriveId(const QJsonObject &manifest)
         }
     }
 
-    return idForName(manifest.value(QStringLiteral("name")).toString());
+    return idForName(resolvedName.isEmpty()
+                         ? manifest.value(QStringLiteral("name")).toString()
+                         : resolvedName);
 }
 
 bool WebExtension::loadFromDirectory(const QString &dir, QString *error)
@@ -225,16 +227,22 @@ bool WebExtension::loadFromDirectory(const QString &dir, QString *error)
     m_manifest = manifest;
     m_baseDir = QDir(dir).absolutePath();
 
-    m_name = manifest.value(QStringLiteral("name")).toString();
+    m_manifestVersion = manifest.value(QStringLiteral("manifest_version")).toInt(2);
+    m_defaultLocale = manifest.value(QStringLiteral("default_locale")).toString();
+    // Before anything reads the name: a localized manifest writes it as
+    // "__MSG_appName__", which would otherwise reach the UI verbatim and, worse,
+    // be what the id is derived from — every such extension would collide on the
+    // same id.
+    loadLocaleMessages();
+
+    m_name = resolveMessages(manifest.value(QStringLiteral("name")).toString());
     if (m_name.isEmpty())
         return fail(QStringLiteral("manifest.json has no name"));
     m_version = manifest.value(QStringLiteral("version")).toString();
-    m_description = manifest.value(QStringLiteral("description")).toString();
+    m_description = resolveMessages(manifest.value(QStringLiteral("description")).toString());
     m_homepageUrl = manifest.value(QStringLiteral("homepage_url")).toString();
-    m_manifestVersion = manifest.value(QStringLiteral("manifest_version")).toInt(2);
-    m_defaultLocale = manifest.value(QStringLiteral("default_locale")).toString();
     m_icons = manifest.value(QStringLiteral("icons")).toObject();
-    m_id = deriveId(manifest);
+    m_id = deriveId(manifest, m_name);
 
     // MV2 lumps host patterns into "permissions"; MV3 splits them out. Keep the
     // two lists separate either way so the UI can show API permissions apart
@@ -267,8 +275,34 @@ bool WebExtension::loadFromDirectory(const QString &dir, QString *error)
         }
     }
 
-    loadLocaleMessages();
     return true;
+}
+
+QString WebExtension::resolveMessages(const QString &text) const
+{
+    if (!text.contains(QLatin1String("__MSG_")))
+        return text;
+
+    QString out = text;
+    int start = 0;
+    while ((start = out.indexOf(QLatin1String("__MSG_"), start)) >= 0) {
+        const int keyStart = start + 6;
+        const int end = out.indexOf(QLatin1String("__"), keyStart);
+        if (end < 0)
+            break;
+        const QString key = out.mid(keyStart, end - keyStart);
+        const QString value = m_localeMessages.value(key.toLower()).toObject()
+                                  .value(QStringLiteral("message")).toString();
+        if (value.isEmpty()) {
+            // Leave an unknown placeholder alone rather than blanking the field:
+            // a visible __MSG_foo__ at least says what went missing.
+            start = end + 2;
+            continue;
+        }
+        out.replace(start, end + 2 - start, value);
+        start += value.size();
+    }
+    return out;
 }
 
 void WebExtension::parseContentScripts(const QJsonObject &manifest)
@@ -318,7 +352,7 @@ void WebExtension::parseAction(const QJsonObject &manifest)
         if (action.isEmpty())
             continue;
         m_actionPopup = action.value(QStringLiteral("default_popup")).toString();
-        m_actionTitle = action.value(QStringLiteral("default_title")).toString();
+        m_actionTitle = resolveMessages(action.value(QStringLiteral("default_title")).toString());
         const QJsonValue icon = action.value(QStringLiteral("default_icon"));
         if (icon.isObject() && m_icons.isEmpty())
             m_icons = icon.toObject();
