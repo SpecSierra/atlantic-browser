@@ -13,6 +13,7 @@
 #include "WebExtensionScripts.h"
 #include "WPEWebPage.h"
 
+#include <QDateTime>
 #include <QDebug>
 #include <QDir>
 #include <QFile>
@@ -284,9 +285,19 @@ void WebExtensionManager::loadRegistry()
         return;
     const QJsonObject registry = QJsonDocument::fromJson(file.readAll()).object();
     for (Entry &entry : m_entries) {
+        if (!registry.contains(entry.extension.id())) {
+            entry.installReason = QStringLiteral("install");
+            continue;
+        }
         const QJsonObject state = registry.value(entry.extension.id()).toObject();
         if (state.contains(QStringLiteral("enabled")))
             entry.enabled = state.value(QStringLiteral("enabled")).toBool(true);
+
+        const QString stored = state.value(QStringLiteral("version")).toString();
+        if (stored != entry.extension.version()) {
+            entry.installReason = QStringLiteral("update");
+            entry.previousVersion = stored;
+        }
     }
 }
 
@@ -295,7 +306,8 @@ void WebExtensionManager::saveRegistry() const
     QJsonObject registry;
     for (const Entry &entry : m_entries) {
         registry.insert(entry.extension.id(),
-                        QJsonObject{ { QStringLiteral("enabled"), entry.enabled } });
+                        QJsonObject{ { QStringLiteral("enabled"), entry.enabled },
+                                     { QStringLiteral("version"), entry.extension.version() } });
     }
     QDir().mkpath(extensionsDirectory());
     QFile file(QDir(extensionsDirectory()).filePath(QLatin1String(kRegistryFile)));
@@ -352,6 +364,31 @@ void WebExtensionManager::reload()
         if (entry.enabled)
             startBackground(entry);
     }
+
+    // Only now, with every background context up and its listeners registered.
+    // onInstalled is where extensions do first-run setup — seed storage, open a
+    // welcome page — so getting this wrong makes them look simply broken.
+    bool registryNeedsWriting = false;
+    for (Entry &entry : m_entries) {
+        if (!entry.enabled)
+            continue;
+        if (!entry.installReason.isEmpty()) {
+            QJsonObject details{ { QStringLiteral("reason"), entry.installReason } };
+            if (!entry.previousVersion.isEmpty())
+                details.insert(QStringLiteral("previousVersion"), entry.previousVersion);
+            emitEvent(entry.extension.id(), ExtContext(),
+                      QStringLiteral("runtime.onInstalled"), QJsonArray{ details });
+            registryNeedsWriting = true;
+        }
+        emitEvent(entry.extension.id(), ExtContext(),
+                  QStringLiteral("runtime.onStartup"), QJsonArray());
+        entry.installReason.clear();
+        entry.previousVersion.clear();
+    }
+    // Record the versions we just announced, so the same install or update is
+    // not reported again on the next launch.
+    if (registryNeedsWriting)
+        saveRegistry();
 
     endResetModel();
     Q_EMIT countChanged();
@@ -1543,6 +1580,24 @@ void WebExtensionManager::dispatchApiCall(const QString &extensionId, const ExtC
         return;
     }
 
+    // --- management (self only; enumerating other extensions is not offered) ---
+    if (api == QLatin1String("management.getSelf")) {
+        ok(QJsonObject{
+            { QStringLiteral("id"), extensionId },
+            { QStringLiteral("name"), entry->extension.name() },
+            { QStringLiteral("version"), entry->extension.version() },
+            { QStringLiteral("description"), entry->extension.description() },
+            { QStringLiteral("enabled"), entry->enabled },
+            { QStringLiteral("installType"), QStringLiteral("normal") },
+            { QStringLiteral("mayDisable"), true },
+            { QStringLiteral("type"), QStringLiteral("extension") },
+            { QStringLiteral("hostPermissions"),
+              QJsonArray::fromStringList(entry->extension.hostPermissions()) },
+            { QStringLiteral("permissions"),
+              QJsonArray::fromStringList(entry->extension.permissions()) } });
+        return;
+    }
+
     // --- contextMenus ---
     if (api.startsWith(QLatin1String("contextMenus.")) || api.startsWith(QLatin1String("menus."))) {
         const QString action = api.section(QLatin1Char('.'), 1);
@@ -2212,4 +2267,30 @@ void WebExtensionManager::activateContextMenuItem(const QString &extensionId,
     // Chrome fires this at the background context; content scripts never see it.
     emitEvent(extensionId, ExtContext(), QStringLiteral("contextMenus.onClicked"),
               QJsonArray{ info, tab });
+}
+
+void WebExtensionManager::notifyNavigation(int tabId, const QString &url, const QString &stage)
+{
+    if (url.isEmpty() || url == QLatin1String("about:blank"))
+        return;
+
+    // Only extensions that could see the page get to hear about it navigating.
+    const QUrl target(url);
+    for (const Entry &entry : m_entries) {
+        if (!entry.enabled || !entry.background)
+            continue;
+        if (!entry.extension.hasHostAccess(target)
+            && !entry.extension.hasPermission(QStringLiteral("webNavigation"))) {
+            continue;
+        }
+        emitEvent(entry.extension.id(), ExtContext(),
+                  QStringLiteral("webNavigation.") + stage,
+                  QJsonArray{ QJsonObject{
+                      { QStringLiteral("tabId"), tabId },
+                      { QStringLiteral("url"), url },
+                      { QStringLiteral("frameId"), 0 },
+                      { QStringLiteral("parentFrameId"), -1 },
+                      { QStringLiteral("timeStamp"),
+                        double(QDateTime::currentMSecsSinceEpoch()) } } });
+    }
 }

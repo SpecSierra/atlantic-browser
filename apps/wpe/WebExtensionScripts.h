@@ -528,10 +528,30 @@ static const char* const kApiShim = R"JS(
             ["updateDynamicRules", "getDynamicRules", "updateEnabledRulesets",
              "getEnabledRulesets", "updateSessionRules", "getSessionRules"],
             ["onRuleMatchedDebug"]),
-        webNavigation: unsupportedNamespace("webNavigation",
-            ["getFrame", "getAllFrames"],
-            ["onBeforeNavigate", "onCommitted", "onCompleted", "onDOMContentLoaded",
-             "onCreatedNavigationTarget", "onHistoryStateUpdated", "onErrorOccurred"]),
+        // Main frame only: Atlantic reports no per-subframe navigation, so the
+        // frame-scoped calls answer for frame 0 and the subframe-only events
+        // stay inert rather than lying about ids.
+        webNavigation: {
+            getFrame: function(details, callback) {
+                var value = { frameId: 0, parentFrameId: -1, errorOccurred: false };
+                if (callback) { callback(value); return undefined; }
+                return Promise.resolve(value);
+            },
+            getAllFrames: function(details, callback) {
+                var value = [{ frameId: 0, parentFrameId: -1, errorOccurred: false }];
+                if (callback) { callback(value); return undefined; }
+                return Promise.resolve(value);
+            },
+            onBeforeNavigate: new Event("webNavigation.onBeforeNavigate"),
+            onCommitted: new Event("webNavigation.onCommitted"),
+            onCompleted: new Event("webNavigation.onCompleted"),
+            onDOMContentLoaded: new Event("webNavigation.onDOMContentLoaded"),
+            onHistoryStateUpdated: new Event("webNavigation.onHistoryStateUpdated"),
+            onErrorOccurred: new Event("webNavigation.onErrorOccurred"),
+            onCreatedNavigationTarget: inertEvent("webNavigation.onCreatedNavigationTarget"),
+            onReferenceFragmentUpdated: inertEvent("webNavigation.onReferenceFragmentUpdated"),
+            onTabReplaced: inertEvent("webNavigation.onTabReplaced")
+        },
         cookies: unsupportedNamespace("cookies",
             ["get", "getAll", "set", "remove", "getAllCookieStores"], ["onChanged"]),
         contextMenus: contextMenus,
@@ -569,8 +589,17 @@ static const char* const kApiShim = R"JS(
         bookmarks: unsupportedNamespace("bookmarks",
             ["get", "getTree", "search", "create", "remove", "update"],
             ["onCreated", "onRemoved", "onChanged"]),
-        management: unsupportedNamespace("management",
-            ["getSelf", "getAll", "get", "setEnabled", "uninstallSelf"], []),
+        management: {
+            getSelf: wrap("management.getSelf"),
+            // Enumerating or disabling other extensions is deliberately not
+            // offered; an extension may only ask about itself.
+            get: unsupported("management.get"),
+            getAll: unsupported("management.getAll"),
+            setEnabled: unsupported("management.setEnabled"),
+            uninstallSelf: unsupported("management.uninstallSelf"),
+            onInstalled: inertEvent("management.onInstalled"),
+            onUninstalled: inertEvent("management.onUninstalled")
+        },
         idle: unsupportedNamespace("idle", ["queryState", "setDetectionInterval"], ["onStateChanged"]),
         privacy: { network: {}, services: {}, websites: {} },
         proxy: unsupportedNamespace("proxy", ["register", "unregister"], ["onRequest", "onError"])

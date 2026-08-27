@@ -430,6 +430,43 @@ test("menus is the same namespace as contextMenus", () => {
     assert.strictEqual(harness.browser.menus, harness.browser.contextMenus);
 });
 
+test("runtime.onInstalled carries the reason and previous version", () => {
+    const harness = makeSandbox("background");
+    const seen = [];
+    harness.browser.runtime.onInstalled.addListener((details) => seen.push(details));
+    harness.event("runtime.onInstalled", [{ reason: "update", previousVersion: "1.0" }]);
+    assert.deepStrictEqual(seen, [{ reason: "update", previousVersion: "1.0" }]);
+});
+
+test("webNavigation events fan out with their details", () => {
+    const harness = makeSandbox("background");
+    const seen = [];
+    harness.browser.webNavigation.onCommitted.addListener((d) => seen.push(d));
+    harness.event("webNavigation.onCommitted",
+                  [{ tabId: 4, url: "https://example.com/", frameId: 0 }]);
+    assert.strictEqual(seen.length, 1);
+    assert.strictEqual(seen[0].url, "https://example.com/");
+});
+
+test("webNavigation.getFrame answers for the main frame", async () => {
+    const harness = makeSandbox("background");
+    // Answered locally: no round trip, so no reply is needed.
+    const frame = await harness.browser.webNavigation.getFrame({ frameId: 0 });
+    // Round-tripped through JSON: objects built inside the VM realm carry that
+    // realm's prototype, which deepStrictEqual counts as a difference.
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(frame)),
+                           { frameId: 0, parentFrameId: -1, errorOccurred: false });
+});
+
+test("management.getSelf goes to the bridge, the rest refuse", async () => {
+    const harness = makeSandbox("background");
+    const promise = harness.browser.management.getSelf();
+    assert.strictEqual(harness.lastCall().api, "management.getSelf");
+    harness.reply(harness.lastCall().seq, { id: "test", version: "1.0" });
+    assert.strictEqual((await promise).version, "1.0");
+    await assert.rejects(() => harness.browser.management.getAll(), /not supported/);
+});
+
 // --- background preamble -----------------------------------------------------
 //
 // The preamble is what a background script actually lands in: JSC gives us a

@@ -2586,6 +2586,29 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             // after the built-in bridges so an extension cannot shadow them.
             WebExtensionManager::instance()->installIntoPage(ucm, this);
 
+            // browser.webNavigation, off the load states we already get. Only
+            // the main frame is reported; WebKit gives us no per-subframe
+            // signal here, and claiming frame ids we cannot back would be worse
+            // than reporting none.
+            g_signal_connect(
+                wv, "load-changed",
+                G_CALLBACK(+[](WebKitWebView* view, WebKitLoadEvent event, gpointer userData) {
+                    auto* page = static_cast<WPEWebPage*>(userData);
+                    if (!page)
+                        return;
+                    const gchar* uri = webkit_web_view_get_uri(view);
+                    const QString url = uri ? QString::fromUtf8(uri) : QString();
+                    QString stage;
+                    switch (event) {
+                    case WEBKIT_LOAD_STARTED:   stage = QStringLiteral("onBeforeNavigate"); break;
+                    case WEBKIT_LOAD_COMMITTED: stage = QStringLiteral("onCommitted"); break;
+                    case WEBKIT_LOAD_FINISHED:  stage = QStringLiteral("onCompleted"); break;
+                    default: return;
+                    }
+                    WebExtensionManager::instance()->notifyNavigation(page->tabId(), url, stage);
+                }),
+                this);
+
             WebKitNetworkSession* session = webkit_web_view_get_network_session(wv);
             if (!session) {
                 session = webkit_network_session_get_default();

@@ -18,6 +18,7 @@ import Sailfish.Silica.private 1.0 as Private
 import Sailfish.Browser 1.0
 import Sailfish.Policy 1.0
 import Nemo.Configuration 1.0
+import Nemo.Notifications 1.0 as Nemo
 import "components" as Browser
 import "../shared" as Shared
 
@@ -857,6 +858,28 @@ Page {
     Browser.InputPickerOverlay { webView: webView }
 
     Browser.ImageActionPanel { webView: webView }
+
+    // browser.notifications. The manager has no way to raise a system
+    // notification itself, so it asks here; without this, notifications.create
+    // resolved with an id and then showed nothing at all.
+    Nemo.Notification {
+        id: extensionNotification
+
+        appName: "Atlantic"
+        isTransient: false
+    }
+
+    Connections {
+        target: WebExtensionManager
+        onNotificationRequested: {
+            extensionNotification.close()
+            extensionNotification.summary = title
+            extensionNotification.body = message
+            extensionNotification.previewSummary = title
+            extensionNotification.previewBody = message
+            extensionNotification.publish()
+        }
+    }
 
     Component.onCompleted: {
         chromeAutoHideTimer.restart()

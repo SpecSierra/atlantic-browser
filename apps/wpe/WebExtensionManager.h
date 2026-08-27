@@ -136,6 +136,9 @@ public:
     void notifyTabUpdated(int tabId, const QString &url, const QString &title, bool loading);
     void notifyTabActivated(int tabId);
     void notifyTabRemoved(int tabId);
+    // browser.webNavigation. `stage` is the event name without the namespace,
+    // e.g. "onCommitted". Frame ids are always 0: we only report the main frame.
+    void notifyNavigation(int tabId, const QString &url, const QString &stage);
 
     // Called by WebExtensionBackground for messages it does not handle itself.
     void handleBridgeMessage(const QString &extensionId, WPEWebPage *page, bool mainWorld,
@@ -215,6 +218,10 @@ private:
         QString popupOverride;
         // QList, not QVector: neither struct is relocatable, and QVector::erase
         // instantiates a memmove branch over them that trips -Wclass-memaccess.
+        // Computed at load: "install" the first time we see the extension,
+        // "update" when its version moved since the registry was written.
+        QString installReason;
+        QString previousVersion;
         QList<DynamicScript> dynamicScripts;
         QList<MenuItemDef> menuItems;
     };

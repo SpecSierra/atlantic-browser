@@ -126,14 +126,9 @@ bool WebExtensionBackground::start()
                  QStringLiteral("atlantic-extension://%1/%2").arg(m_extensionId, relative));
     }
 
-    // Extensions commonly do their one-time setup from onInstalled/onStartup.
-    // We have no install/update distinction yet, so every launch is a startup.
-    dispatch(QString::fromUtf8(QJsonDocument(QJsonObject{
-        { QStringLiteral("type"), QStringLiteral("event") },
-        { QStringLiteral("name"), QStringLiteral("runtime.onStartup") },
-        { QStringLiteral("args"), QJsonArray() }
-    }).toJson(QJsonDocument::Compact)));
-
+    // runtime.onStartup and runtime.onInstalled are emitted by the manager once
+    // every background context is up, so that it can order them and tell an
+    // install from an update. Firing onStartup here as well would double it.
     return true;
 }
 
