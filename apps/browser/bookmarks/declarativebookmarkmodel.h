@@ -26,6 +26,12 @@ class DeclarativeBookmarkModel : public QAbstractListModel
     Q_PROPERTY(bool activeUrlBookmarked READ activeUrlBookmarked NOTIFY activeUrlBookmarkedChanged FINAL)
 public:
     DeclarativeBookmarkModel(QObject *parent = 0);
+    ~DeclarativeBookmarkModel() override;
+
+    // The model the UI is showing. browser.bookmarks writes through it rather
+    // than saving bookmarks.json behind the live list's back, which would be
+    // overwritten by the next UI-side save. Null until QML has created one.
+    static DeclarativeBookmarkModel *primaryInstance();
 
     enum BookmarkRoles {
            UrlRole = Qt::UserRole + 1,
@@ -40,6 +46,8 @@ public:
     Q_INVOKABLE void updateFavoriteIcon(const QString& url, const QString& favicon, bool touchIcon);
     Q_INVOKABLE bool contains(const QString& url) const;
     Q_INVOKABLE void edit(int index, const QString& url, const QString& title);
+    // -1 when the url is not bookmarked.
+    int indexOfUrl(const QString &url) const { return bookmarkIndexes.value(url, -1); }
 
     QString activeUrl() const;
     void setActiveUrl(const QString& url);

@@ -16,6 +16,8 @@
 #include <QSqlDatabase>
 #include <QSqlQuery>
 
+#include <QVariantList>
+
 #include "link.h"
 #include "tab.h"
 
@@ -54,6 +56,13 @@ public slots:
     void removeHistoryEntry(const QString &url);
     void addHistoryEntry(const QString &url, const QString &title);
     void clearHistory(int period);
+    // browser.history needs what getHistory() throws away: the visit count,
+    // the exact timestamp, a caller-chosen result limit and a time range. It
+    // also needs its answer tagged, because getHistory()'s reply is a
+    // broadcast that any other consumer may pick up.
+    void searchHistory(int requestId, const QString &text, qint64 startTime, qint64 endTime,
+                       int maxResults);
+    void deleteHistoryRange(qint64 startTime, qint64 endTime);
 
     void saveSetting(const QString &name, const QString &value);
     SettingsMap getSettings();
@@ -65,6 +74,8 @@ signals:
     void titleChanged(const QString &url, const QString &title);
     void tabHistoryAvailable(int tabId, QList<Link>, int currentLinkId);
     void historyAvailable(QList<Link>);
+    // One map per row: id, url, title, lastVisitTime (ms), visitCount.
+    void historySearchAvailable(int requestId, QVariantList entries);
     void error(const QString &query);
 
 private:

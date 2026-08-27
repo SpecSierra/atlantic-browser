@@ -24,6 +24,7 @@
 #include <QJsonValue>
 #include <QPointer>
 #include <QString>
+#include <QVariantList>
 #include <QVector>
 
 // Qt's `#define signals public` mangles a GDBus struct field of the same name;
@@ -144,6 +145,9 @@ public:
     void notifyTabUpdated(int tabId, const QString &url, const QString &title, bool loading);
     void notifyTabActivated(int tabId);
     void notifyTabRemoved(int tabId);
+    // browser.history.onVisited. Called when a load completes in a tab that
+    // records history; private tabs never do.
+    void notifyHistoryVisit(int tabId, const QString &url, const QString &title);
     // browser.webNavigation. `stage` is the event name without the namespace,
     // e.g. "onCommitted". Frame ids are always 0: we only report the main frame.
     void notifyNavigation(int tabId, const QString &url, const QString &stage);
@@ -266,6 +270,16 @@ private:
         bool answered = false;
     };
 
+    // Reply address of an in-flight browser.history query.
+    struct HistoryRequest {
+        QString extensionId;
+        WPEWebPage *page = nullptr;
+        bool mainWorld = false;
+        int seq = 0;
+        QString mode; // "search" or "getVisits"
+        QString url;  // getVisits: the one URL the caller asked about
+    };
+
     struct PortRoute {
         QString extensionId;
         ExtContext a;
@@ -316,6 +330,43 @@ private:
     QString gatherSources(const WebExtension &extension, const QJsonObject &injection,
                           const QString &inlineKey, QString *error) const;
 
+    // --- browser.cookies (WebExtensionCookies.cpp) ---
+    //
+    // Returns true when it took the call, so the main dispatcher can carry on
+    // to the next namespace. Answers are async: the reply goes out from the
+    // GLib callback, which re-checks that the extension and the origin page
+    // are still there.
+    bool dispatchCookiesApi(const QString &extensionId, const ExtContext &origin, int seq,
+                            const QString &api, const QJsonArray &args);
+    // `userData` is a CookieCallback and `listPtr` a GList of SoupCookie the
+    // query hands over; both are opaque here to keep libsoup out of this
+    // header. Takes ownership of each.
+    static void finishCookieQuery(void *userData, void *listPtr, const QString &error);
+    // `cookiePtr` is an owned SoupCookie.
+    void deleteCookie(const QString &extensionId, const ExtContext &origin, int seq,
+                      void *cookiePtr);
+    // cookies.onChanged, for mutations that went through this API. Page-set
+    // cookies are invisible to us: WebKit reports no change notifications.
+    void notifyCookieChanged(const QJsonObject &cookie, bool removed, const QString &cause);
+
+    // --- browser.history / browser.bookmarks (WebExtensionBrowsingData.cpp) ---
+    //
+    // Same contract as dispatchCookiesApi(): true means the call was taken.
+    // History answers come back on a DBManager signal, so each in-flight
+    // search parks its reply address in m_historyRequests.
+    bool dispatchHistoryApi(const QString &extensionId, const ExtContext &origin, int seq,
+                            const QString &api, const QJsonArray &args);
+    bool dispatchBookmarksApi(const QString &extensionId, const ExtContext &origin, int seq,
+                              const QString &api, const QJsonArray &args);
+    void connectHistory();
+    void onHistorySearchAvailable(int requestId, const QVariantList &entries);
+    void broadcastHistoryRemoved(bool allHistory, const QJsonArray &urls);
+    void broadcastBookmarkEvent(const QString &event, const QJsonArray &args);
+    // Every bookmark in the live model, as API nodes. Assigns ids on the way.
+    QJsonArray bookmarkNodes();
+    // Opaque, stable for the lifetime of the session.
+    QString bookmarkIdFor(const QString &url);
+
     // browser.storage backing: one JSON file per (extension, area).
     QString storagePath(const QString &extensionId, const QString &area) const;
     QJsonObject readStorage(const QString &extensionId, const QString &area) const;
@@ -340,6 +391,11 @@ private:
     QHash<QString, PendingMessage> m_pendingMessages;
     QHash<QString, PortRoute> m_ports;
     QHash<QString, QJsonObject> m_storageCache; // "<id>/<area>" -> object
+    QHash<int, HistoryRequest> m_historyRequests;
+    QHash<QString, QString> m_bookmarkIds; // opaque id -> bookmark url
+    int m_nextHistoryRequest = 1;
+    bool m_historyConnected = false;
+
     WebExtensionHost *m_host = nullptr;
     QString m_lastError;
     quint64 m_nextToken = 1;

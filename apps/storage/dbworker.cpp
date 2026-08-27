@@ -622,6 +622,55 @@ void DBWorker::getHistory(const QString &filter)
     emit historyAvailable(linkList);
 }
 
+void DBWorker::searchHistory(int requestId, const QString &text, qint64 startTime,
+                             qint64 endTime, int maxResults)
+{
+    // Times cross the bridge in milliseconds, as the API uses; the column is
+    // in seconds.
+    QStringList conditions;
+    conditions << QStringLiteral("url NOT LIKE 'about:%'");
+    if (!text.isEmpty())
+        conditions << QStringLiteral("(url LIKE :search OR title LIKE :search)");
+    if (startTime > 0)
+        conditions << QStringLiteral("date >= :start");
+    if (endTime > 0)
+        conditions << QStringLiteral("date <= :end");
+
+    QSqlQuery query = prepare(QStringLiteral("SELECT id, url, title, date, visited_count "
+                                             "FROM browser_history WHERE %1 "
+                                             "ORDER BY date DESC LIMIT :limit;")
+                                  .arg(conditions.join(QStringLiteral(" AND "))));
+    if (!text.isEmpty())
+        query.bindValue(QStringLiteral(":search"), QStringLiteral("%%1%").arg(text));
+    if (startTime > 0)
+        query.bindValue(QStringLiteral(":start"), startTime / 1000);
+    if (endTime > 0)
+        query.bindValue(QStringLiteral(":end"), endTime / 1000);
+    query.bindValue(QStringLiteral(":limit"), qBound(1, maxResults, 1000));
+
+    QVariantList entries;
+    if (execute(query)) {
+        while (query.next()) {
+            QVariantMap entry;
+            entry.insert(QStringLiteral("id"), query.value(0).toInt());
+            entry.insert(QStringLiteral("url"), query.value(1).toString());
+            entry.insert(QStringLiteral("title"), query.value(2).toString());
+            entry.insert(QStringLiteral("lastVisitTime"), query.value(3).toLongLong() * 1000);
+            entry.insert(QStringLiteral("visitCount"), query.value(4).toInt());
+            entries.append(entry);
+        }
+    }
+    emit historySearchAvailable(requestId, entries);
+}
+
+void DBWorker::deleteHistoryRange(qint64 startTime, qint64 endTime)
+{
+    QSqlQuery query = prepare("DELETE FROM browser_history WHERE date >= ? AND date <= ?;");
+    query.bindValue(0, startTime / 1000);
+    query.bindValue(1, endTime > 0 ? endTime / 1000 : qint64(QDateTime::currentDateTimeUtc().toTime_t()));
+    execute(query);
+}
+
 QList<Link> DBWorker::getHistoryQList()
 {
     QString filterQuery("WHERE url NOT LIKE 'about:%'");

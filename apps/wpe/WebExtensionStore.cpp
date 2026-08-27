@@ -42,7 +42,10 @@ const char *const kBrokenApis[] = {
 
 // APIs whose absence costs a feature but usually not the point of the add-on.
 const char *const kPartialApis[] = {
-    "webNavigation", "cookies", "downloads", "history", "bookmarks",
+    // cookies, history and bookmarks are implemented against the browser's own
+    // subsystems and are no longer listed here; what they do not cover is
+    // documented in docs/investigations/webextensions.md.
+    "webNavigation", "downloads",
     "management", "idle", "browsingData", "sessions", "topSites", "search",
     "devtools", "nativeMessaging", "privacy", "tabHide",
     nullptr

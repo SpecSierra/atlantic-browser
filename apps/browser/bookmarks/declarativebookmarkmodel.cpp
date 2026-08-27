@@ -12,9 +12,28 @@
 #include "bookmarkmanager.h"
 #include "faviconmanager.h"
 
+namespace {
+// First model created wins; there is one bookmark list and one UI showing it.
+DeclarativeBookmarkModel *s_primaryInstance = nullptr;
+}
+
+DeclarativeBookmarkModel *DeclarativeBookmarkModel::primaryInstance()
+{
+    return s_primaryInstance;
+}
+
+DeclarativeBookmarkModel::~DeclarativeBookmarkModel()
+{
+    if (s_primaryInstance == this)
+        s_primaryInstance = nullptr;
+}
+
 DeclarativeBookmarkModel::DeclarativeBookmarkModel(QObject *parent)
     : QAbstractListModel(parent)
 {
+    if (!s_primaryInstance)
+        s_primaryInstance = this;
+
     connect(BookmarkManager::instance(), &BookmarkManager::cleared,
             this, &DeclarativeBookmarkModel::clearBookmarks);
     // A bookmark is usually created before its site has ever been visited in

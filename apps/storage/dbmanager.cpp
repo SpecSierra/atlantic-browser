@@ -38,6 +38,7 @@ DBManager::DBManager(QObject *parent)
     connect(&workerThread, &QThread::finished, worker, &DBWorker::deleteLater);
     connect(worker, &DBWorker::tabsAvailable, this, &DBManager::tabsAvailable);
     connect(worker, &DBWorker::historyAvailable, this, &DBManager::historyAvailable);
+    connect(worker, &DBWorker::historySearchAvailable, this, &DBManager::historySearchAvailable);
     connect(worker, &DBWorker::tabHistoryAvailable, this, &DBManager::tabHistoryAvailable);
     connect(worker, &DBWorker::titleChanged, this, &DBManager::titleChanged);
     connect(worker, &DBWorker::thumbPathChanged, this, &DBManager::thumbPathChanged);
@@ -154,6 +155,21 @@ void DBManager::clearHistory(int period)
 void DBManager::getHistory(const QString &filter)
 {
     QMetaObject::invokeMethod(worker, "getHistory", Qt::QueuedConnection, Q_ARG(QString, filter));
+}
+
+void DBManager::searchHistory(int requestId, const QString &text, qint64 startTime,
+                              qint64 endTime, int maxResults)
+{
+    QMetaObject::invokeMethod(worker, "searchHistory", Qt::QueuedConnection,
+                              Q_ARG(int, requestId), Q_ARG(QString, text),
+                              Q_ARG(qint64, startTime), Q_ARG(qint64, endTime),
+                              Q_ARG(int, maxResults));
+}
+
+void DBManager::deleteHistoryRange(qint64 startTime, qint64 endTime)
+{
+    QMetaObject::invokeMethod(worker, "deleteHistoryRange", Qt::QueuedConnection,
+                              Q_ARG(qint64, startTime), Q_ARG(qint64, endTime));
 }
 
 void DBManager::getTabHistory(int tabId)

@@ -189,7 +189,54 @@ test("a failed call sets runtime.lastError for the duration of the callback", (d
 
 test("an unsupported API rejects rather than silently doing nothing", async () => {
     const { browser } = makeSandbox("content");
-    await assert.rejects(() => browser.cookies.get({ name: "x" }),
+    await assert.rejects(() => browser.downloads.download({ url: "https://example.com/f" }),
+                         /not supported by Atlantic/);
+});
+
+test("cookies.getAll goes over the bridge and resolves with the list", async () => {
+    const harness = makeSandbox("background");
+    const promise = harness.browser.cookies.getAll({ domain: "example.com" });
+    const call = harness.lastCall();
+    assert.strictEqual(call.api, "cookies.getAll");
+    assert.deepStrictEqual(call.args, [{ domain: "example.com" }]);
+    harness.reply(call.seq, [{ name: "sid", value: "1" }]);
+    assert.deepStrictEqual(await promise, [{ name: "sid", value: "1" }]);
+});
+
+test("cookies.onChanged delivers what the host broadcasts", () => {
+    const harness = makeSandbox("background");
+    const seen = [];
+    harness.browser.cookies.onChanged.addListener((info) => seen.push(info));
+    harness.event("cookies.onChanged",
+                  [{ removed: false, cookie: { name: "sid" }, cause: "explicit" }]);
+    assert.strictEqual(seen.length, 1);
+    assert.strictEqual(seen[0].cookie.name, "sid");
+});
+
+test("history.search and history.getVisits are real calls now", async () => {
+    const harness = makeSandbox("background");
+    const search = harness.browser.history.search({ text: "news", maxResults: 5 });
+    let call = harness.lastCall();
+    assert.strictEqual(call.api, "history.search");
+    harness.reply(call.seq, [{ url: "https://example.com/", visitCount: 2 }]);
+    assert.strictEqual((await search)[0].visitCount, 2);
+
+    const visits = harness.browser.history.getVisits({ url: "https://example.com/" });
+    call = harness.lastCall();
+    assert.strictEqual(call.api, "history.getVisits");
+    harness.reply(call.seq, [{ visitId: "1", visitTime: 1 }]);
+    assert.strictEqual((await visits).length, 1);
+});
+
+test("bookmarks.create posts, and move stays unsupported on a flat list", async () => {
+    const harness = makeSandbox("background");
+    const promise = harness.browser.bookmarks.create({ title: "T", url: "https://example.com/" });
+    const call = harness.lastCall();
+    assert.strictEqual(call.api, "bookmarks.create");
+    harness.reply(call.seq, { id: "atl-bm-1", url: "https://example.com/" });
+    assert.strictEqual((await promise).id, "atl-bm-1");
+
+    await assert.rejects(() => harness.browser.bookmarks.move("atl-bm-1", {}),
                          /not supported by Atlantic/);
 });
 

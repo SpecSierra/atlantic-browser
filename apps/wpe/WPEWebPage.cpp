@@ -2609,6 +2609,15 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                     default: return;
                     }
                     WebExtensionManager::instance()->notifyNavigation(page->tabId(), url, stage);
+
+                    // browser.history.onVisited. A finished load is exactly
+                    // when the visit is recorded — except in a private tab,
+                    // which records nothing and must report nothing.
+                    if (event == WEBKIT_LOAD_FINISHED && !page->privateBrowsing()) {
+                        const gchar* title = webkit_web_view_get_title(view);
+                        WebExtensionManager::instance()->notifyHistoryVisit(
+                            page->tabId(), url, title ? QString::fromUtf8(title) : QString());
+                    }
                 }),
                 this);
 

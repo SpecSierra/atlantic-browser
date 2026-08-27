@@ -1717,6 +1717,15 @@ void WebExtensionManager::dispatchApiCall(const QString &extensionId, const ExtC
         return;
     }
 
+    // --- cookies, history, bookmarks (WebExtensionCookies.cpp,
+    //     WebExtensionBrowsingData.cpp) ---
+    if (dispatchCookiesApi(extensionId, origin, seq, api, args))
+        return;
+    if (dispatchHistoryApi(extensionId, origin, seq, api, args))
+        return;
+    if (dispatchBookmarksApi(extensionId, origin, seq, api, args))
+        return;
+
     // --- management (self only; enumerating other extensions is not offered) ---
     if (api == QLatin1String("management.getSelf")) {
         ok(QJsonObject{

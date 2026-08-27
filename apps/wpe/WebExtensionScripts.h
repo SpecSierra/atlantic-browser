@@ -563,8 +563,31 @@ static const char* const kApiShim = R"JS(
             onReferenceFragmentUpdated: inertEvent("webNavigation.onReferenceFragmentUpdated"),
             onTabReplaced: inertEvent("webNavigation.onTabReplaced")
         },
-        cookies: unsupportedNamespace("cookies",
-            ["get", "getAll", "set", "remove", "getAllCookieStores"], ["onChanged"]),
+        // Backed by the default network session's cookie jar. There is one
+        // store, "0"; private-browsing cookies live on an ephemeral session
+        // and are deliberately not reachable. onChanged fires for changes made
+        // through this API - WebKit reports nothing when a page sets a cookie.
+        cookies: {
+            get: wrap("cookies.get"),
+            getAll: wrap("cookies.getAll"),
+            set: wrap("cookies.set"),
+            remove: wrap("cookies.remove"),
+            getAllCookieStores: wrap("cookies.getAllCookieStores"),
+            onChanged: new Event("cookies.onChanged"),
+            SameSiteStatus: {
+                NO_RESTRICTION: "no_restriction",
+                LAX: "lax",
+                STRICT: "strict",
+                UNSPECIFIED: "unspecified"
+            },
+            OnChangedCause: {
+                EVICTED: "evicted",
+                EXPIRED: "expired",
+                EXPLICIT: "explicit",
+                EXPIRED_OVERWRITE: "expired_overwrite",
+                OVERWRITE: "overwrite"
+            }
+        },
         contextMenus: contextMenus,
         menus: contextMenus,
         scripting: {
@@ -594,12 +617,41 @@ static const char* const kApiShim = R"JS(
         downloads: unsupportedNamespace("downloads",
             ["download", "search", "cancel", "pause", "resume", "erase"],
             ["onCreated", "onChanged", "onErased"]),
-        history: unsupportedNamespace("history",
-            ["search", "getVisits", "addUrl", "deleteUrl", "deleteAll"],
-            ["onVisited", "onVisitRemoved"]),
-        bookmarks: unsupportedNamespace("bookmarks",
-            ["get", "getTree", "search", "create", "remove", "update"],
-            ["onCreated", "onRemoved", "onChanged"]),
+        // The browser's own history database. One row per URL, so getVisits
+        // reports the last visit rather than inventing the earlier ones, and
+        // onVisited fires when a load finishes in a non-private tab.
+        history: {
+            search: wrap("history.search"),
+            getVisits: wrap("history.getVisits"),
+            addUrl: wrap("history.addUrl"),
+            deleteUrl: wrap("history.deleteUrl"),
+            deleteRange: wrap("history.deleteRange"),
+            deleteAll: wrap("history.deleteAll"),
+            onVisited: new Event("history.onVisited"),
+            onVisitRemoved: new Event("history.onVisitRemoved"),
+            TransitionType: { LINK: "link", TYPED: "typed" }
+        },
+        // The browser's bookmark list, which is flat: everything lives in one
+        // folder under the root, and create() will not make folders.
+        bookmarks: {
+            get: wrap("bookmarks.get"),
+            getChildren: wrap("bookmarks.getChildren"),
+            getTree: wrap("bookmarks.getTree"),
+            getSubTree: wrap("bookmarks.getSubTree"),
+            getRecent: wrap("bookmarks.getRecent"),
+            search: wrap("bookmarks.search"),
+            create: wrap("bookmarks.create"),
+            remove: wrap("bookmarks.remove"),
+            removeTree: wrap("bookmarks.removeTree"),
+            update: wrap("bookmarks.update"),
+            // No reordering in a flat list with no drag surface for it.
+            move: unsupported("bookmarks.move"),
+            onCreated: new Event("bookmarks.onCreated"),
+            onRemoved: new Event("bookmarks.onRemoved"),
+            onChanged: new Event("bookmarks.onChanged"),
+            onMoved: inertEvent("bookmarks.onMoved"),
+            BookmarkTreeNodeType: { BOOKMARK: "bookmark", FOLDER: "folder", SEPARATOR: "separator" }
+        },
         management: {
             getSelf: wrap("management.getSelf"),
             // Enumerating or disabling other extensions is deliberately not

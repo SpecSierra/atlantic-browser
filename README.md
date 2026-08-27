@@ -29,7 +29,7 @@ Shared docs live in the engine repo, since most work spans both:
 | Layer | Contents |
 |---|---|
 | QML UI (Sailfish Silica) | `BrowserPage` → `WebView` → `Overlay`/`ToolBar`; `TabView`, settings, bookmarks, history |
-| Shared library `libsailfishbrowser.so` | `WPEWebContainer` (tab lifecycle), `WPEWebPage` (Qt↔WPE), `BrowserService` (D-Bus), `DownloadManager`, `FaviconManager`, `SettingManager`, `BookmarkManager` |
+| Shared library `libsailfishbrowser.so` | `WPEWebContainer` (tab lifecycle), `WPEWebPage` (Qt↔WPE), `WebExtensionManager` (extension host), `BrowserService` (D-Bus), `DownloadManager`, `FaviconManager`, `SettingManager`, `BookmarkManager` |
 | Storage | `DBManager` → `DBWorker` → SQLite; `PersistentTabModel`, `DeclarativeHistoryModel` |
 | Engine (external) | `WPEQtView` ← WPE WebKit 2.52.6, `libWPEWebKit-2.0`, `libwpe-1.0` |
 
@@ -55,7 +55,7 @@ from the WPE WebProcess are posted to the Qt Quick scene graph with
 | `selectionBridge` | throttled text-selection reporter — coordinates for draggable handles |
 | `scrollBridge` | throttled scroll position — drives chrome show/hide |
 | `mediaBridge` | playback state; volume sync with the native slider (`com.Meego.MainVolume2`) |
-| `imageLongPressBridge` | image URL on long-press, for the context menu |
+| `imageLongPressBridge` | long-press target — image URL, link URL, editable state and selection; drives the long-press panel and `contextMenus` item matching |
 | `pinchBridge` | reports whether the page handled a pinch, so the browser gesture can stand down |
 | `inputPickerBridge` | HTML5 date/time/color inputs → Silica pickers |
 | `loginBridge` | password capture and gesture-first autofill |
@@ -75,6 +75,90 @@ injected JS (`dispatchTextToFocusedElement`, `dispatchBackspaceToFocusedElement`
 except Enter, which needs the native keysym path; the keyboard height is reserved in
 the web viewport via the container's bottom inset.
 
+### WebExtensions (`apps/wpe/WebExtension*`)
+
+Atlantic runs MV2 and the practical subset of MV3, unpacked or from a `.zip` /
+`.xpi` / `.crx`, out of
+`~/.local/share/org.sailfishos/browser/extensions/<id>/`. All of it is UI-process
+work on APIs WPE WebKit 2.52 already exposes — the engine repo carries no
+extension code. Design record, limits and the device-verification plan:
+`atlantic-engine/docs/investigations/webextensions.md`.
+
+| Class | Role |
+|---|---|
+| `WebExtension` | manifest model, `MatchPattern`, `_locales` |
+| `WebExtensionManager` | registry, `atlantic-extension://` scheme handler, content-script install, `browser.*` dispatch; also the `QAbstractListModel` the settings UI lists |
+| `WebExtensionBackgroundView` | background page in a hidden `WebKitWebView` |
+| `WebExtensionBackground` | `JSCContext` background host — the fallback, forced with `ATLANTIC_EXT_BACKGROUND_PAGE=0` |
+| `WebExtensionArchive` | central-directory zip reader (`QZipReader` cannot read AMO's streamed zips) |
+| `WebExtensionStore` | curated catalog rendered over live addons.mozilla.org metadata, plus full AMO search |
+| `WebExtensionCookies` | `browser.cookies` over the default session's `WebKitCookieManager` |
+| `WebExtensionBrowsingData` | `browser.history` and `browser.bookmarks` over `DBManager` and the live bookmark model |
+| `WebExtensionScripts.h` | the whole `browser.*` / `chrome.*` JS shim and the background polyfills — the biggest and riskiest file in the set |
+
+**Isolation:** each extension's content scripts go in via
+`webkit_user_script_new_for_world()` into their own world, `atlantic-ext-<id>`;
+Chrome match patterns pass to WebKit unchanged except `<all_urls>`, which is
+expanded. Extension pages (popup, options) are ordinary tabs on
+`atlantic-extension://<id>/…` and get a *second* handler in the default world,
+allow-listed to their own origin. The scheme is registered secure and
+CORS-enabled, with a path-traversal guard and `web_accessible_resources`
+enforced in the handler.
+
+**Bridge:** JS never calls C++ directly. Pages post `{seq, api, args}` on
+`window.webkit.messageHandlers.atlExt_<id>`; the background context calls
+`__atlNative(json)`; replies come back as `__atlExtBridge.dispatch(...)`
+evaluated in the right world. Promise/callback duality, `Event` objects, ports,
+storage areas, `i18n` and `alarms` all live in the JS shim, so C++ sees flat
+calls. Tab APIs are `WPEWebContainer` implementing `WebExtensionHost`.
+
+**Background pages run in a real hidden web view**, on a non-EGL
+`wpe_view_backend_exportable_fdo` whose frames are released and acked
+immediately — a Firefox MV3 background is an event page with a DOM, and under
+bare JSC its handlers silently never settled. Two traps that cost device time:
+creating any `wpe_view_backend` before a real web view exists aborts at startup
+(background pages are gated behind `setEngineReady()`), and a view must be
+`webkit_web_view_terminate_web_process()`'d before unref or every reload orphans
+a WebProcess per extension.
+
+**Browser data:** `cookies` runs on the default network session's
+`WebKitCookieManager` (`WebExtensionCookies.cpp`) — one store, `"0"`, since
+private tabs are on an ephemeral session that is deliberately not exposed, and
+`onChanged` fires only for changes made through the API because WebKit reports
+none of its own. `history` and `bookmarks` (`WebExtensionBrowsingData.cpp`) go
+through the browser's own subsystems: `DBWorker::searchHistory()`, added for
+this, is tagged per request and keeps the visit count and timestamp that
+`getHistory()` drops; bookmarks are written through the live
+`DeclarativeBookmarkModel` so the UI updates immediately, and its flat list is
+presented as one folder under a synthesised root. Both are gated on their
+permission, cookies additionally on host access.
+
+**Deliberately inert** — the call rejects with a message and `addListener` is
+accepted silently, because extensions register these at top level and throwing
+kills the whole background script: `webRequest` and `declarativeNetRequest`
+(network blocking is owned by the Rust WebProcess extension, which the UI
+process cannot hand a per-request veto to), `downloads`, `proxy`, `idle`,
+`management` beyond `getSelf`, and the MV3 service-worker lifecycle.
+`scripting`, `contextMenus`, `runtime.onInstalled`, `webNavigation` and
+`notifications` *are* implemented. Whatever an installed extension asks for that
+we do not do is surfaced as a per-extension warning in Settings → Extensions.
+
+That inert list has a consequence worth stating plainly: the popular end of the
+ecosystem is webRequest-based, so uBlock Origin, Tampermonkey, Violentmonkey and
+Stylus are **broken** here. uBO is in the catalog as a broken entry on purpose,
+so the answer is findable. Verdicts are derived, not guessed — AMO reports
+declared permissions before download, so `WebExtensionStore::verdictFor()`
+classifies catalog and search rows alike. Nothing is mirrored; packages come
+from AMO and are checked against the `sha256:` digest AMO publishes, except the
+paste-an-`.xpi`-URL escape hatch, which the dialog says is unchecked.
+
+**Tests** (host, no device): `node tests/webextension-shim.test.js` and
+`python3 tests/test_extension_catalog.py` (`ATLANTIC_CATALOG_ONLINE=1` re-derives
+verdicts from AMO — the catalog-rot guard). `tests/sample-extension/` is the
+on-device smoke test. Background pages appear as their own inspectable target;
+an extension's JSC background context answers plain `Runtime.evaluate`, not the
+Target-wrapped protocol.
+
 ### QML UI (`apps/browser/qml/`, `apps/shared/`)
 
 | Component | Role |
@@ -86,6 +170,9 @@ the web viewport via the container's bottom inset.
 | `OverlayAnimator.qml` | state machine: `chromeVisible`, `fullscreenWebPage`, `startPage`, `secondaryTools`, `draggingOverlay`, `certOverlay`, `noOverlay` |
 | `ResourceController.qml` | audio/video lifecycle; listens to MCE D-Bus for screen blank and calls `suspendView()`/`resumeView()` |
 | `Background.qml` | screen-fixed blurred ambience wallpaper (sampled in the shader via `gl_FragCoord`) |
+| `ExtensionsPage.qml` | installed extensions — enable/remove, per-extension warnings for unsupported APIs, install from file |
+| `ExtensionStorePage.qml` | catalog and AMO search, with the compatibility verdict on every row |
+| `pages/components/ImageActionPanel.qml` | the general long-press panel — built-in actions plus matching `contextMenus` items |
 
 Two QML gotchas that have cost time: `webPageComponent` is dead — pages are created
 in C++, so per-page settings must be pushed with a `Binding` on `contentItem`. And
@@ -130,13 +217,14 @@ missing. The runtime is loaded on the first `afterRendering` so the UI paints fi
 | `apps/browser/` | `main.cpp`, D-Bus services, bookmarks, login/search models, QML pages |
 | `apps/browser/qml/` | `BrowserPage`, `Overlay`, `ToolBar`, `TabView`, `FavoriteGrid`, `SettingsPage`, … |
 | `apps/shared/` | reusable QML — `WebView`, `BrowserWindow`, `OverlayAnimator`, `ResourceController`, `Background` |
-| `apps/wpe/` | WPE bridge — `WPEWebPage`, `WPEWebContainer`, `WPEUserScripts.h`, `AdBlockEngine`, `WPERuntimePaths` |
+| `apps/wpe/` | WPE bridge — `WPEWebPage`, `WPEWebContainer`, `WPEUserScripts.h`, `AdBlockEngine`, `WPERuntimePaths`; extension host — `WebExtension*` |
 | `apps/lib/` | shared-library bootstrap (`browserruntime.cpp`) |
 | `apps/core/` | `Browser`, `DownloadManager`, `FaviconManager`, `SettingManager` |
 | `apps/history/`, `apps/storage/` | tab/history models; SQLite backend (`DBManager`, `DBWorker`, `Tab`, `Link`) |
 | `apps/factories/` | page factory stubs |
 | `settings/` | Sailfish Settings plugin |
-| `data/` | prefs, search engines, launcher icon |
+| `data/` | prefs, search engines, launcher icon, `extension-catalog.json` (installed to `/usr/share/atlantic-browser/`, overridable with `ATLANTIC_EXTENSION_CATALOG`) |
+| `tests/` | host-side tests — extension shim, catalog verdicts, `sample-extension/` |
 | `translations/`, `rpm/` | translation project files (`.ts` are generated, not tracked); RPM spec |
 
 ## Build
