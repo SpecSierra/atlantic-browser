@@ -6,8 +6,16 @@
   measured against the shipped theme icons rather than guessed: on the 112x112
   canvas an icon-m glyph sits inside a ~14px margin and is stroked at 3px in
   pure white on transparency (icon-m-about, -clock, -ambience all measure 3;
-  -mail 4). Silica's Icon colorizes any non-theme source with the ambience
-  primary colour, so white-on-transparent tints exactly like a theme icon.
+  -mail 4).
+
+  DO NOT "fix" the white to black for light ambiences. The white is a mask, not
+  a colour: only the alpha channel is used. Silica's Icon sets
+  color: palette.primaryColor for any non-theme source, which recolours the
+  glyph per ambience - dark on a light ambience, light on a dark one - and
+  switches to highlightColor when the row is pressed. Hard-coding black here
+  would break every dark ambience instead. This is the same convention the
+  platform's own app-private icons follow: harbour-file-browser ships
+  icon-m-play.png as 112x112 pure white and hands it to Silica the same way.
 
   Kept as SVG rather than a PNG per z-factor: libqsvg is present on the device
   and one file then renders crisply at every Theme.iconSize*.
