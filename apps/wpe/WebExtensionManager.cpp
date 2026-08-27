@@ -8,6 +8,7 @@
 
 #include "WebExtensionManager.h"
 
+#include "WebExtensionArchive.h"
 #include "WebExtensionBackground.h"
 #include "WebExtensionScripts.h"
 #include "WPEWebPage.h"
@@ -32,7 +33,6 @@
 #include <jsc/jsc.h>
 #pragma pop_macro("signals")
 
-#include <private/qzipreader_p.h>
 
 namespace {
 
@@ -381,10 +381,11 @@ bool WebExtensionManager::install(const QString &path)
             setLastError(QStringLiteral("Cannot create a staging directory"));
             return false;
         }
-        QZipReader zip(info.absoluteFilePath());
-        if (!zip.isReadable() || !zip.extractAll(staging.path())) {
-            setLastError(QStringLiteral("%1 is not a readable extension archive")
-                             .arg(info.fileName()));
+        QString archiveError;
+        if (!WebExtensionArchive::extract(info.absoluteFilePath(), staging.path(),
+                                          &archiveError)) {
+            setLastError(QStringLiteral("Could not unpack %1: %2")
+                             .arg(info.fileName(), archiveError));
             return false;
         }
         sourceDir = staging.path();

@@ -349,8 +349,16 @@ WebExtensionStore::Entry WebExtensionStore::entryFromAddonJson(const QJsonObject
     return entry;
 }
 
+void WebExtensionStore::ensureCatalogLoaded()
+{
+    if (m_catalogRefreshed || m_searching)
+        return;
+    showCatalog();
+}
+
 void WebExtensionStore::showCatalog()
 {
+    m_catalogRefreshed = true;
     if (m_searching) {
         m_searching = false;
         Q_EMIT searchingChanged();

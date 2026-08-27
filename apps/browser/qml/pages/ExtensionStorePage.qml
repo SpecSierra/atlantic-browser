@@ -68,6 +68,10 @@ Page {
         return qsTrId("atlantic-la-extension_some_features_need").arg(reasons.join(", "))
     }
 
+    // The catalog ships without icons or version numbers; they arrive with the
+    // AMO metadata, so the first view of the page has to ask for it.
+    Component.onCompleted: WebExtensionStore.ensureCatalogLoaded()
+
     SilicaBackground.Background {
         anchors.fill: parent
         z: -1

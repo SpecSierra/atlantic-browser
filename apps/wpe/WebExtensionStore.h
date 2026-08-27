@@ -67,6 +67,11 @@ public:
     // Shows the curated catalog and refreshes each entry from AMO. Entries stay
     // visible with their shipped name and verdict when AMO is unreachable.
     Q_INVOKABLE void showCatalog();
+    // Called when the store page opens. The catalog renders from the shipped
+    // JSON with no icons or versions until something fetches AMO metadata, so
+    // the first view has to trigger that itself; later visits are a no-op, and
+    // it never clobbers search results the user is looking at.
+    Q_INVOKABLE void ensureCatalogLoaded();
     // Full-text AMO search. An empty query returns to the catalog.
     Q_INVOKABLE void search(const QString &query);
     // Downloads and installs by AMO slug — no verdict gate, by design.
@@ -133,4 +138,5 @@ private:
     QString m_installing;     // slug currently being downloaded
     int m_pending = 0;
     bool m_searching = false;
+    bool m_catalogRefreshed = false;
 };

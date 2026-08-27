@@ -30,6 +30,7 @@ import urllib.request
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CATALOG = os.path.join(ROOT, "data", "extension-catalog.json")
 STORE_SOURCE = os.path.join(ROOT, "apps", "wpe", "WebExtensionStore.cpp")
+MANAGER_SOURCE = os.path.join(ROOT, "apps", "wpe", "WebExtensionManager.cpp")
 
 VERDICTS = {"works", "partial", "broken", "unknown"}
 ONLINE = os.environ.get("ATLANTIC_CATALOG_ONLINE") == "1"
@@ -79,6 +80,52 @@ def addon_permissions(addon):
     current = addon["current_version"]
     entry = current.get("file") or (current.get("files") or [{}])[0]
     return list(entry.get("permissions") or []) + list(entry.get("host_permissions") or [])
+
+
+class ArchiveTest(unittest.TestCase):
+    """Guards the reason WebExtensionArchive exists.
+
+    AMO's signing pipeline emits streamed zips: general-purpose flag bit 3 is
+    set on every entry, so the local file headers carry crc/sizes of zero and
+    only the central directory has the real values. Qt 5.6's QZipReader reads
+    the local header, extracts one file and fails the archive -- which is how
+    "darkreader.xpi is not a readable extension archive" happened. If anyone
+    ever "simplifies" the extractor back to QZipReader, these fail.
+    """
+
+    def test_manager_does_not_use_qzipreader(self):
+        source = open(MANAGER_SOURCE, encoding="utf-8").read()
+        self.assertNotIn("qzipreader", source.lower(),
+                         "QZipReader cannot read AMO packages; use WebExtensionArchive")
+        self.assertIn("WebExtensionArchive::extract", source)
+
+    @unittest.skipUnless(ONLINE, "set ATLANTIC_CATALOG_ONLINE=1 to query AMO")
+    def test_amo_packages_are_streamed_zips(self):
+        import io
+        import zipfile
+        addon = fetch_addon("darkreader")
+        entry = addon["current_version"]["file"]
+        request = urllib.request.Request(
+            entry["url"], headers={"User-Agent": "Atlantic/1.2 (catalog test)"})
+        with urllib.request.urlopen(request, timeout=90) as response:
+            blob = response.read()
+
+        archive = zipfile.ZipFile(io.BytesIO(blob))
+        infos = archive.infolist()
+        self.assertGreater(len(infos), 1)
+        # Bit 3 set everywhere is the hazard; if AMO ever stops doing this the
+        # test should be revisited, not deleted.
+        self.assertTrue(all(info.flag_bits & 0x08 for info in infos),
+                        "expected every entry to carry a data descriptor")
+        # And the local headers really are zeroed, which is what breaks a
+        # local-header-based reader.
+        import struct
+        first = infos[0]
+        crc, csize, usize = struct.unpack(
+            "<III", blob[first.header_offset + 14:first.header_offset + 26])
+        self.assertEqual((crc, csize, usize), (0, 0, 0),
+                         "local header should be zeroed for a streamed entry")
+        self.assertNotEqual(first.CRC, 0, "central directory should hold the real CRC")
 
 
 class CatalogTest(unittest.TestCase):

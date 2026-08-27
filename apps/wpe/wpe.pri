@@ -14,6 +14,8 @@ INCLUDEPATH += $${SFOS_SYSROOT}/usr/include/gio-unix-2.0
 LIBS += -L$${WPE_SFOS_PREFIX}/lib/qt5/qml/org/wpewebkit/qtwpe -lqtwpe
 LIBS += -L$${WPE_SFOS_PREFIX}/lib -lWPEWebKit-2.0
 LIBS += -L$${SFOS_SYSROOT}/usr/lib64 -lgio-2.0 -lgobject-2.0 -lglib-2.0
+# zlib: raw inflate for extension packages (WebExtensionArchive)
+LIBS += -L$${SFOS_SYSROOT}/usr/lib64 -lz
 LIBS += -L$${WPE_SFOS_PREFIX}/lib -latlantic_adblock
 
 QT += network
@@ -21,6 +23,7 @@ QT += network
 HEADERS += \
     $$PWD/AdBlockEngine.h \
     $$PWD/WebExtension.h \
+    $$PWD/WebExtensionArchive.h \
     $$PWD/WebExtensionBackground.h \
     $$PWD/WebExtensionManager.h \
     $$PWD/WebExtensionScripts.h \
@@ -34,6 +37,7 @@ HEADERS += \
 SOURCES += \
     $$PWD/AdBlockEngine.cpp \
     $$PWD/WebExtension.cpp \
+    $$PWD/WebExtensionArchive.cpp \
     $$PWD/WebExtensionBackground.cpp \
     $$PWD/WebExtensionManager.cpp \
     $$PWD/WebExtensionStore.cpp \
