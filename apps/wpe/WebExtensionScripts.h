@@ -296,6 +296,17 @@ static const char* const kApiShim = R"JS(
         onStartup: new Event("runtime.onStartup"),
         onSuspend: inertEvent("runtime.onSuspend"),
         onUpdateAvailable: inertEvent("runtime.onUpdateAvailable"),
+        // Called unconditionally by extensions that set an uninstall survey
+        // URL. Atlantic has nowhere to send it, but throwing here would take
+        // down the rest of a background script, so it is accepted and dropped.
+        setUninstallURL: function(url, callback) {
+            if (callback) { callback(); return undefined; }
+            return Promise.resolve();
+        },
+        getFrameId: function() { return -1; },
+        connectNative: unsupported("runtime.connectNative"),
+        sendNativeMessage: unsupported("runtime.sendNativeMessage"),
+        getPackageDirectoryEntry: unsupported("runtime.getPackageDirectoryEntry"),
         getBackgroundPage: function(callback) {
             // We have no DOM window for the background context, so there is
             // nothing meaningful to hand back.
@@ -771,6 +782,49 @@ static const char* const kBackgroundPreamble = R"JS(
                                                 args: ["error", String(e && e.stack || e)] }));
         }
     };
+
+    // A minimal EventTarget on the global. MV3 background scripts are written
+    // as service workers and routinely call self.addEventListener("error"|
+    // "unhandledrejection"|"install"|...) at top level; without this the very
+    // first such call throws and takes the rest of the script with it.
+    var globalListeners = Object.create(null);
+    global.addEventListener = function(type, fn) {
+        if (typeof fn !== "function") return;
+        var list = globalListeners[type] || (globalListeners[type] = []);
+        if (list.indexOf(fn) === -1) list.push(fn);
+    };
+    global.removeEventListener = function(type, fn) {
+        var list = globalListeners[type];
+        if (!list) return;
+        var i = list.indexOf(fn);
+        if (i !== -1) list.splice(i, 1);
+    };
+    global.dispatchEvent = function(event) {
+        if (!event || !event.type) return true;
+        var list = (globalListeners[event.type] || []).slice();
+        for (var i = 0; i < list.length; i++) {
+            try {
+                list[i].call(global, event);
+            } catch (e) {
+                global.__atlNative(JSON.stringify({ seq: 0, api: "log",
+                    args: ["error", String(e && e.stack || e)] }));
+            }
+        }
+        return !event.defaultPrevented;
+    };
+
+    // Reported errors reach any "error" listener, so an extension's own
+    // telemetry sees what we log.
+    global.__atlDispatchError = function(message, stack) {
+        global.dispatchEvent({ type: "error", message: message, filename: "",
+                               lineno: 0, colno: 0,
+                               error: { message: message, stack: stack || "" } });
+    };
+
+    // Service-worker lifecycle calls that scripts make unconditionally. There
+    // is no worker here, so these are no-ops rather than errors.
+    global.skipWaiting = function() { return Promise.resolve(); };
+    global.registration = undefined;
 
     var console = {};
     ["log", "info", "warn", "error", "debug", "trace"].forEach(function(level) {
