@@ -15,6 +15,7 @@
 #include "WPEWebPage.h"
 
 #include <QDateTime>
+#include <QPair>
 #include <QTimer>
 #include <QDebug>
 #include <QDir>
@@ -330,8 +331,20 @@ void WebExtensionManager::reload()
 {
     beginResetModel();
 
-    for (Entry &entry : m_entries)
+    // Hand the running backgrounds aside rather than killing them: reload() runs
+    // on every install and uninstall, and respawning a WebProcess for every
+    // other extension each time is a real cost on a 4 GB device. Anything not
+    // claimed below is torn down at the end.
+    QHash<QString, QPair<WebExtensionBackgroundView *, WebExtensionBackground *>> running;
+    for (Entry &entry : m_entries) {
+        if (entry.backgroundView || entry.background) {
+            running.insert(entry.extension.id() + QLatin1Char('\n') + entry.extension.version(),
+                           qMakePair(entry.backgroundView, entry.background));
+            entry.backgroundView = nullptr;
+            entry.background = nullptr;
+        }
         stopBackground(entry);
+    }
     m_entries.clear();
 
     const QString root = extensionsDirectory();
@@ -369,8 +382,28 @@ void WebExtensionManager::reload()
 
     loadRegistry();
     for (Entry &entry : m_entries) {
-        if (entry.enabled)
-            startBackground(entry);
+        if (!entry.enabled)
+            continue;
+        // Same extension, same version: keep the context it already has, so its
+        // state and listeners survive an unrelated install.
+        const QString key = entry.extension.id() + QLatin1Char('\n') + entry.extension.version();
+        auto it = running.find(key);
+        if (it != running.end()) {
+            entry.backgroundView = it->first;
+            entry.background = it->second;
+            running.erase(it);
+            continue;
+        }
+        startBackground(entry);
+    }
+
+    // Whatever is left belongs to an extension that was removed, disabled or
+    // upgraded; those really do have to go.
+    for (auto it = running.begin(); it != running.end(); ++it) {
+        if (it->first)
+            it->first->deleteLater();
+        if (it->second)
+            it->second->deleteLater();
     }
 
     announceLifecycleEvents();

@@ -94,7 +94,11 @@ WebExtensionBackgroundView::WebExtensionBackgroundView(WebExtensionManager *mana
 WebExtensionBackgroundView::~WebExtensionBackgroundView()
 {
     if (m_webView) {
-        webkit_web_view_try_close(m_webView);
+        // try_close() only *asks* the page to close, and a background page has
+        // no UI to honour the request — the view outlived us and kept its whole
+        // WebProcess alive, so a reload() left one orphan per extension behind.
+        // Terminate the process, then drop our reference.
+        webkit_web_view_terminate_web_process(m_webView);
         g_object_unref(m_webView);
         m_webView = nullptr;
     }
