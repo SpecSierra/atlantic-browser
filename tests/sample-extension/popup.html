@@ -1,0 +1,18 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smoke test</title>
+<style>
+  body { font: 14px/1.5 sans-serif; margin: 16px; }
+  dt { font-weight: bold; margin-top: 12px; }
+  dd { margin: 0; }
+  .bad { color: #b00; }
+</style>
+<h1>Atlantic extension smoke test</h1>
+<dl>
+  <dt>runtime.id</dt><dd id="id">…</dd>
+  <dt>storage.local.visits</dt><dd id="visits">…</dd>
+  <dt>tabs.query({active:true})</dt><dd id="tab">…</dd>
+</dl>
+<button id="reset">Reset the visit counter</button>
+<script src="popup.js"></script>

@@ -20,6 +20,10 @@ QT += network
 
 HEADERS += \
     $$PWD/AdBlockEngine.h \
+    $$PWD/WebExtension.h \
+    $$PWD/WebExtensionBackground.h \
+    $$PWD/WebExtensionManager.h \
+    $$PWD/WebExtensionScripts.h \
     $$PWD/AdBlockListUpdater.h \
     $$PWD/WPEWebPage.h \
     $$PWD/WPEUserScripts.h \
@@ -28,6 +32,9 @@ HEADERS += \
 
 SOURCES += \
     $$PWD/AdBlockEngine.cpp \
+    $$PWD/WebExtension.cpp \
+    $$PWD/WebExtensionBackground.cpp \
+    $$PWD/WebExtensionManager.cpp \
     $$PWD/AdBlockListUpdater.cpp \
     $$PWD/WPEWebPage.cpp \
     $$PWD/WPEWebContainer.cpp \

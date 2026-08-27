@@ -1,0 +1,20 @@
+{
+  "manifest_version": 2,
+  "name": "Atlantic Extension Smoke Test",
+  "version": "1.0",
+  "description": "Exercises content scripts, storage, messaging, tabs and a popup page. Install it to verify WebExtension support on device.",
+  "default_locale": "en",
+  "permissions": ["storage", "tabs", "<all_urls>"],
+  "background": { "scripts": ["background.js"] },
+  "browser_action": { "default_popup": "popup.html", "default_title": "Smoke test" },
+  "options_ui": { "page": "popup.html" },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_end"
+    }
+  ],
+  "web_accessible_resources": ["popup.html"]
+}

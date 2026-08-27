@@ -17,6 +17,7 @@
 #include "dbmanager.h"
 #include "faviconmanager.h"
 #include "tab.h"
+#include "WebExtensionManager.h"
 
 #include <QGuiApplication>
 #include <QPointer>
@@ -25,6 +26,8 @@
 #include <QScreen>
 #include <QDebug>
 #include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QQuickWindow>
 #include <QWindow>
 
@@ -251,6 +254,11 @@ void WPEWebContainer::configureSandboxPaths()
     webkit_web_context_set_cache_model(ctx, cacheModel);
     qDebug() << "[WPE] Cache model:" << cacheModelName;
 
+    // WebExtensions. The atlantic-extension:// scheme has to exist on the
+    // context before any WebProcess spawns, same rule as the sandbox paths
+    // below, so it is registered here rather than lazily on first use.
+    WebExtensionManager::instance()->registerUriScheme();
+
     // Register the network ad-block WebProcess extension. The Brave/Rust engine
     // only sees every subresource from inside the WebProcess (UI-process
     // decide-policy misses most), so blocking lives there. Connecting the signal
@@ -286,6 +294,8 @@ void WPEWebContainer::configureSandboxPaths()
     // extension reads engine.dat from here when its stamp beats the shipped one.
     addSandboxPathIfExists(ctx, AdBlockListUpdater::cacheDir(), TRUE,
                            QStringLiteral("adblock-updates"));
+    addSandboxPathIfExists(ctx, WebExtensionManager::instance()->extensionsDirectory(), TRUE,
+                           QStringLiteral("web-extensions"));
     addSandboxPathIfExists(ctx, QString::fromUtf8(WPERuntimePaths::kQtShareDir), TRUE,
                            QStringLiteral("qt-share"));
     addSandboxPathIfExists(ctx, QString::fromUtf8(WPERuntimePaths::kQtLibDir), TRUE,
@@ -648,6 +658,12 @@ void WPEWebContainer::componentComplete()
     m_completed = true;
     emit completedChanged();
 
+    WebExtensionManager *extensions = WebExtensionManager::instance();
+    extensions->setHost(this);
+    connect(extensions, &WebExtensionManager::openUrlRequested, this,
+            [this](const QString &url, bool inNewTab) { load(url, QString(), inNewTab); });
+    extensions->reload();
+
     // After the persistent model finishes its async DB load, make sure something is shown.
     // If an initial URL was requested, load it; otherwise activate the persisted tab, or
     // fall back to a blank page if there are no saved tabs.
@@ -773,13 +789,15 @@ void WPEWebContainer::setJavaScriptBlocklist(const QString &json)
 void WPEWebContainer::onActiveTabChanged(int activeTabId)
 {
     activatePage(activeTabId);
+    WebExtensionManager::instance()->notifyTabActivated(activeTabId);
 }
 
 void WPEWebContainer::onTabAdded(int tabId)
 {
     // Pre-create the page so it's ready
     WPEWebPage *page = getOrCreatePage(tabId);
-    Q_UNUSED(page)
+    WebExtensionManager::instance()->notifyTabCreated(
+        tabId, page ? page->url().toString() : QString());
     // A newly-added background tab must not blow the live-tab budget: if we're
     // already at the cap it will be discarded here and reload when first shown.
     enforceLiveTabBudget();
@@ -787,6 +805,7 @@ void WPEWebContainer::onTabAdded(int tabId)
 
 void WPEWebContainer::onTabClosed(int tabId)
 {
+    WebExtensionManager::instance()->notifyTabRemoved(tabId);
     m_mruTabs.removeAll(tabId);
     WPEWebPage *page = m_pages.take(tabId);
     const bool wasPrivate = page && page->privateBrowsing();
@@ -1054,6 +1073,9 @@ void WPEWebContainer::onPageUrlChanged()
     emit urlChanged();
     emit titleChanged();
 
+    WebExtensionManager::instance()->notifyTabUpdated(page->tabId(), newUrl, page->title(),
+                                                      page->isLoading());
+
     // Update tab model
     if (m_tabModel) {
         // The tab model tracks URL via its own signals; here we record history.
@@ -1115,4 +1137,92 @@ void WPEWebContainer::setActiveTabRendered(bool r)
         m_activeTabRendered = r;
         emit activeTabRenderedChanged();
     }
+}
+
+// --- WebExtensionHost --------------------------------------------------------
+//
+// browser.tabs, answered from the tab model. Tab ids are the browser's own, so
+// an extension's tabs.sendMessage(tabId) reaches the page it means.
+
+QJsonArray WPEWebContainer::extQueryTabs(const QJsonObject &query)
+{
+    QJsonArray result;
+    if (!m_tabModel)
+        return result;
+
+    const int activeId = m_tabModel->activeTabId();
+    const bool wantActive = query.value(QStringLiteral("active")).toBool(false);
+    const bool filterActive = query.contains(QStringLiteral("active"));
+    const QString urlPattern = query.value(QStringLiteral("url")).toString();
+    const MatchPattern pattern = urlPattern.isEmpty() ? MatchPattern()
+                                                      : MatchPattern::parse(urlPattern);
+
+    const QList<Tab> &tabs = m_tabModel->tabs();
+    for (int i = 0; i < tabs.size(); ++i) {
+        const Tab &tab = tabs.at(i);
+        const bool active = tab.tabId() == activeId;
+        if (filterActive && active != wantActive)
+            continue;
+        if (pattern.isValid() && !pattern.matches(QUrl(tab.url())))
+            continue;
+
+        result.append(QJsonObject{
+            { QStringLiteral("id"), tab.tabId() },
+            { QStringLiteral("index"), i },
+            { QStringLiteral("windowId"), 1 },
+            { QStringLiteral("url"), tab.url() },
+            { QStringLiteral("title"), tab.title() },
+            { QStringLiteral("active"), active },
+            { QStringLiteral("highlighted"), active },
+            { QStringLiteral("pinned"), false },
+            { QStringLiteral("incognito"), m_privateMode },
+            { QStringLiteral("status"), QStringLiteral("complete") }
+        });
+    }
+    return result;
+}
+
+int WPEWebContainer::extCreateTab(const QString &url, bool active)
+{
+    load(url, QString(), true);
+    Q_UNUSED(active) // a new tab is always the active one here
+    return m_tabModel ? m_tabModel->activeTabId() : 0;
+}
+
+bool WPEWebContainer::extUpdateTab(int tabId, const QJsonObject &properties)
+{
+    if (!m_tabModel)
+        return false;
+
+    if (properties.value(QStringLiteral("active")).toBool(false))
+        activateTab(tabId);
+
+    const QString url = properties.value(QStringLiteral("url")).toString();
+    if (!url.isEmpty()) {
+        if (tabId == m_tabModel->activeTabId())
+            load(url, QString(), false);
+        else
+            activateTab(tabId, url);
+        return true;
+    }
+
+    if (properties.value(QStringLiteral("reload")).toBool(false)) {
+        if (tabId == m_tabModel->activeTabId()) {
+            reload(false);
+            return true;
+        }
+        return false;
+    }
+    return true;
+}
+
+bool WPEWebContainer::extRemoveTab(int tabId)
+{
+    closeTab(tabId);
+    return true;
+}
+
+int WPEWebContainer::extActiveTabId() const
+{
+    return m_tabModel ? m_tabModel->activeTabId() : 0;
 }

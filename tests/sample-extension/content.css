@@ -1,0 +1,13 @@
+#atlantic-ext-smoke {
+    position: fixed;
+    z-index: 2147483647;
+    left: 0;
+    bottom: 0;
+    max-width: 100%;
+    padding: 6px 10px;
+    font: 12px/1.4 sans-serif;
+    color: #fff;
+    background: rgba(0, 90, 160, 0.92);
+    border-top-right-radius: 6px;
+    pointer-events: none;
+}

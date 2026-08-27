@@ -13,6 +13,7 @@
 #include "AdBlockListUpdater.h"
 #include "credentialstore.h"
 #include "searchenginemodel.h"
+#include "WebExtensionManager.h"
 
 #include <QBuffer>
 #include <QClipboard>
@@ -2569,6 +2570,11 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             onFaviconBridgeInstall(ucm, this);
             onSearchEngineBridgeInstall(ucm, this);
 
+            // Installed WebExtensions: the API shim and every content script /
+            // style sheet, each in the extension's own isolated world. Must come
+            // after the built-in bridges so an extension cannot shadow them.
+            WebExtensionManager::instance()->installIntoPage(ucm, this);
+
             WebKitNetworkSession* session = webkit_web_view_get_network_session(wv);
             if (!session) {
                 session = webkit_network_session_get_default();
@@ -2611,6 +2617,7 @@ WPEWebPage::~WPEWebPage()
         m_pendingPermission = nullptr;
     }
     liveWebPages().removeAll(this);
+    WebExtensionManager::instance()->forgetPage(this);
     clearFileChooserRequest(true);
 }
 

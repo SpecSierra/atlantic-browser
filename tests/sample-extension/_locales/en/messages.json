@@ -1,0 +1,6 @@
+{
+  "badgeLabel": {
+    "message": "Atlantic sees $HOST$",
+    "placeholders": { "HOST": { "content": "$1" } }
+  }
+}

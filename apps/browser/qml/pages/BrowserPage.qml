@@ -24,6 +24,9 @@ import "../shared" as Shared
 Page {
     id: browserPage
 
+    // Lets deeper settings pages pop straight back here (see ExtensionsPage).
+    objectName: "atlanticBrowserPage"
+
     readonly property bool active: status == PageStatus.Active
     property bool tabPageActive
     // Capture at portrait aspect ratio to match the 2-column SFOS-style tab cards.

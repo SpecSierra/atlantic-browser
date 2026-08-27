@@ -13,6 +13,8 @@
 #include <QList>
 #include <QPointer>
 
+#include "WebExtensionManager.h"
+
 class QTimer;
 class WPEWebPage;
 class DeclarativeTabModel;
@@ -20,7 +22,7 @@ class DeclarativeHistoryModel;
 class PersistentTabModel;
 class PrivateTabModel;
 
-class WPEWebContainer : public QQuickItem
+class WPEWebContainer : public QQuickItem, public WebExtensionHost
 {
     Q_OBJECT
     Q_INTERFACES(QQmlParserStatus)
@@ -119,6 +121,14 @@ public:
     // QQmlParserStatus
     void classBegin() override;
     void componentComplete() override;
+
+    // WebExtensionHost — browser.tabs / browser.windows, served off the tab
+    // model. Extensions never touch the model directly.
+    QJsonArray extQueryTabs(const QJsonObject &query) override;
+    int extCreateTab(const QString &url, bool active) override;
+    bool extUpdateTab(int tabId, const QJsonObject &properties) override;
+    bool extRemoveTab(int tabId) override;
+    int extActiveTabId() const override;
 
 Q_SIGNALS:
     void rotationHandlerChanged();

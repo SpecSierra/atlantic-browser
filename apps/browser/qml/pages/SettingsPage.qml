@@ -327,6 +327,30 @@ Page {
                 onClicked: pageStack.push("PrivacySettingsPage.qml", { previousPage: page })
             }
 
+            BackgroundItem {
+                width: parent.width
+                contentHeight: Theme.itemSizeMedium
+                Row {
+                    width: parent.width - 2*Theme.horizontalPageMargin
+                    x: Theme.horizontalPageMargin
+                    spacing: Theme.paddingMedium
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    Icon {
+                        id: extensionsIcon
+                        source: "image://theme/icon-m-extension"
+                    }
+                    Label {
+                        width: parent.width - parent.spacing - extensionsIcon.width
+                        //: The label for the button for managing installed browser extensions
+                        //% "Extensions"
+                        text: qsTrId("atlantic-la-extensions")
+                        anchors.verticalCenter: extensionsIcon.verticalCenter
+                    }
+                }
+                onClicked: pageStack.push("ExtensionsPage.qml")
+            }
+
             SectionHeader {
                 //: Section Header for per-site behaviour settings
                 //% "Websites"
