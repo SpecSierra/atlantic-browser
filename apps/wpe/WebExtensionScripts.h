@@ -883,6 +883,257 @@ static const char* const kBackgroundPreamble = R"JS(
         return output;
     };
 
+    // --- Web platform globals JavaScriptCore does not have --------------------
+    //
+    // URL, Headers, AbortController and friends live in WebCore, not in the
+    // engine, so a bare jsc_context_new() global has none of them. Background
+    // scripts written as service workers use them constantly - LanguageTool's
+    // reaches for URL 63 times and AbortController 46 - and the failures land
+    // inside promise handlers at request time, which is why the script can run
+    // to completion and still never do any work.
+
+    function ltrim(s, ch) { while (s.charAt(0) === ch) s = s.substring(1); return s; }
+
+    global.URLSearchParams = function(init) {
+        var pairs = [];
+        if (typeof init === "string") {
+            ltrim(init, "?").split("&").forEach(function(part) {
+                if (!part) return;
+                var i = part.indexOf("=");
+                var k = i < 0 ? part : part.substring(0, i);
+                var v = i < 0 ? "" : part.substring(i + 1);
+                pairs.push([decodeURIComponent(k.replace(/\+/g, " ")),
+                            decodeURIComponent(v.replace(/\+/g, " "))]);
+            });
+        } else if (init && typeof init === "object") {
+            if (Array.isArray(init))
+                init.forEach(function(p) { pairs.push([String(p[0]), String(p[1])]); });
+            else
+                for (var k in init) pairs.push([k, String(init[k])]);
+        }
+        this._pairs = pairs;
+    };
+    global.URLSearchParams.prototype = {
+        append: function(k, v) { this._pairs.push([String(k), String(v)]); },
+        set: function(k, v) {
+            var found = false;
+            this._pairs = this._pairs.filter(function(p) {
+                if (p[0] !== String(k)) return true;
+                if (found) return false;
+                found = true; p[1] = String(v); return true;
+            });
+            if (!found) this._pairs.push([String(k), String(v)]);
+        },
+        get: function(k) {
+            for (var i = 0; i < this._pairs.length; i++)
+                if (this._pairs[i][0] === String(k)) return this._pairs[i][1];
+            return null;
+        },
+        getAll: function(k) {
+            return this._pairs.filter(function(p) { return p[0] === String(k); })
+                              .map(function(p) { return p[1]; });
+        },
+        has: function(k) { return this.get(k) !== null; },
+        "delete": function(k) {
+            this._pairs = this._pairs.filter(function(p) { return p[0] !== String(k); });
+        },
+        forEach: function(fn, self_) {
+            this._pairs.forEach(function(p) { fn.call(self_, p[1], p[0], this); }, this);
+        },
+        keys: function() { return this._pairs.map(function(p) { return p[0]; }); },
+        values: function() { return this._pairs.map(function(p) { return p[1]; }); },
+        toString: function() {
+            return this._pairs.map(function(p) {
+                return encodeURIComponent(p[0]) + "=" + encodeURIComponent(p[1]);
+            }).join("&");
+        }
+    };
+
+    // Enough of the URL parser for absolute URLs and relative resolution, which
+    // is all an extension does with it. Not the full WHATWG algorithm: no IDNA,
+    // no percent-encoding normalisation of the host.
+    var URL_RE = /^([a-zA-Z][a-zA-Z0-9+.-]*:)\/\/([^\/?#]*)([^?#]*)(\?[^#]*)?(#.*)?$/;
+
+    function resolvePath(basePath, relative) {
+        if (relative.charAt(0) === "/") return relative;
+        // Join onto the base's directory, then fold "." and ".." away. The
+        // leading empty segment is the root and must survive, hence length > 1.
+        var directory = basePath.replace(/[^\/]*$/, "");
+        var segments = (directory + relative).split("/");
+        var out = [];
+        for (var i = 0; i < segments.length; i++) {
+            var part = segments[i];
+            if (part === ".") continue;
+            if (part === "..") { if (out.length > 1) out.pop(); continue; }
+            out.push(part);
+        }
+        return out.join("/") || "/";
+    }
+
+    global.URL = function(input, base) {
+        var href = String(input);
+        if (!URL_RE.test(href)) {
+            if (base === undefined)
+                throw new TypeError("Invalid URL: " + href);
+            var b = new global.URL(base);
+            if (href.indexOf("//") === 0)
+                href = b.protocol + href;
+            else if (href.charAt(0) === "?")
+                href = b.protocol + "//" + b.host + b.pathname + href;
+            else if (href.charAt(0) === "#")
+                href = b.protocol + "//" + b.host + b.pathname + b.search + href;
+            else
+                href = b.protocol + "//" + b.host + resolvePath(b.pathname, href);
+        }
+
+        var m = URL_RE.exec(href);
+        if (!m) throw new TypeError("Invalid URL: " + href);
+        this.protocol = m[1];
+        var authority = m[2];
+        var at = authority.lastIndexOf("@");
+        if (at !== -1) {
+            var credentials = authority.substring(0, at).split(":");
+            this.username = credentials[0] || "";
+            this.password = credentials[1] || "";
+            authority = authority.substring(at + 1);
+        } else {
+            this.username = "";
+            this.password = "";
+        }
+        var colon = authority.lastIndexOf(":");
+        if (colon !== -1 && authority.indexOf("]") < colon) {
+            this.hostname = authority.substring(0, colon);
+            this.port = authority.substring(colon + 1);
+        } else {
+            this.hostname = authority;
+            this.port = "";
+        }
+        this.host = authority;
+        this.pathname = m[3] || "/";
+        this.search = m[4] || "";
+        this.hash = m[5] || "";
+        this.origin = this.protocol + "//" + this.host;
+        this.searchParams = new global.URLSearchParams(this.search);
+        this.href = this.protocol + "//"
+            + (this.username ? this.username + (this.password ? ":" + this.password : "") + "@" : "")
+            + this.host + this.pathname + this.search + this.hash;
+    };
+    global.URL.prototype.toString = function() { return this.href; };
+    global.URL.prototype.toJSON = function() { return this.href; };
+
+    global.Headers = function(init) {
+        this._map = Object.create(null);
+        if (init instanceof global.Headers)
+            init = init._map;
+        if (init && typeof init === "object") {
+            if (Array.isArray(init))
+                init.forEach(function(p) { this.append(p[0], p[1]); }, this);
+            else
+                for (var k in init) this.set(k, init[k]);
+        }
+    };
+    global.Headers.prototype = {
+        set: function(k, v) { this._map[String(k).toLowerCase()] = String(v); },
+        append: function(k, v) {
+            var key = String(k).toLowerCase();
+            this._map[key] = this._map[key] ? this._map[key] + ", " + v : String(v);
+        },
+        get: function(k) {
+            var v = this._map[String(k).toLowerCase()];
+            return v === undefined ? null : v;
+        },
+        has: function(k) { return this.get(k) !== null; },
+        "delete": function(k) { delete this._map[String(k).toLowerCase()]; },
+        forEach: function(fn, self_) {
+            for (var k in this._map) fn.call(self_, this._map[k], k, this);
+        },
+        keys: function() { return Object.keys(this._map); }
+    };
+
+    // AbortController: the signal is honoured by our fetch, which drops the
+    // response rather than truly cancelling the transfer - the request is
+    // already in flight in the UI process. Callers see the abort either way.
+    global.AbortSignal = function() {
+        this.aborted = false;
+        this.reason = undefined;
+        this._listeners = [];
+        this.onabort = null;
+    };
+    global.AbortSignal.prototype = {
+        addEventListener: function(type, fn) {
+            if (type === "abort" && typeof fn === "function") this._listeners.push(fn);
+        },
+        removeEventListener: function(type, fn) {
+            var i = this._listeners.indexOf(fn);
+            if (i !== -1) this._listeners.splice(i, 1);
+        },
+        throwIfAborted: function() { if (this.aborted) throw this.reason; }
+    };
+    global.AbortController = function() { this.signal = new global.AbortSignal(); };
+    global.AbortController.prototype.abort = function(reason) {
+        var signal = this.signal;
+        if (signal.aborted) return;
+        signal.aborted = true;
+        var error = new Error("The operation was aborted.");
+        error.name = "AbortError";
+        signal.reason = reason === undefined ? error : reason;
+        var event = { type: "abort", target: signal };
+        if (typeof signal.onabort === "function") {
+            try { signal.onabort(event); } catch (e) {}
+        }
+        signal._listeners.slice().forEach(function(fn) {
+            try { fn(event); } catch (e) {}
+        });
+    };
+
+    global.TextEncoder = function() { this.encoding = "utf-8"; };
+    global.TextEncoder.prototype.encode = function(input) {
+        var utf8 = unescape(encodeURIComponent(String(input === undefined ? "" : input)));
+        var out = new Uint8Array(utf8.length);
+        for (var i = 0; i < utf8.length; i++) out[i] = utf8.charCodeAt(i);
+        return out;
+    };
+    global.TextDecoder = function(encoding) { this.encoding = encoding || "utf-8"; };
+    global.TextDecoder.prototype.decode = function(bytes) {
+        if (!bytes) return "";
+        var binary = "";
+        var view = bytes.buffer ? new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+                                : new Uint8Array(bytes);
+        for (var i = 0; i < view.length; i++) binary += String.fromCharCode(view[i]);
+        try { return decodeURIComponent(escape(binary)); } catch (e) { return binary; }
+    };
+
+    global.performance = global.performance || { now: function() { return Date.now(); } };
+
+    // Real entropy, injected by the host from /dev/urandom at context creation;
+    // Math.random is not an acceptable source for anything calling itself
+    // crypto. When the pool runs out we say so rather than quietly degrading.
+    global.crypto = {
+        getRandomValues: function(array) {
+            var pool = global.__atlEntropy || "";
+            for (var i = 0; i < array.length; i++) {
+                if (global.__atlEntropyOffset + 2 <= pool.length) {
+                    array[i] = parseInt(pool.substr(global.__atlEntropyOffset, 2), 16);
+                    global.__atlEntropyOffset += 2;
+                } else {
+                    throw new Error("crypto.getRandomValues: entropy pool exhausted");
+                }
+            }
+            return array;
+        },
+        randomUUID: function() {
+            var b = global.crypto.getRandomValues(new Uint8Array(16));
+            b[6] = (b[6] & 0x0f) | 0x40;
+            b[8] = (b[8] & 0x3f) | 0x80;
+            var hex = [];
+            for (var i = 0; i < 16; i++) hex.push((b[i] + 0x100).toString(16).substr(1));
+            return hex.slice(0, 4).join("") + "-" + hex.slice(4, 6).join("") + "-"
+                 + hex.slice(6, 8).join("") + "-" + hex.slice(8, 10).join("") + "-"
+                 + hex.slice(10, 16).join("");
+        }
+    };
+    global.__atlEntropyOffset = 0;
+
     // fetch() over the UI process's QNetworkAccessManager. Only the subset
     // extensions actually use for list downloads: method, headers, body, and a
     // text/json/arrayBuffer-less response.

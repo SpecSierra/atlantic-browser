@@ -561,6 +561,83 @@ test("preamble: XMLHttpRequest goes through fetch", (done) => {
     sandbox.__atlFetchDone(posted.pop().args[0], true, 200, "OK", {}, "hi", null);
 });
 
+test("preamble: URL parses and resolves against a base", () => {
+    const { sandbox } = makePreambleSandbox();
+    const u = new sandbox.URL("https://user:pw@api.example.com:8443/v2/check?a=1&b=2#frag");
+    assert.strictEqual(u.protocol, "https:");
+    assert.strictEqual(u.hostname, "api.example.com");
+    assert.strictEqual(u.port, "8443");
+    assert.strictEqual(u.pathname, "/v2/check");
+    assert.strictEqual(u.search, "?a=1&b=2");
+    assert.strictEqual(u.hash, "#frag");
+    assert.strictEqual(u.origin, "https://api.example.com:8443");
+    assert.strictEqual(u.searchParams.get("b"), "2");
+
+    assert.strictEqual(new sandbox.URL("/x", "https://e.com/a/b").href, "https://e.com/x");
+    assert.strictEqual(new sandbox.URL("c", "https://e.com/a/b").href, "https://e.com/a/c");
+    assert.strictEqual(new sandbox.URL("../d", "https://e.com/a/b/c").href, "https://e.com/a/d");
+    assert.strictEqual(new sandbox.URL("?q=1", "https://e.com/a").href, "https://e.com/a?q=1");
+    assert.throws(() => new sandbox.URL("not a url"), /Invalid URL/);
+});
+
+test("preamble: URLSearchParams round-trips and encodes", () => {
+    const { sandbox } = makePreambleSandbox();
+    const p = new sandbox.URLSearchParams("text=a+b&language=en-US");
+    assert.strictEqual(p.get("text"), "a b");
+    p.set("text", "x&y");
+    assert.strictEqual(p.toString(), "text=x%26y&language=en-US");
+    p.append("language", "de");
+    // Arrays built inside the VM realm carry its prototype, so compare contents.
+    assert.deepStrictEqual(Array.from(p.getAll("language")), ["en-US", "de"]);
+    p.delete("language");
+    assert.strictEqual(p.has("language"), false);
+});
+
+test("preamble: Headers are case-insensitive", () => {
+    const { sandbox } = makePreambleSandbox();
+    const h = new sandbox.Headers({ "Content-Type": "application/json" });
+    assert.strictEqual(h.get("content-type"), "application/json");
+    h.append("X-Try", "1");
+    h.append("x-try", "2");
+    assert.strictEqual(h.get("X-TRY"), "1, 2");
+});
+
+test("preamble: AbortController fires its listeners once", () => {
+    const { sandbox } = makePreambleSandbox();
+    const c = new sandbox.AbortController();
+    let fired = 0;
+    c.signal.addEventListener("abort", () => fired++);
+    c.signal.onabort = () => fired++;
+    assert.strictEqual(c.signal.aborted, false);
+    c.abort();
+    c.abort(); // second abort must be a no-op
+    assert.strictEqual(c.signal.aborted, true);
+    assert.strictEqual(fired, 2);
+    assert.throws(() => c.signal.throwIfAborted(), /aborted/);
+});
+
+test("preamble: TextEncoder and TextDecoder round-trip UTF-8", () => {
+    const { sandbox } = makePreambleSandbox();
+    const bytes = new sandbox.TextEncoder().encode("héllo — ok");
+    assert.ok(bytes.length > "héllo — ok".length, "multi-byte chars must expand");
+    assert.strictEqual(new sandbox.TextDecoder().decode(bytes), "héllo — ok");
+});
+
+test("preamble: crypto draws from the injected pool, and refuses without one", () => {
+    const { sandbox } = makePreambleSandbox();
+    sandbox.__atlEntropy = "00112233445566778899aabbccddeeff".repeat(40);
+    sandbox.__atlEntropyOffset = 0;
+    const out = sandbox.crypto.getRandomValues(new Uint8Array(4));
+    assert.deepStrictEqual(Array.from(out), [0x00, 0x11, 0x22, 0x33]);
+    const uuid = sandbox.crypto.randomUUID();
+    assert.match(uuid, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+
+    const bare = makePreambleSandbox().sandbox;
+    bare.__atlEntropy = "";
+    assert.throws(() => bare.crypto.getRandomValues(new Uint8Array(1)),
+                  /entropy pool exhausted/);
+});
+
 // --- runner ------------------------------------------------------------------
 
 (async function run() {

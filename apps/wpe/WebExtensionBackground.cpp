@@ -110,6 +110,25 @@ bool WebExtensionBackground::start()
     jsc_context_set_value(m_context, "__atlNative", native);
     g_object_unref(native);
 
+    // Entropy for the preamble's crypto shim, before it runs. JavaScriptCore has
+    // no crypto of its own, and Math.random has no business backing something
+    // called getRandomValues, so the pool comes from /dev/urandom. 4 KiB is far
+    // more than an extension needs for request ids and UUIDs; the shim throws
+    // rather than degrading quietly if it is ever exhausted.
+    {
+        QFile urandom(QStringLiteral("/dev/urandom"));
+        QByteArray entropy;
+        if (urandom.open(QIODevice::ReadOnly))
+            entropy = urandom.read(4096).toHex();
+        if (entropy.isEmpty()) {
+            qWarning() << "[WEBEXT]" << m_extensionId
+                       << "no /dev/urandom; crypto.getRandomValues will refuse";
+        }
+        evaluate(QStringLiteral("var __atlEntropy = \"%1\";")
+                     .arg(QString::fromLatin1(entropy)),
+                 QStringLiteral("atlantic-extension://%1/_entropy.js").arg(m_extensionId));
+    }
+
     evaluate(QString::fromUtf8(WebExtensionScripts::kBackgroundPreamble),
              QStringLiteral("atlantic-extension://%1/_preamble.js").arg(m_extensionId));
     evaluate(m_shim, QStringLiteral("atlantic-extension://%1/_shim.js").arg(m_extensionId));
