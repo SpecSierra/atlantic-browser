@@ -338,7 +338,11 @@ Page {
 
                     Icon {
                         id: extensionsIcon
-                        source: "image://theme/icon-m-extension"
+                        // Ours, not the theme's: sailfish-default has no
+                        // icon-m-extension. Silica tints it like any other.
+                        source: Qt.resolvedUrl("../icons/icon-m-extension.svg")
+                        sourceSize.width: Theme.iconSizeMedium
+                        sourceSize.height: Theme.iconSizeMedium
                     }
                     Label {
                         width: parent.width - parent.spacing - extensionsIcon.width

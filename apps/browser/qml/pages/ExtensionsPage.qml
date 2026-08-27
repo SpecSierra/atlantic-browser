@@ -141,16 +141,33 @@ Page {
                     width: parent.width
                     spacing: Theme.paddingMedium
 
-                    Image {
+                    Item {
                         id: icon
+
                         width: Theme.iconSizeMedium
                         height: Theme.iconSizeMedium
-                        sourceSize.width: Theme.iconSizeMedium
-                        sourceSize.height: Theme.iconSizeMedium
-                        fillMode: Image.PreserveAspectFit
-                        source: model.iconPath !== "" ? model.iconPath : "image://theme/icon-m-extension"
                         opacity: model.enabled ? 1.0 : 0.4
                         anchors.verticalCenter: parent.verticalCenter
+
+                        // The extension's own icon is full colour and must not
+                        // be tinted; the fallback glyph is monochrome and must
+                        // be. Hence two elements rather than one switched source.
+                        Image {
+                            anchors.fill: parent
+                            sourceSize.width: width
+                            sourceSize.height: height
+                            fillMode: Image.PreserveAspectFit
+                            visible: model.iconPath !== ""
+                            source: model.iconPath
+                        }
+
+                        Icon {
+                            anchors.fill: parent
+                            sourceSize.width: width
+                            sourceSize.height: height
+                            visible: model.iconPath === ""
+                            source: Qt.resolvedUrl("../icons/icon-m-extension.svg")
+                        }
                     }
 
                     Column {

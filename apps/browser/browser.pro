@@ -32,7 +32,7 @@ include(../shared/shared.pri)
 
 # QML files and folders of browser
 qml.path = $$DEPLOYMENT_PATH
-qml.files = qml/*.qml qml/pages qml/cover
+qml.files = qml/*.qml qml/pages qml/cover qml/icons
 INSTALLS += qml
 
 # Search engines shipped by the browser (beyond the mozembedlite system set)
@@ -43,4 +43,4 @@ INSTALLS += searchengines
 # C++ sources
 SOURCES += main.cpp
 
-OTHER_FILES += qml/*.qml qml/pages/*.qml qml/pages/components/*.qml qml/cover/*.qml
+OTHER_FILES += qml/*.qml qml/pages/*.qml qml/pages/components/*.qml qml/cover/*.qml qml/icons/*.svg
