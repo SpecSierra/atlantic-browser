@@ -7,10 +7,9 @@ import Sailfish.Silica 1.0
 import Sailfish.Browser 1.0
 import Sailfish.Silica.Background 1.0 as SilicaBackground
 
-// Browse and install extensions. Empty search shows the curated catalog that
-// ships with Atlantic; typing searches all of addons.mozilla.org. The catalog
-// is advice, not a gate — anything found is installable, including add-ons
-// whose verdict says they will not work here.
+// Search addons.mozilla.org and install from it. Nothing is suggested and
+// nothing is gated: the page shows what was searched for, and anything found is
+// installable, including add-ons that will not work here — those say so.
 Page {
     id: page
 
@@ -29,31 +28,21 @@ Page {
             pageStack.pop()
     }
 
-    function clearSearch() {
-        if (searchFieldItem)
-            searchFieldItem.text = ""
-        WebExtensionStore.showCatalog()
-    }
-
+    // Only a verdict worth acting on is shown. An add-on we have nothing
+    // against says nothing at all: "works" would be a promise this page cannot
+    // make, since the verdict is derived from declared permissions, not from
+    // anybody running it.
     function verdictColor(verdict) {
-        switch (verdict) {
-        case "works": return Theme.highlightColor
-        case "partial": return Theme.secondaryHighlightColor
-        case "broken": return Theme.errorColor
-        default: return Theme.secondaryColor
-        }
+        return verdict === "broken" ? Theme.errorColor : Theme.secondaryHighlightColor
     }
 
     function verdictLabel(verdict) {
         switch (verdict) {
-        //% "Works"
-        case "works": return qsTrId("atlantic-la-extension_verdict_works")
         //% "Partly works"
         case "partial": return qsTrId("atlantic-la-extension_verdict_partial")
         //% "Will not work"
         case "broken": return qsTrId("atlantic-la-extension_verdict_broken")
-        //% "Unknown"
-        default: return qsTrId("atlantic-la-extension_verdict_unknown")
+        default: return ""
         }
     }
 
@@ -67,10 +56,6 @@ Page {
         //% "Some features need %1, which Atlantic does not provide."
         return qsTrId("atlantic-la-extension_some_features_need").arg(reasons.join(", "))
     }
-
-    // The catalog ships without icons or version numbers; they arrive with the
-    // AMO metadata, so the first view of the page has to ask for it.
-    Component.onCompleted: WebExtensionStore.ensureCatalogLoaded()
 
     SilicaBackground.Background {
         anchors.fill: parent
@@ -91,12 +76,6 @@ Page {
                 //% "Install from a link…"
                 text: qsTrId("atlantic-me-extension_install_link")
                 onClicked: pageStack.animatorPush(linkDialog)
-            }
-            MenuItem {
-                //% "Show the recommended list"
-                text: qsTrId("atlantic-me-extension_show_catalog")
-                visible: WebExtensionStore.searching
-                onClicked: page.clearSearch()
             }
         }
 
@@ -131,17 +110,6 @@ Page {
                     WebExtensionStore.search(text)
                     focus = false
                 }
-            }
-
-            Label {
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * Theme.horizontalPageMargin
-                wrapMode: Text.WordWrap
-                font.pixelSize: Theme.fontSizeExtraSmall
-                color: Theme.secondaryColor
-                visible: !WebExtensionStore.searching
-                //% "These are known to suit Atlantic. Search to install anything else — Atlantic will not stop you, but it will tell you first what is not going to work."
-                text: qsTrId("atlantic-la-extension_store_hint")
             }
 
             Label {
@@ -247,14 +215,8 @@ Page {
                             Label {
                                 font.pixelSize: Theme.fontSizeExtraSmall
                                 color: page.verdictColor(model.verdict)
+                                visible: text !== ""
                                 text: page.verdictLabel(model.verdict)
-                            }
-                            Label {
-                                font.pixelSize: Theme.fontSizeExtraSmall
-                                color: Theme.secondaryColor
-                                visible: model.curated && !model.verified
-                                //% "· expected, not yet tested"
-                                text: qsTrId("atlantic-la-extension_untested")
                             }
                             Label {
                                 font.pixelSize: Theme.fontSizeExtraSmall
@@ -278,17 +240,16 @@ Page {
                     text: model.summary
                 }
 
-                // The hand-written catalog note when there is one; otherwise the
-                // verdict derived from the add-on's declared permissions.
+                // Only ever a warning: what the add-on needs that Atlantic does
+                // not provide. Empty, and hidden, when there is nothing to warn
+                // about.
                 Label {
                     width: parent.width
                     wrapMode: Text.WordWrap
                     font.pixelSize: Theme.fontSizeExtraSmall
                     color: model.verdict === "broken" ? Theme.errorColor : Theme.secondaryColor
                     visible: text !== ""
-                    text: model.note !== ""
-                          ? model.note
-                          : page.verdictDetail(model.verdict, model.verdictReasons)
+                    text: page.verdictDetail(model.verdict, model.verdictReasons)
                 }
             }
 
@@ -317,8 +278,13 @@ Page {
 
         ViewPlaceholder {
             enabled: listView.count === 0 && !WebExtensionStore.busy
-            //% "Nothing to show"
-            text: qsTrId("atlantic-la-extension_store_empty")
+            // Before the first search this is the whole page, so it says what
+            // to do; afterwards it reports the empty result instead.
+            text: WebExtensionStore.searching
+                  //% "Nothing found"
+                  ? qsTrId("atlantic-la-extension_store_no_results")
+                  //% "Find extensions"
+                  : qsTrId("atlantic-la-extension_store_empty")
             //% "Search addons.mozilla.org to find extensions"
             hintText: qsTrId("atlantic-la-extension_store_empty_hint")
         }

@@ -10,7 +10,6 @@
 
 #include "WebExtension.h"
 #include "WebExtensionManager.h"
-#include "WPERuntimePaths.h"
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -105,15 +104,6 @@ QJsonObject fileObject(const QJsonObject &currentVersion)
     return files.isEmpty() ? QJsonObject() : files.first().toObject();
 }
 
-QString catalogPath()
-{
-    const QByteArray override = qgetenv("ATLANTIC_EXTENSION_CATALOG");
-    if (!override.isEmpty())
-        return QString::fromLocal8Bit(override);
-    return QString::fromUtf8(WPERuntimePaths::kAtlanticShareDir)
-        + QStringLiteral("/extension-catalog.json");
-}
-
 } // namespace
 
 WebExtensionStore *WebExtensionStore::instance()
@@ -125,9 +115,6 @@ WebExtensionStore *WebExtensionStore::instance()
 WebExtensionStore::WebExtensionStore(QObject *parent)
     : QAbstractListModel(parent)
 {
-    loadCatalog();
-    m_rows = m_catalog;
-
     // An install anywhere (store, file picker, sideload) changes the Installed
     // badge on every row.
     connect(WebExtensionManager::instance(), &WebExtensionManager::extensionsChanged,
@@ -136,44 +123,6 @@ WebExtensionStore::WebExtensionStore(QObject *parent)
                     Q_EMIT dataChanged(index(0), index(m_rows.size() - 1), { InstalledRole });
                 }
             });
-}
-
-// --- catalog ----------------------------------------------------------------
-
-void WebExtensionStore::loadCatalog()
-{
-    const QString path = catalogPath();
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) {
-        qWarning() << "[WEBEXT-STORE] no catalog at" << path << "- search still works";
-        return;
-    }
-
-    QJsonParseError error;
-    const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &error);
-    if (error.error != QJsonParseError::NoError) {
-        qWarning() << "[WEBEXT-STORE] catalog is not valid JSON:" << error.errorString();
-        return;
-    }
-
-    const QJsonArray extensions =
-        document.object().value(QStringLiteral("extensions")).toArray();
-    for (const QJsonValue &value : extensions) {
-        const QJsonObject object = value.toObject();
-        Entry entry;
-        entry.slug = object.value(QStringLiteral("slug")).toString();
-        if (entry.slug.isEmpty())
-            continue;
-        entry.name = object.value(QStringLiteral("name")).toString();
-        entry.summary = object.value(QStringLiteral("summary")).toString();
-        entry.note = object.value(QStringLiteral("note")).toString();
-        entry.verdict = object.value(QStringLiteral("expected"))
-                            .toString(QStringLiteral("unknown"));
-        entry.verified = object.value(QStringLiteral("verified")).toBool(false);
-        entry.curated = true;
-        m_catalog.append(entry);
-    }
-    qDebug() << "[WEBEXT-STORE] catalog:" << m_catalog.size() << "entries from" << path;
 }
 
 QString WebExtensionStore::verdictFor(const QStringList &permissions, QStringList *reasons)
@@ -220,9 +169,6 @@ QHash<int, QByteArray> WebExtensionStore::roleNames() const
         { UsersRole, "users" },
         { VerdictRole, "verdict" },
         { VerdictReasonRole, "verdictReasons" },
-        { NoteRole, "note" },
-        { CuratedRole, "curated" },
-        { VerifiedRole, "verified" },
         { HomepageRole, "homepage" },
         { InstalledRole, "installed" },
         { InstallingRole, "installing" }
@@ -258,9 +204,6 @@ QVariant WebExtensionStore::data(const QModelIndex &index, int role) const
     case UsersRole: return entry.users;
     case VerdictRole: return entry.verdict;
     case VerdictReasonRole: return entry.verdictReasons;
-    case NoteRole: return entry.note;
-    case CuratedRole: return entry.curated;
-    case VerifiedRole: return entry.verified;
     case HomepageRole: return entry.homepage;
     case InstalledRole: return isInstalled(entry);
     case InstallingRole: return entry.installing;
@@ -336,13 +279,9 @@ void WebExtensionStore::applyAddonJson(Entry &entry, const QJsonObject &addon) c
     QStringList permissions = toStringList(file.value(QStringLiteral("permissions")));
     permissions += toStringList(file.value(QStringLiteral("host_permissions")));
 
-    // A curated verdict is a reviewed judgement; keep it, but let the derived
-    // one fill in when the catalog said nothing.
     QStringList reasons;
-    const QString derived = verdictFor(permissions, &reasons);
+    entry.verdict = verdictFor(permissions, &reasons);
     entry.verdictReasons = reasons;
-    if (!entry.curated || entry.verdict == QLatin1String("unknown"))
-        entry.verdict = derived;
 }
 
 WebExtensionStore::Entry WebExtensionStore::entryFromAddonJson(const QJsonObject &addon) const
@@ -352,67 +291,22 @@ WebExtensionStore::Entry WebExtensionStore::entryFromAddonJson(const QJsonObject
     return entry;
 }
 
-void WebExtensionStore::ensureCatalogLoaded()
-{
-    if (m_catalogRefreshed || m_searching)
-        return;
-    showCatalog();
-}
-
-void WebExtensionStore::showCatalog()
-{
-    m_catalogRefreshed = true;
-    if (m_searching) {
-        m_searching = false;
-        Q_EMIT searchingChanged();
-    }
-
-    beginResetModel();
-    m_rows = m_catalog;
-    endResetModel();
-    Q_EMIT countChanged();
-
-    if (m_rows.isEmpty()) {
-        setStatus(tr("No catalog is installed. Search to find extensions."));
-        return;
-    }
-
-    setStatus(QString());
-    setPending(m_pending + m_rows.size());
-    for (int row = 0; row < m_rows.size(); ++row) {
-        const QString slug = m_rows.at(row).slug;
-        QNetworkReply *reply = get(QString::fromLatin1(kAmoAddon)
-                                       .arg(slug, QLocale().name().replace(QLatin1Char('_'),
-                                                                           QLatin1Char('-'))));
-        connect(reply, &QNetworkReply::finished, this, [this, reply, slug]() {
-            reply->deleteLater();
-            m_inFlight.removeAll(reply);
-            setPending(m_pending - 1);
-
-            const int row = indexOfSlug(slug);
-            if (row < 0)
-                return; // the list moved on (search, or another refresh)
-
-            if (reply->error() != QNetworkReply::NoError) {
-                // Offline is not an error worth shouting about: the shipped
-                // name, summary and verdict are already on screen.
-                if (m_pending == 0 && m_status.isEmpty())
-                    setStatus(tr("Could not reach addons.mozilla.org — showing the bundled list."));
-                return;
-            }
-            const QJsonObject addon =
-                QJsonDocument::fromJson(reply->readAll()).object();
-            applyAddonJson(m_rows[row], addon);
-            Q_EMIT dataChanged(index(row), index(row));
-        });
-    }
-}
-
 void WebExtensionStore::search(const QString &query)
 {
     const QString trimmed = query.trimmed();
     if (trimmed.isEmpty()) {
-        showCatalog();
+        // Nothing to fall back to: the store has no list of its own, so an
+        // empty query empties the view.
+        cancel();
+        beginResetModel();
+        m_rows.clear();
+        endResetModel();
+        Q_EMIT countChanged();
+        if (m_searching) {
+            m_searching = false;
+            Q_EMIT searchingChanged();
+        }
+        setStatus(QString());
         return;
     }
 

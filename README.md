@@ -91,7 +91,7 @@ extension code. Design record, limits and the device-verification plan:
 | `WebExtensionBackgroundView` | background page in a hidden `WebKitWebView` |
 | `WebExtensionBackground` | `JSCContext` background host — the fallback, forced with `ATLANTIC_EXT_BACKGROUND_PAGE=0` |
 | `WebExtensionArchive` | central-directory zip reader (`QZipReader` cannot read AMO's streamed zips) |
-| `WebExtensionStore` | curated catalog rendered over live addons.mozilla.org metadata, plus full AMO search |
+| `WebExtensionStore` | addons.mozilla.org search and install; nothing mirrored, nothing recommended |
 | `WebExtensionCookies` | `browser.cookies` over the default session's `WebKitCookieManager` |
 | `WebExtensionBrowsingData` | `browser.history` and `browser.bookmarks` over `DBManager` and the live bookmark model |
 | `WebExtensionDownloads` | `browser.downloads` over `DownloadManager`'s per-download records |
@@ -153,16 +153,18 @@ we do not do is surfaced as a per-extension warning in Settings → Extensions.
 
 That inert list has a consequence worth stating plainly: the popular end of the
 ecosystem is webRequest-based, so uBlock Origin, Tampermonkey, Violentmonkey and
-Stylus are **broken** here. uBO is in the catalog as a broken entry on purpose,
-so the answer is findable. Verdicts are derived, not guessed — AMO reports
-declared permissions before download, so `WebExtensionStore::verdictFor()`
-classifies catalog and search rows alike. Nothing is mirrored; packages come
-from AMO and are checked against the `sha256:` digest AMO publishes, except the
-paste-an-`.xpi`-URL escape hatch, which the dialog says is unchecked.
+Stylus are **broken** here, and the store says so on the row before you install
+one. Verdicts are derived, not guessed — AMO reports declared permissions before
+download, so `WebExtensionStore::verdictFor()` classifies every search result —
+and only a bad verdict is ever shown: an add-on with nothing against it says
+nothing, since "works" would be a promise nobody has tested. Nothing is
+mirrored and nothing is suggested; packages come from AMO and are checked
+against the `sha256:` digest AMO publishes, except the paste-an-`.xpi`-URL
+escape hatch, which the dialog says is unchecked.
 
 **Tests** (host, no device): `node tests/webextension-shim.test.js` and
-`python3 tests/test_extension_catalog.py` (`ATLANTIC_CATALOG_ONLINE=1` re-derives
-verdicts from AMO — the catalog-rot guard). `tests/sample-extension/` is the
+`python3 tests/test_extension_store.py` (`ATLANTIC_STORE_ONLINE=1` re-derives
+verdicts from what AMO declares today — the guard against the rule drifting). `tests/sample-extension/` is the
 on-device smoke test. Background pages appear as their own inspectable target;
 an extension's JSC background context answers plain `Runtime.evaluate`, not the
 Target-wrapped protocol.
@@ -179,7 +181,7 @@ Target-wrapped protocol.
 | `ResourceController.qml` | audio/video lifecycle; listens to MCE D-Bus for screen blank and calls `suspendView()`/`resumeView()` |
 | `Background.qml` | screen-fixed blurred ambience wallpaper (sampled in the shader via `gl_FragCoord`) |
 | `ExtensionsPage.qml` | installed extensions — enable/remove, per-extension warnings for unsupported APIs, install from file |
-| `ExtensionStorePage.qml` | catalog and AMO search, with the compatibility verdict on every row |
+| `ExtensionStorePage.qml` | AMO search and install; warns on a row that will not work, and says nothing on one that will |
 | `pages/components/ImageActionPanel.qml` | the general long-press panel — built-in actions plus matching `contextMenus` items |
 
 Two QML gotchas that have cost time: `webPageComponent` is dead — pages are created
@@ -231,8 +233,8 @@ missing. The runtime is loaded on the first `afterRendering` so the UI paints fi
 | `apps/history/`, `apps/storage/` | tab/history models; SQLite backend (`DBManager`, `DBWorker`, `Tab`, `Link`) |
 | `apps/factories/` | page factory stubs |
 | `settings/` | Sailfish Settings plugin |
-| `data/` | prefs, search engines, launcher icon, `extension-catalog.json` (installed to `/usr/share/atlantic-browser/`, overridable with `ATLANTIC_EXTENSION_CATALOG`) |
-| `tests/` | host-side tests — extension shim, catalog verdicts, `sample-extension/` |
+| `data/` | prefs, search engines, launcher icon |
+| `tests/` | host-side tests — extension shim, store verdict rules, `sample-extension/` |
 | `translations/`, `rpm/` | translation project files (`.ts` are generated, not tracked); RPM spec |
 
 ## Build

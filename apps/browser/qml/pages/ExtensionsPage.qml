@@ -49,8 +49,8 @@ Page {
                 text: qsTrId("atlantic-me-extensions_install")
                 onClicked: pageStack.animatorPush(filePickerPage)
             }
-            // Declared last so it sits nearest the content edge: browsing the
-            // catalogue is the common way in, sideloading a file is not.
+            // Declared last so it sits nearest the content edge: searching
+            // addons.mozilla.org is the common way in, sideloading a file is not.
             MenuItem {
                 //% "Get extensions"
                 text: qsTrId("atlantic-me-extensions_browse")

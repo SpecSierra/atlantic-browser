@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
-"""Checks data/extension-catalog.json.
+"""Checks the extension store's rules against the code that implements them.
 
-Offline (always): schema, duplicate slugs, valid verdicts, and that every
-"verified" claim is one somebody actually made.
+Offline (always): the verdict tables are parsed out of WebExtensionStore.cpp
+rather than copied, and the guard that keeps QZipReader out of the extractor.
 
-Online (ATLANTIC_CATALOG_ONLINE=1): resolves each slug against
-addons.mozilla.org and re-derives its verdict from the add-on's currently
-declared permissions, using the same API tables the C++ store compiles in --
-they are parsed out of WebExtensionStore.cpp rather than copied, so the test
-cannot drift from the shipped rule. This is the guard against catalog rot: an
-add-on that adds webRequest in a later release silently stops working, and the
-catalog would go on recommending it.
+Online (ATLANTIC_STORE_ONLINE=1): re-derives verdicts from what AMO currently
+declares, so a rule that has drifted from the ecosystem shows up here rather
+than on a device. Nothing is recommended by Atlantic any more -- the store is
+search-only -- so this checks the rule, not a list.
 
-Run: python3 tests/test_extension_catalog.py
-     ATLANTIC_CATALOG_ONLINE=1 python3 tests/test_extension_catalog.py
+Run: python3 tests/test_extension_store.py
+     ATLANTIC_STORE_ONLINE=1 python3 tests/test_extension_store.py
 
 This Source Code Form is subject to the terms of the Mozilla Public
 License, v. 2.0. If a copy of the MPL was not distributed with this file,
@@ -28,12 +25,10 @@ import unittest
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CATALOG = os.path.join(ROOT, "data", "extension-catalog.json")
 STORE_SOURCE = os.path.join(ROOT, "apps", "wpe", "WebExtensionStore.cpp")
 MANAGER_SOURCE = os.path.join(ROOT, "apps", "wpe", "WebExtensionManager.cpp")
 
-VERDICTS = {"works", "partial", "broken", "unknown"}
-ONLINE = os.environ.get("ATLANTIC_CATALOG_ONLINE") == "1"
+ONLINE = os.environ.get("ATLANTIC_STORE_ONLINE") == "1"
 
 
 def api_tables():
@@ -99,7 +94,7 @@ class ArchiveTest(unittest.TestCase):
                          "QZipReader cannot read AMO packages; use WebExtensionArchive")
         self.assertIn("WebExtensionArchive::extract", source)
 
-    @unittest.skipUnless(ONLINE, "set ATLANTIC_CATALOG_ONLINE=1 to query AMO")
+    @unittest.skipUnless(ONLINE, "set ATLANTIC_STORE_ONLINE=1 to query AMO")
     def test_amo_packages_are_streamed_zips(self):
         import io
         import zipfile
@@ -128,60 +123,34 @@ class ArchiveTest(unittest.TestCase):
         self.assertNotEqual(first.CRC, 0, "central directory should hold the real CRC")
 
 
-class CatalogTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        with open(CATALOG, encoding="utf-8") as handle:
-            cls.catalog = json.load(handle)
-        cls.entries = cls.catalog["extensions"]
+class VerdictTest(unittest.TestCase):
+    """The rule itself, not a list of add-ons."""
 
-    def test_top_level_shape(self):
-        self.assertEqual(self.catalog["version"], 1)
-        self.assertEqual(self.catalog["source"], "addons.mozilla.org")
-        self.assertIsInstance(self.entries, list)
-        self.assertGreater(len(self.entries), 0)
+    def test_host_patterns_never_count(self):
+        verdict, reasons = verdict_for(["https://*/*", "<all_urls>", "storage"])
+        self.assertEqual(verdict, "works")
+        self.assertEqual(reasons, [])
 
-    def test_entries_are_complete(self):
-        for entry in self.entries:
-            slug = entry.get("slug", "<missing>")
-            for field in ("slug", "name", "summary", "expected", "verified", "note"):
-                self.assertIn(field, entry, "%s is missing %r" % (slug, field))
-            self.assertIn(entry["expected"], VERDICTS,
-                          "%s has verdict %r" % (slug, entry["expected"]))
-            self.assertIsInstance(entry["verified"], bool)
-            self.assertTrue(entry["note"].strip(),
-                            "%s has an empty note; say what does and does not work" % slug)
+    def test_webrequest_is_broken_and_says_why(self):
+        verdict, reasons = verdict_for(["webRequest", "webRequestBlocking", "storage"])
+        self.assertEqual(verdict, "broken")
+        self.assertIn("webRequest", reasons)
 
-    def test_slugs_are_unique(self):
-        slugs = [entry["slug"] for entry in self.entries]
-        self.assertEqual(len(slugs), len(set(slugs)), "duplicate slug in the catalog")
+    def test_implemented_apis_are_not_flagged(self):
+        # These four were wired to the browser's own subsystems; a permission
+        # left behind in the tables would warn about something that works.
+        for permission in ("cookies", "history", "bookmarks", "downloads",
+                           "contextMenus", "scripting"):
+            verdict, _ = verdict_for([permission])
+            self.assertEqual(verdict, "works", permission)
 
-    def test_slugs_are_url_safe(self):
-        for entry in self.entries:
-            self.assertRegex(entry["slug"], r"^[a-z0-9][a-z0-9._-]*$")
-
-    def test_broken_entries_explain_themselves(self):
-        # A "broken" entry exists only to save someone the search, so its note
-        # has to say what to do instead.
-        for entry in self.entries:
-            if entry["expected"] == "broken":
-                self.assertGreater(
-                    len(entry["note"]), 60,
-                    "%s is listed as broken but the note does not explain why or "
-                    "what to use instead" % entry["slug"])
-
-    @unittest.skipUnless(ONLINE, "set ATLANTIC_CATALOG_ONLINE=1 to query AMO")
-    def test_catalog_matches_amo(self):
-        stale = []
-        for entry in self.entries:
-            addon = fetch_addon(entry["slug"])
-            derived, reasons = verdict_for(addon_permissions(addon))
-            if derived != entry["expected"]:
-                stale.append("%s: catalog says %r, AMO now implies %r (%s)"
-                             % (entry["slug"], entry["expected"], derived,
-                                ", ".join(reasons) or "no flagged APIs"))
-        self.assertEqual(stale, [], "catalog is out of date:\n  " + "\n  ".join(stale))
+    @unittest.skipUnless(ONLINE, "set ATLANTIC_STORE_ONLINE=1 to query AMO")
+    def test_ublock_origin_is_still_broken(self):
+        # The canary for the tables drifting: uBO is webRequest-based, and the
+        # day that stops being true the rule needs revisiting.
+        verdict, _ = verdict_for(addon_permissions(fetch_addon("ublock-origin")))
+        self.assertEqual(verdict, "broken")
 
 
 if __name__ == "__main__":
-    sys.exit(0 if unittest.main(exit=False, verbosity=2).result.wasSuccessful() else 1)
+    unittest.main(verbosity=2)
