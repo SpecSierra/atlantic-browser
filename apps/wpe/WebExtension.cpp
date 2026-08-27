@@ -291,8 +291,19 @@ QString WebExtension::resolveMessages(const QString &text) const
         if (end < 0)
             break;
         const QString key = out.mid(keyStart, end - keyStart);
-        const QString value = m_localeMessages.value(key.toLower()).toObject()
-                                  .value(QStringLiteral("message")).toString();
+        // The predefined messages, which are not in messages.json.
+        // @@extension_id is the one that matters: extensions build asset URLs
+        // out of it in CSS, and an unsubstituted one is a broken request.
+        QString value;
+        if (key == QLatin1String("@@extension_id"))
+            value = m_id;
+        else if (key == QLatin1String("@@ui_locale"))
+            value = QLocale().name();
+        else if (key == QLatin1String("@@bidi_dir"))
+            value = QStringLiteral("ltr");
+        else
+            value = m_localeMessages.value(key.toLower()).toObject()
+                        .value(QStringLiteral("message")).toString();
         if (value.isEmpty()) {
             // Leave an unknown placeholder alone rather than blanking the field:
             // a visible __MSG_foo__ at least says what went missing.

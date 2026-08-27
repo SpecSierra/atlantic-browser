@@ -605,13 +605,22 @@ void WebExtensionManager::registerUriScheme()
     WebKitWebContext *context = webkit_web_context_get_default();
     webkit_web_context_register_uri_scheme(context, kScheme, handleSchemeRequest, this, nullptr);
 
+    // Extensions hard-code the scheme of the browser they were built for into
+    // CSS and HTML assets — LanguageTool's stylesheet asks for its fonts over
+    // moz-extension://. The host is still the extension id, so the same handler
+    // answers; without this every such asset is a failed request.
+    for (const char *alias : { "moz-extension", "chrome-extension" })
+        webkit_web_context_register_uri_scheme(context, alias, handleSchemeRequest, this, nullptr);
+
     // Extension pages need a real, storage-owning origin: "secure" keeps them
     // out of mixed-content downgrades, "cors-enabled" lets their own fetches
     // of extension resources work. Deliberately NOT registered as local or
     // no-access — both would strip the origin they need.
     WebKitSecurityManager *security = webkit_web_context_get_security_manager(context);
-    webkit_security_manager_register_uri_scheme_as_secure(security, kScheme);
-    webkit_security_manager_register_uri_scheme_as_cors_enabled(security, kScheme);
+    for (const char *scheme : { kScheme, "moz-extension", "chrome-extension" }) {
+        webkit_security_manager_register_uri_scheme_as_secure(security, scheme);
+        webkit_security_manager_register_uri_scheme_as_cors_enabled(security, scheme);
+    }
 }
 
 void WebExtensionManager::handleSchemeRequest(WebKitURISchemeRequest *request, gpointer userData)
@@ -866,7 +875,12 @@ void WebExtensionManager::installIntoPage(WebKitUserContentManager *ucm, WPEWebP
                     qWarning() << "[WEBEXT]" << extensionId << "missing content CSS" << relative;
                     continue;
                 }
-                const QByteArray source = file.readAll();
+                // Firefox substitutes __MSG_ placeholders in content-script CSS,
+                // and extensions rely on it: LanguageTool's stylesheet builds
+                // font URLs out of __MSG_@@extension_id__, which without this
+                // request a literal "__MSG_@@extension_id__" host and fail.
+                const QByteArray source =
+                    extension.substituteMessages(QString::fromUtf8(file.readAll())).toUtf8();
                 WebKitUserStyleSheet *sheet = webkit_user_style_sheet_new_for_world(
                     source.constData(), frames, WEBKIT_USER_STYLE_LEVEL_USER, world.constData(),
                     allowList.data(), block);

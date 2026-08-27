@@ -127,6 +127,12 @@ private:
     void parseBackground(const QJsonObject &manifest);
     void parseAction(const QJsonObject &manifest);
     void loadLocaleMessages();
+public:
+    // Public because injected CSS needs the same substitution: Firefox
+    // replaces __MSG_ placeholders in content-script stylesheets, and
+    // extensions use __MSG_@@extension_id__ to build asset URLs there.
+    QString substituteMessages(const QString &text) const { return resolveMessages(text); }
+private:
     // Resolves a "__MSG_key__" placeholder against localeMessages(). Manifest
     // fields (name, description, action title) may be written that way, and an
     // unresolved one otherwise reaches the UI verbatim.
