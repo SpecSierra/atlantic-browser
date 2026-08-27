@@ -189,8 +189,36 @@ test("a failed call sets runtime.lastError for the duration of the callback", (d
 
 test("an unsupported API rejects rather than silently doing nothing", async () => {
     const { browser } = makeSandbox("content");
-    await assert.rejects(() => browser.downloads.download({ url: "https://example.com/f" }),
+    await assert.rejects(() => browser.proxy.register("proxy.js"),
                          /not supported by Atlantic/);
+});
+
+test("downloads.download and search are real; pause is not", async () => {
+    const harness = makeSandbox("background");
+    const started = harness.browser.downloads.download({ url: "https://example.com/f.zip" });
+    let call = harness.lastCall();
+    assert.strictEqual(call.api, "downloads.download");
+    harness.reply(call.seq, 7);
+    assert.strictEqual(await started, 7);
+
+    const found = harness.browser.downloads.search({ state: "complete", limit: 5 });
+    call = harness.lastCall();
+    assert.strictEqual(call.api, "downloads.search");
+    harness.reply(call.seq, [{ id: 7, state: "complete" }]);
+    assert.strictEqual((await found)[0].id, 7);
+
+    await assert.rejects(() => harness.browser.downloads.pause(7),
+                         /not supported by Atlantic/);
+});
+
+test("downloads.onChanged delivers the delta the host sends", () => {
+    const harness = makeSandbox("background");
+    const seen = [];
+    harness.browser.downloads.onChanged.addListener((delta) => seen.push(delta));
+    harness.event("downloads.onChanged",
+                  [{ id: 7, state: { previous: "in_progress", current: "complete" } }]);
+    assert.strictEqual(seen.length, 1);
+    assert.strictEqual(seen[0].state.current, "complete");
 });
 
 test("cookies.getAll goes over the bridge and resolves with the list", async () => {

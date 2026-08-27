@@ -1717,13 +1717,15 @@ void WebExtensionManager::dispatchApiCall(const QString &extensionId, const ExtC
         return;
     }
 
-    // --- cookies, history, bookmarks (WebExtensionCookies.cpp,
-    //     WebExtensionBrowsingData.cpp) ---
+    // --- cookies, history, bookmarks, downloads (WebExtensionCookies.cpp,
+    //     WebExtensionBrowsingData.cpp, WebExtensionDownloads.cpp) ---
     if (dispatchCookiesApi(extensionId, origin, seq, api, args))
         return;
     if (dispatchHistoryApi(extensionId, origin, seq, api, args))
         return;
     if (dispatchBookmarksApi(extensionId, origin, seq, api, args))
+        return;
+    if (dispatchDownloadsApi(extensionId, origin, seq, api, args))
         return;
 
     // --- management (self only; enumerating other extensions is not offered) ---

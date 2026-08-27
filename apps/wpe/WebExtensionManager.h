@@ -358,6 +358,14 @@ private:
                             const QString &api, const QJsonArray &args);
     bool dispatchBookmarksApi(const QString &extensionId, const ExtContext &origin, int seq,
                               const QString &api, const QJsonArray &args);
+    // --- browser.downloads (WebExtensionDownloads.cpp) ---
+    bool dispatchDownloadsApi(const QString &extensionId, const ExtContext &origin, int seq,
+                              const QString &api, const QJsonArray &args);
+    void connectDownloads();
+    // onChanged carries a delta, so the last state each download was reported
+    // in has to be kept to diff against.
+    void notifyDownloadChanged(int downloadId);
+    void broadcastDownloadEvent(const QString &event, const QJsonArray &args);
     void connectHistory();
     void onHistorySearchAvailable(int requestId, const QVariantList &entries);
     void broadcastHistoryRemoved(bool allHistory, const QJsonArray &urls);
@@ -395,6 +403,8 @@ private:
     QHash<QString, QString> m_bookmarkIds; // opaque id -> bookmark url
     int m_nextHistoryRequest = 1;
     bool m_historyConnected = false;
+    QHash<int, QJsonObject> m_downloadSnapshots; // last reported state, per download
+    bool m_downloadsConnected = false;
 
     WebExtensionHost *m_host = nullptr;
     QString m_lastError;

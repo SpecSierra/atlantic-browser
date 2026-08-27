@@ -94,6 +94,7 @@ extension code. Design record, limits and the device-verification plan:
 | `WebExtensionStore` | curated catalog rendered over live addons.mozilla.org metadata, plus full AMO search |
 | `WebExtensionCookies` | `browser.cookies` over the default session's `WebKitCookieManager` |
 | `WebExtensionBrowsingData` | `browser.history` and `browser.bookmarks` over `DBManager` and the live bookmark model |
+| `WebExtensionDownloads` | `browser.downloads` over `DownloadManager`'s per-download records |
 | `WebExtensionScripts.h` | the whole `browser.*` / `chrome.*` JS shim and the background polyfills — the biggest and riskiest file in the set |
 
 **Isolation:** each extension's content scripts go in via
@@ -133,11 +134,18 @@ this, is tagged per request and keeps the visit count and timestamp that
 presented as one folder under a synthesised root. Both are gated on their
 permission, cookies additionally on host access.
 
+`downloads` runs on `DownloadManager`, which grew a per-download record for it
+(the transfer engine owns the UI and cannot answer `search()`); records are
+per-session. An API-initiated download settles its own destination instead of
+raising the Save As prompt, `filename` must be a bare name so it cannot escape
+the download folder, and `pause`/`resume` reject — WebKit's download API has no
+pause.
+
 **Deliberately inert** — the call rejects with a message and `addListener` is
 accepted silently, because extensions register these at top level and throwing
 kills the whole background script: `webRequest` and `declarativeNetRequest`
 (network blocking is owned by the Rust WebProcess extension, which the UI
-process cannot hand a per-request veto to), `downloads`, `proxy`, `idle`,
+process cannot hand a per-request veto to), `proxy`, `idle`,
 `management` beyond `getSelf`, and the MV3 service-worker lifecycle.
 `scripting`, `contextMenus`, `runtime.onInstalled`, `webNavigation` and
 `notifications` *are* implemented. Whatever an installed extension asks for that

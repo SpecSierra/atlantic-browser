@@ -48,6 +48,7 @@ SOURCES += \
     $$PWD/WebExtensionBackgroundView.cpp \
     $$PWD/WebExtensionBrowsingData.cpp \
     $$PWD/WebExtensionCookies.cpp \
+    $$PWD/WebExtensionDownloads.cpp \
     $$PWD/WebExtensionManager.cpp \
     $$PWD/WebExtensionStore.cpp \
     $$PWD/AdBlockListUpdater.cpp \

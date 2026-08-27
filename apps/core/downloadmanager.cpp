@@ -168,6 +168,25 @@ bool DownloadManager::prepareDownload(WebKitDownload *download, const QString &s
     const QString safeName = sanitizeFileName(suggestedFilename);
     const QString defaultDir = BrowserPaths::downloadLocation();
 
+    WebKitURIRequest *request = webkit_download_get_request(download);
+    const gchar *uri = request ? webkit_uri_request_get_uri(request) : nullptr;
+
+    Record record;
+    record.id = downloadId;
+    record.url = QString::fromUtf8(uri ? uri : "");
+    record.mimeType = info.value(QStringLiteral("mimeType")).toString();
+    record.totalBytes = expectedSize;
+    record.startTime = QDateTime::currentDateTimeUtc();
+    m_records.insert(downloadId, record);
+    emit downloadRecordCreated(downloadId);
+
+    // Started through startDownload(): nobody is there to answer a prompt.
+    if (m_autoDestination.contains(download)) {
+        const QString name = m_autoDestination.take(download);
+        confirmDownloadToDirectory(downloadId, defaultDir, name.isEmpty() ? safeName : name);
+        return true;
+    }
+
     emit saveAsRequested(downloadId, safeName, defaultDir);
     return true;
 }
@@ -222,6 +241,10 @@ void DownloadManager::confirmDownload(int downloadId, const QString &destination
     m_downloadInfoCache.insert(downloadId, info);
 
     const qlonglong expectedSize = info.value(QStringLiteral("expectedSize")).toLongLong();
+
+    updateRecord(downloadId, [&destinationPath](Record &record) {
+        record.path = destinationPath;
+    });
 
     emit downloadStarted();
     emit downloadStatusChanged(downloadId, DownloadStatus::Started, info);
@@ -290,6 +313,12 @@ void DownloadManager::cancelPendingDownload(int downloadId)
     if (WebKitDownload *download = m_downloadIdToObject.value(downloadId, nullptr))
         webkit_download_cancel(download);
 
+    updateRecord(downloadId, [](Record &record) {
+        record.state = QStringLiteral("interrupted");
+        record.error = QStringLiteral("USER_CANCELED");
+        record.endTime = QDateTime::currentDateTimeUtc();
+    });
+
     releaseDownload(downloadId);
 }
 
@@ -300,6 +329,15 @@ void DownloadManager::updateDownload(WebKitDownload *download)
 
     const int downloadId = m_downloadObjectToId.value(download);
     const double progress = std::clamp(webkit_download_get_estimated_progress(download), 0.0, 1.0);
+
+    updateRecord(downloadId, [download](Record &record) {
+        record.bytesReceived = qint64(webkit_download_get_received_data_length(download));
+        if (record.totalBytes <= 0 && record.bytesReceived > 0) {
+            const double estimated = webkit_download_get_estimated_progress(download);
+            if (estimated > 0.0)
+                record.totalBytes = qint64(record.bytesReceived / estimated);
+        }
+    });
 
     const int transferId = transferIdForDownload(downloadId);
     if (transferId <= 0) {
@@ -401,8 +439,118 @@ QVariantMap DownloadManager::downloadInfo(int downloadId) const
     return m_downloadInfoCache.value(downloadId);
 }
 
+QList<DownloadManager::Record> DownloadManager::downloadRecords() const
+{
+    return m_records.values();
+}
+
+DownloadManager::Record DownloadManager::downloadRecord(int downloadId) const
+{
+    return m_records.value(downloadId);
+}
+
+void DownloadManager::updateRecord(int downloadId, const std::function<void(Record &)> &mutate)
+{
+    const auto it = m_records.find(downloadId);
+    if (it == m_records.end())
+        return;
+    mutate(it.value());
+    emit downloadRecordChanged(downloadId);
+}
+
+bool DownloadManager::eraseDownloadRecord(int downloadId)
+{
+    if (!m_records.contains(downloadId))
+        return false;
+    // Only a finished download can be forgotten; erasing one that is still
+    // running would leave a transfer nothing can be matched back to.
+    if (m_records.value(downloadId).state == QLatin1String("in_progress"))
+        return false;
+    m_records.remove(downloadId);
+    emit downloadRecordErased(downloadId);
+    return true;
+}
+
+bool DownloadManager::removeDownloadFile(int downloadId, QString *error)
+{
+    const Record record = m_records.value(downloadId);
+    if (record.id == 0) {
+        if (error)
+            *error = QStringLiteral("no such download");
+        return false;
+    }
+    if (record.state != QLatin1String("complete")) {
+        if (error)
+            *error = QStringLiteral("the download is not complete");
+        return false;
+    }
+    if (record.path.isEmpty() || !QFile::exists(record.path)) {
+        if (error)
+            *error = QStringLiteral("the file is already gone");
+        return false;
+    }
+    if (!QFile::remove(record.path)) {
+        if (error)
+            *error = QStringLiteral("the file could not be removed");
+        return false;
+    }
+    updateRecord(downloadId, [](Record &record) { record.path.clear(); });
+    return true;
+}
+
+int DownloadManager::startDownload(const QString &url, const QString &fileName, bool saveAs,
+                                   QString *error)
+{
+    const QUrl parsed(url);
+    if (!parsed.isValid() || parsed.scheme().isEmpty()) {
+        if (error)
+            *error = QStringLiteral("not a valid url");
+        return -1;
+    }
+
+    WebKitNetworkSession *session = webkit_network_session_get_default();
+    if (!session) {
+        if (error)
+            *error = QStringLiteral("no network session");
+        return -1;
+    }
+
+    WebKitDownload *download = webkit_network_session_download_uri(session,
+                                                                  url.toUtf8().constData());
+    if (!download) {
+        if (error)
+            *error = QStringLiteral("the download could not be started");
+        return -1;
+    }
+
+    // download_uri hands over a reference; ensureDownloadId takes one of its
+    // own, so this one is ours to drop.
+    const int downloadId = ensureDownloadId(download);
+    if (!saveAs) {
+        // Remembered before decide-destination can fire: prepareDownload uses
+        // it to settle the destination instead of asking the user.
+        m_autoDestination.insert(download,
+                                 fileName.isEmpty() ? QStringLiteral("download")
+                                                    : sanitizeFileName(fileName));
+    }
+    g_object_unref(download);
+    return downloadId;
+}
+
 void DownloadManager::finalizeDownload(int downloadId, DownloadStatus::Status status, int transferStatus, const QString &reason)
 {
+    updateRecord(downloadId, [status, &reason](Record &record) {
+        record.state = status == DownloadStatus::Done ? QStringLiteral("complete")
+                                                      : QStringLiteral("interrupted");
+        if (status != DownloadStatus::Done) {
+            record.error = status == DownloadStatus::Canceled ? QStringLiteral("USER_CANCELED")
+                                                              : QStringLiteral("NETWORK_FAILED");
+        }
+        if (!reason.isEmpty() && record.error.isEmpty())
+            record.error = reason;
+        record.endTime = QDateTime::currentDateTimeUtc();
+    });
+
     emit downloadStatusChanged(downloadId, status, downloadInfo(downloadId));
 
     const int transferId = transferIdForDownload(downloadId);
@@ -429,6 +577,7 @@ void DownloadManager::releaseDownload(int downloadId)
 {
     if (WebKitDownload *download = m_downloadIdToObject.take(downloadId)) {
         m_downloadObjectToId.remove(download);
+        m_autoDestination.remove(download);
         g_object_unref(download);
     }
     m_downloadInfoCache.remove(downloadId);

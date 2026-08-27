@@ -614,9 +614,28 @@ static const char* const kApiShim = R"JS(
             getRegisteredContentScripts: wrap("scripting.getRegisteredContentScripts"),
             ExecutionWorld: { ISOLATED: "ISOLATED", MAIN: "MAIN" }
         },
-        downloads: unsupportedNamespace("downloads",
-            ["download", "search", "cancel", "pause", "resume", "erase"],
-            ["onCreated", "onChanged", "onErased"]),
+        // DownloadManager drives the transfer; its per-download record is what
+        // search() reads, and it lives for this run of the browser only.
+        // pause/resume have no equivalent in WebKit's download API, and there
+        // is nothing to hand a finished file to, so open/show stay unsupported.
+        downloads: {
+            download: wrap("downloads.download"),
+            search: wrap("downloads.search"),
+            cancel: wrap("downloads.cancel"),
+            erase: wrap("downloads.erase"),
+            removeFile: wrap("downloads.removeFile"),
+            pause: unsupported("downloads.pause"),
+            resume: unsupported("downloads.resume"),
+            open: unsupported("downloads.open"),
+            show: unsupported("downloads.show"),
+            showDefaultFolder: unsupported("downloads.showDefaultFolder"),
+            getFileIcon: unsupported("downloads.getFileIcon"),
+            acceptDanger: unsupported("downloads.acceptDanger"),
+            onCreated: new Event("downloads.onCreated"),
+            onChanged: new Event("downloads.onChanged"),
+            onErased: new Event("downloads.onErased"),
+            State: { IN_PROGRESS: "in_progress", INTERRUPTED: "interrupted", COMPLETE: "complete" }
+        },
         // The browser's own history database. One row per URL, so getVisits
         // reports the last visit rather than inventing the earlier ones, and
         // onVisited fires when a load finishes in a non-private tab.

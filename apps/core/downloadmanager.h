@@ -14,9 +14,13 @@
 
 #include "downloadstatus.h"
 
+#include <functional>
+
+#include <QDateTime>
 #include <QObject>
 #include <QElapsedTimer>
 #include <QHash>
+#include <QList>
 #include <QString>
 #include <QVariant>
 
@@ -30,9 +34,39 @@ class DownloadManager : public QObject
     Q_ENUMS(DownloadStatus::Status)
 
 public:
+    // What a download looked like, kept so that something other than the
+    // transfer UI can ask about it — browser.downloads needs search(), which
+    // the transfer engine cannot answer. Lives for the session only: the
+    // download/transfer mappings are not persistent either (see the TODO
+    // below), so a restart starts with an empty list.
+    struct Record {
+        int id = 0;
+        QString url;
+        QString path;      // absolute; empty until a destination is chosen
+        QString mimeType;
+        QString error;
+        // "in_progress", "complete" or "interrupted", as the API spells them.
+        QString state = QStringLiteral("in_progress");
+        qint64 bytesReceived = 0;
+        qint64 totalBytes = 0;
+        QDateTime startTime;
+        QDateTime endTime;
+    };
+
     static DownloadManager *instance();
 
     bool existActiveTransfers();
+
+    QList<Record> downloadRecords() const;
+    Record downloadRecord(int downloadId) const;
+    // Starts a download that no page asked for. `fileName` is a bare name (no
+    // directories); when `saveAs` is false the destination is chosen without
+    // prompting, which is what an API caller expects. Returns the download id,
+    // or -1 with `error` set.
+    int startDownload(const QString &url, const QString &fileName, bool saveAs, QString *error);
+    // Forgets the record. The file, if any, is left alone.
+    bool eraseDownloadRecord(int downloadId);
+    bool removeDownloadFile(int downloadId, QString *error);
 
     bool pdfPrinting() const;
 
@@ -45,6 +79,10 @@ signals:
     // replies with confirmDownload() (with the chosen absolute path) or
     // cancelPendingDownload().
     void saveAsRequested(int downloadId, QString suggestedFileName, QString defaultDir);
+    // Record lifecycle, for consumers that need more than the transfer UI.
+    void downloadRecordCreated(int downloadId);
+    void downloadRecordChanged(int downloadId);
+    void downloadRecordErased(int downloadId);
 
 public slots:
     void cancelActiveTransfers();
@@ -83,6 +121,7 @@ private:
     void finalizeDownload(int downloadId, DownloadStatus::Status status, int transferStatus, const QString &reason);
     void releaseDownload(int downloadId);
     QVariantMap downloadInfo(int downloadId) const;
+    void updateRecord(int downloadId, const std::function<void(Record &)> &mutate);
 
     // A download completion that arrived before the asynchronous createDownload
     // reply assigned a transfer id; flushed to the transfer engine once it does.
@@ -103,6 +142,10 @@ private:
     QHash<int, QVariantMap> m_downloadInfoCache;
     QHash<int, PendingFinal> m_pendingFinal;
     QHash<int, double> m_pendingProgress;
+    QHash<int, Record> m_records;
+    // Downloads started through startDownload(): the destination is settled
+    // here instead of by asking the user.
+    QHash<WebKitDownload *, QString> m_autoDestination;
 
     // Last progress state reported to the transfer engine, used to throttle
     // updates: sent unthrottled, the per-network-chunk received-data signal
