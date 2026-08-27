@@ -506,6 +506,12 @@ void WebExtensionManager::openActionPopup(const QString &extensionId)
                             true);
 }
 
+void WebExtensionManager::openUrl(const QString &url, bool inNewTab)
+{
+    if (!url.isEmpty())
+        Q_EMIT openUrlRequested(url, inNewTab);
+}
+
 void WebExtensionManager::openOptionsPage(const QString &extensionId)
 {
     const Entry *entry = entryFor(extensionId);

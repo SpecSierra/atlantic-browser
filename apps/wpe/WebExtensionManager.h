@@ -103,6 +103,9 @@ public:
     // has no anchored popup surface.
     Q_INVOKABLE void openActionPopup(const QString &extensionId);
     Q_INVOKABLE void openOptionsPage(const QString &extensionId);
+    // Opens a URL in a browser tab on behalf of the extension UI. The signal is
+    // already wired to WPEWebContainer::load(); this just gives QML a way in.
+    Q_INVOKABLE void openUrl(const QString &url, bool inNewTab = true);
 
     // --- engine side ---
 

@@ -45,6 +45,11 @@ Page {
                 onClicked: WebExtensionManager.reload()
             }
             MenuItem {
+                //% "Get extensions"
+                text: qsTrId("atlantic-me-extensions_browse")
+                onClicked: pageStack.push("ExtensionStorePage.qml")
+            }
+            MenuItem {
                 //% "Install from file…"
                 text: qsTrId("atlantic-me-extensions_install")
                 onClicked: pageStack.animatorPush(filePickerPage)
@@ -66,7 +71,7 @@ Page {
                 font.pixelSize: Theme.fontSizeExtraSmall
                 color: Theme.secondaryColor
                 visible: listView.count === 0
-                //% "No extensions installed. Install a .zip or .xpi package, or copy an unpacked extension into %1."
+                //% "No extensions installed. Pull down to browse addons.mozilla.org, install a .zip or .xpi package, or copy an unpacked extension into %1."
                 text: qsTrId("atlantic-la-extensions_empty").arg(WebExtensionManager.extensionsDirectory)
             }
 

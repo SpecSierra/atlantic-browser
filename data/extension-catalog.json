@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "source": "addons.mozilla.org",
+  "updated": "2026-08-27",
+  "_comment": [
+    "Curated list of extensions for the Atlantic store page. Packages are",
+    "downloaded from addons.mozilla.org by slug; nothing is mirrored here.",
+    "",
+    "'expected' is a compatibility verdict derived from the add-on's declared",
+    "permissions using the same rule WebExtensionStore::verdictFor() applies to",
+    "search results, then reviewed by hand. 'verified' means somebody actually",
+    "ran it on a device — set it to true only after doing so, per extension.",
+    "",
+    "The catalog is a recommendation, never a restriction: the store page can",
+    "search all of AMO and will install anything the user asks for, including",
+    "entries marked broken."
+  ],
+  "extensions": [
+    {
+      "slug": "darkreader",
+      "name": "Dark Reader",
+      "summary": "Dark mode for every website.",
+      "expected": "partial",
+      "verified": false,
+      "note": "Dimming is a content script and should work. Its context-menu entries will not appear; use the popup instead."
+    },
+    {
+      "slug": "unpaywall",
+      "name": "Unpaywall",
+      "summary": "Finds free, legal copies of paywalled research papers.",
+      "expected": "works",
+      "verified": false,
+      "note": "Asks for nothing Atlantic withholds."
+    },
+    {
+      "slug": "youtube-nonstop",
+      "name": "YouTube NonStop",
+      "summary": "Dismisses YouTube's \"are you still watching?\" prompt.",
+      "expected": "works",
+      "verified": false,
+      "note": "A single content script; nothing else."
+    },
+    {
+      "slug": "enhancer-for-youtube",
+      "name": "Enhancer for YouTube",
+      "summary": "Playback speed, volume, quality and layout controls for YouTube.",
+      "expected": "works",
+      "verified": false,
+      "note": "Content script plus settings in storage — no APIs Atlantic withholds."
+    },
+    {
+      "slug": "terms-of-service-didnt-read",
+      "name": "Terms of Service; Didn't Read",
+      "summary": "Grades and summarises the terms of the site you are on.",
+      "expected": "works",
+      "verified": false,
+      "note": "Asks for nothing Atlantic withholds."
+    },
+    {
+      "slug": "simple-translate",
+      "name": "Simple Translate",
+      "summary": "Translates selected text in place.",
+      "expected": "partial",
+      "verified": false,
+      "note": "Selection translation should work. Its context-menu entry will not appear."
+    },
+    {
+      "slug": "read-aloud",
+      "name": "Read Aloud",
+      "summary": "Reads the page out loud.",
+      "expected": "partial",
+      "verified": false,
+      "note": "Its context-menu entry will not appear; start it from the popup."
+    },
+    {
+      "slug": "tranquility-1",
+      "name": "Tranquility Reader",
+      "summary": "Strips a page down to its readable content.",
+      "expected": "partial",
+      "verified": false,
+      "note": "Its context-menu entry will not appear; use the popup."
+    },
+    {
+      "slug": "image-search-options",
+      "name": "Image Search Options",
+      "summary": "Reverse image search from the page.",
+      "expected": "partial",
+      "verified": false,
+      "note": "Driven entirely from the context menu, which Atlantic does not show — of limited use until that lands."
+    },
+    {
+      "slug": "sponsorblock",
+      "name": "SponsorBlock",
+      "summary": "Skips sponsored segments in YouTube videos.",
+      "expected": "partial",
+      "verified": false,
+      "note": "Skipping is a content script and should work; the parts that rely on dynamic script injection will not."
+    },
+    {
+      "slug": "ublock-origin",
+      "name": "uBlock Origin",
+      "summary": "Wide-spectrum content blocker.",
+      "expected": "broken",
+      "verified": false,
+      "note": "Listed so the answer is easy to find: uBlock Origin blocks through webRequest, which Atlantic does not provide, so it will install and then do nothing. Atlantic's built-in blocker already runs the same filter lists through the Brave engine — turn it on in Settings instead."
+    }
+  ]
+}

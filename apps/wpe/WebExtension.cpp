@@ -168,22 +168,13 @@ bool MatchPattern::matches(const QUrl &url) const
 
 // --- WebExtension -----------------------------------------------------------
 
-QString WebExtension::deriveId(const QJsonObject &manifest)
+QString WebExtension::idForGeckoId(const QString &geckoId)
 {
-    // Firefox-style explicit id wins — it is what the extension's own code and
-    // any published options URLs expect.
-    for (const char *key : { "browser_specific_settings", "applications" }) {
-        const QJsonObject settings = manifest.value(QLatin1String(key)).toObject();
-        const QString id = settings.value(QStringLiteral("gecko")).toObject()
-                               .value(QStringLiteral("id")).toString();
-        if (!id.isEmpty()) {
-            const QString slug = slugify(id);
-            if (!slug.isEmpty())
-                return slug;
-        }
-    }
+    return slugify(geckoId);
+}
 
-    const QString name = manifest.value(QStringLiteral("name")).toString();
+QString WebExtension::idForName(const QString &name)
+{
     QString slug = slugify(name);
     if (slug.isEmpty())
         slug = QStringLiteral("extension");
@@ -193,6 +184,24 @@ QString WebExtension::deriveId(const QJsonObject &manifest)
     // and with it the same storage area and atlantic-extension:// origin.
     const QByteArray digest = QCryptographicHash::hash(name.toUtf8(), QCryptographicHash::Sha1);
     return slug + QLatin1Char('-') + QString::fromLatin1(digest.toHex().left(8));
+}
+
+QString WebExtension::deriveId(const QJsonObject &manifest)
+{
+    // Firefox-style explicit id wins — it is what the extension's own code and
+    // any published options URLs expect.
+    for (const char *key : { "browser_specific_settings", "applications" }) {
+        const QJsonObject settings = manifest.value(QLatin1String(key)).toObject();
+        const QString id = settings.value(QStringLiteral("gecko")).toObject()
+                               .value(QStringLiteral("id")).toString();
+        if (!id.isEmpty()) {
+            const QString slug = idForGeckoId(id);
+            if (!slug.isEmpty())
+                return slug;
+        }
+    }
+
+    return idForName(manifest.value(QStringLiteral("name")).toString());
 }
 
 bool WebExtension::loadFromDirectory(const QString &dir, QString *error)

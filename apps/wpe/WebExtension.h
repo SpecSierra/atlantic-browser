@@ -65,6 +65,13 @@ public:
     // name and as the host of atlantic-extension:// URLs, so it is always
     // restricted to [a-z0-9._-].
     static QString deriveId(const QJsonObject &manifest);
+    // The id an extension declaring this gecko id will get. Lets the store tell
+    // whether an AMO add-on is already installed without downloading it.
+    static QString idForGeckoId(const QString &geckoId);
+    // The id an extension with this name and no gecko id will get. Only a guess
+    // from outside — AMO's display name is not guaranteed to be the manifest
+    // name — so use it for hints, never for anything destructive.
+    static QString idForName(const QString &name);
 
     QString id() const { return m_id; }
     QString name() const { return m_name; }

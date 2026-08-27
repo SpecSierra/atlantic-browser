@@ -24,6 +24,7 @@ HEADERS += \
     $$PWD/WebExtensionBackground.h \
     $$PWD/WebExtensionManager.h \
     $$PWD/WebExtensionScripts.h \
+    $$PWD/WebExtensionStore.h \
     $$PWD/AdBlockListUpdater.h \
     $$PWD/WPEWebPage.h \
     $$PWD/WPEUserScripts.h \
@@ -35,6 +36,7 @@ SOURCES += \
     $$PWD/WebExtension.cpp \
     $$PWD/WebExtensionBackground.cpp \
     $$PWD/WebExtensionManager.cpp \
+    $$PWD/WebExtensionStore.cpp \
     $$PWD/AdBlockListUpdater.cpp \
     $$PWD/WPEWebPage.cpp \
     $$PWD/WPEWebContainer.cpp \

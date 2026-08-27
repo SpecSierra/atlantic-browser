@@ -19,6 +19,7 @@
 #include "inputregion.h"
 #include "searchenginemodel.h"
 #include "WebExtensionManager.h"
+#include "WebExtensionStore.h"
 #include "secureaction.h"
 #include "faviconmanager.h"
 #include "bookmarkmanager.h"
@@ -175,6 +176,11 @@ static QObject *webextension_manager_factory(QQmlEngine *, QJSEngine *)
     return WebExtensionManager::instance();
 }
 
+static QObject *webextension_store_factory(QQmlEngine *, QJSEngine *)
+{
+    return WebExtensionStore::instance();
+}
+
 static QObject *faviconmanager_factory(QQmlEngine *, QJSEngine *)
 {
     return FaviconManager::instance();
@@ -219,6 +225,8 @@ static void registerBrowserQmlTypes()
     qmlRegisterSingletonType<SearchEngineModel>(uri, 1, 0, "SearchEngineModel", search_model_factory);
     qmlRegisterSingletonType<WebExtensionManager>(uri, 1, 0, "WebExtensionManager",
                                                   webextension_manager_factory);
+    qmlRegisterSingletonType<WebExtensionStore>(uri, 1, 0, "WebExtensionStore",
+                                                webextension_store_factory);
 
     registered = true;
 }
