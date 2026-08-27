@@ -1384,6 +1384,17 @@ static void onImageLongPressBridgeMessage(WebKitUserContentManager*, JSCValue* v
     const QString imageUrl = obj.value(QStringLiteral("imageUrl")).toString();
     const qreal x = obj.value(QStringLiteral("x")).toDouble();
     const qreal y = obj.value(QStringLiteral("y")).toDouble();
+
+    // The full context goes to QML for browser.contextMenus; the image URL
+    // keeps its own property because the image panel has always used it.
+    page->setContextInfo(QVariantMap{
+        { QStringLiteral("pageUrl"), obj.value(QStringLiteral("pageUrl")).toString() },
+        { QStringLiteral("linkUrl"), obj.value(QStringLiteral("linkUrl")).toString() },
+        { QStringLiteral("srcUrl"), imageUrl },
+        { QStringLiteral("selectionText"), obj.value(QStringLiteral("selectionText")).toString() },
+        { QStringLiteral("editable"), obj.value(QStringLiteral("editable")).toBool() },
+        { QStringLiteral("mediaType"), imageUrl.isEmpty() ? QString() : QStringLiteral("image") } });
+
     if (imageUrl.isEmpty())
         return;
 
@@ -5030,6 +5041,19 @@ void WPEWebPage::openImageLongPress(const QString &imageUrl)
         m_imageLongPressUrl = imageUrl;
         emit imageLongPressUrlChanged();
     }
+}
+
+void WPEWebPage::setContextInfo(const QVariantMap &info)
+{
+    if (m_contextInfo == info)
+        return;
+    m_contextInfo = info;
+    Q_EMIT contextInfoChanged();
+}
+
+void WPEWebPage::clearContextInfo()
+{
+    setContextInfo(QVariantMap());
 }
 
 void WPEWebPage::clearImageLongPress()

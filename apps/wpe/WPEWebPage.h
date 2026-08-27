@@ -167,6 +167,9 @@ private:
     // signal to onRecvAsyncMessage never fires. A NOTIFY property is observed
     // reliably via QML bindings (same approach as selectMenu* above).
     Q_PROPERTY(QString imageLongPressUrl READ imageLongPressUrl NOTIFY imageLongPressUrlChanged FINAL)
+    // What the last long press landed on: pageUrl, linkUrl, srcUrl,
+    // selectionText, editable, mediaType. Feeds browser.contextMenus.
+    Q_PROPERTY(QVariantMap contextInfo READ contextInfo NOTIFY contextInfoChanged FINAL)
     Q_PROPERTY(bool fileChooserActive READ fileChooserActive NOTIFY fileChooserActiveChanged FINAL)
     Q_PROPERTY(QStringList fileChooserNameFilters READ fileChooserNameFilters NOTIFY fileChooserNameFiltersChanged FINAL)
     Q_PROPERTY(bool fileChooserSelectMultiple READ fileChooserSelectMultiple NOTIFY fileChooserSelectMultipleChanged FINAL)
@@ -425,6 +428,9 @@ public:
     void openImageLongPress(const QString &imageUrl);
     Q_INVOKABLE void clearImageLongPress();
     QString imageLongPressUrl() const { return m_imageLongPressUrl; }
+    QVariantMap contextInfo() const { return m_contextInfo; }
+    void setContextInfo(const QVariantMap &info);
+    Q_INVOKABLE void clearContextInfo();
 
     QStringList selectMenuOptions() const { return m_selectMenuOptions; }
     int selectMenuSelectedIndex() const { return m_selectMenuSelectedIdx; }
@@ -506,6 +512,7 @@ signals:
     void selectMenuOptionsChanged();
     void selectMenuSelectedIndexChanged();
     void imageLongPressUrlChanged();
+    void contextInfoChanged();
     void fileChooserActiveChanged();
     void fileChooserNameFiltersChanged();
     void fileChooserSelectMultipleChanged();
@@ -672,6 +679,7 @@ private:
     QStringList m_selectMenuOptions;
     int m_selectMenuSelectedIdx = 0;
     QString m_imageLongPressUrl;
+    QVariantMap m_contextInfo;
     WebKitFileChooserRequest *m_fileChooserRequest = nullptr;
     bool m_fileChooserActive = false;
     QStringList m_fileChooserNameFilters;

@@ -103,6 +103,15 @@ public:
     // has no anchored popup surface.
     Q_INVOKABLE void openActionPopup(const QString &extensionId);
     Q_INVOKABLE void openOptionsPage(const QString &extensionId);
+
+    // --- browser.contextMenus, for the page long-press panel ---
+    //
+    // `context` carries what was pressed: pageUrl, linkUrl, srcUrl,
+    // selectionText, editable, mediaType. Returns one map per applicable item
+    // with extensionId, itemId, title, type, checked and enabled.
+    Q_INVOKABLE QVariantList contextMenuItems(const QVariantMap &context) const;
+    Q_INVOKABLE void activateContextMenuItem(const QString &extensionId, const QString &itemId,
+                                             const QVariantMap &context);
     // Opens a URL in a browser tab on behalf of the extension UI. The signal is
     // already wired to WPEWebContainer::load(); this just gives QML a way in.
     Q_INVOKABLE void openUrl(const QString &url, bool inNewTab = true);
@@ -134,6 +143,8 @@ public:
 
 Q_SIGNALS:
     void countChanged();
+    // The set of context-menu items changed; the panel should re-query.
+    void contextMenuItemsChanged();
     void lastErrorChanged();
     void extensionsChanged();
     // Routed to the browser UI: extensions cannot open tabs themselves.
@@ -162,6 +173,36 @@ private:
         }
     };
 
+    // One browser.contextMenus entry. Atlantic has no menu bar, so these are
+    // offered on the page long-press panel when their contexts match what was
+    // pressed.
+    struct MenuItemDef {
+        QString id;
+        QString parentId;
+        QString title;
+        QStringList contexts;            // page, selection, link, image, editable, all
+        QStringList documentUrlPatterns; // where the item may appear at all
+        QStringList targetUrlPatterns;   // constrains link/image targets
+        QString type = QStringLiteral("normal");
+        bool checked = false;
+        bool enabled = true;
+        bool visible = true;
+    };
+
+    // A content script registered at runtime through browser.scripting, as
+    // opposed to one declared in the manifest.
+    struct DynamicScript {
+        QString id;
+        QStringList matches;
+        QStringList excludeMatches;
+        QStringList js;
+        QStringList css;
+        QString runAt = QStringLiteral("document_idle");
+        bool allFrames = false;
+        bool mainWorld = false;
+        bool persistAcrossSessions = true;
+    };
+
     struct Entry {
         WebExtension extension;
         bool enabled = true;
@@ -172,6 +213,10 @@ private:
         QString badgeColor;
         QString title;
         QString popupOverride;
+        // QList, not QVector: neither struct is relocatable, and QVector::erase
+        // instantiates a memmove branch over them that trips -Wclass-memaccess.
+        QList<DynamicScript> dynamicScripts;
+        QList<MenuItemDef> menuItems;
     };
 
     // Bound to a script-message handler; identifies which extension and which
@@ -186,6 +231,9 @@ private:
     struct PageState {
         QVector<WebKitUserScript *> scripts;
         QVector<WebKitUserStyleSheet *> styleSheets;
+        // CSS inserted through browser.scripting.insertCSS, keyed so that
+        // removeCSS can take the matching sheet back out again.
+        QHash<QString, WebKitUserStyleSheet *> insertedCss;
         // handler name / world name, so they can be unregistered on reload.
         QVector<QPair<QString, QString>> handlers;
         QVector<HandlerBinding *> bindings;
@@ -233,6 +281,21 @@ private:
     // has no page or the extension has no access to it.
     bool contentContextForTab(const QString &extensionId, int tabId, ExtContext *out) const;
     bool isExtensionPage(const QString &extensionId, WPEWebPage *page) const;
+    // True when `item` should be offered for `context`.
+    static bool menuItemMatches(const MenuItemDef &item, const QVariantMap &context);
+
+    // browser.scripting / tabs.executeScript. Evaluation happens in the
+    // extension's isolated world unless the caller asks for the main one.
+    void executeScript(const QString &extensionId, const ExtContext &origin, int seq,
+                       const QJsonObject &injection);
+    void insertCss(const QString &extensionId, const QJsonObject &injection, bool remove);
+    void applyDynamicScripts(const Entry &entry, PageState &state,
+                             WebKitUserContentManager *ucm);
+    WPEWebPage *pageForTab(const QString &extensionId, int tabId) const;
+    // Reads `files` (relative to the extension) plus inline `css`/`code` into
+    // one blob, in the order the caller listed them.
+    QString gatherSources(const WebExtension &extension, const QJsonObject &injection,
+                          const QString &inlineKey, QString *error) const;
 
     // browser.storage backing: one JSON file per (extension, area).
     QString storagePath(const QString &extensionId, const QString &area) const;

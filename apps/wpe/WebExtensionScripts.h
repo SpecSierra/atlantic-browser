@@ -334,9 +334,9 @@ static const char* const kApiShim = R"JS(
             notify("runtime.connect", [portId, name, tabId]);
             return port;
         },
-        executeScript: unsupported("tabs.executeScript"),
-        insertCSS: unsupported("tabs.insertCSS"),
-        removeCSS: unsupported("tabs.removeCSS"),
+        executeScript: wrap("tabs.executeScript"),
+        insertCSS: wrap("tabs.insertCSS"),
+        removeCSS: wrap("tabs.removeCSS"),
         onCreated: new Event("tabs.onCreated"),
         onUpdated: new Event("tabs.onUpdated"),
         onRemoved: new Event("tabs.onRemoved"),
@@ -451,6 +451,31 @@ static const char* const kApiShim = R"JS(
         }
     };
 
+    // contextMenus.create is the odd one out: it returns the item id
+    // *synchronously* and only reports failure through the optional callback,
+    // so an id has to be minted here when the caller did not supply one.
+    var nextMenuId = 1;
+    var contextMenus = {
+        create: function(properties, callback) {
+            properties = properties || {};
+            if (properties.id === undefined || properties.id === null)
+                properties.id = "atl-item-" + (nextMenuId++);
+            var promise = call("contextMenus.create", [properties]);
+            if (callback)
+                promise.then(function() { callback(); }, function() { callback(); });
+            else
+                promise.catch(function(e) { reportError(e); });
+            return properties.id;
+        },
+        update: wrap("contextMenus.update"),
+        remove: wrap("contextMenus.remove"),
+        removeAll: wrap("contextMenus.removeAll"),
+        onClicked: new Event("contextMenus.onClicked"),
+        onShown: inertEvent("contextMenus.onShown"),
+        onHidden: inertEvent("contextMenus.onHidden"),
+        ACTION_MENU_TOP_LEVEL_LIMIT: 6
+    };
+
     function unsupportedNamespace(name, methods, events) {
         var namespace = {};
         methods.forEach(function(method) { namespace[method] = unsupported(name + "." + method); });
@@ -509,13 +534,32 @@ static const char* const kApiShim = R"JS(
              "onCreatedNavigationTarget", "onHistoryStateUpdated", "onErrorOccurred"]),
         cookies: unsupportedNamespace("cookies",
             ["get", "getAll", "set", "remove", "getAllCookieStores"], ["onChanged"]),
-        contextMenus: unsupportedNamespace("contextMenus",
-            ["create", "update", "remove", "removeAll"], ["onClicked"]),
-        menus: unsupportedNamespace("menus",
-            ["create", "update", "remove", "removeAll"], ["onClicked"]),
-        scripting: unsupportedNamespace("scripting",
-            ["executeScript", "insertCSS", "removeCSS", "registerContentScripts",
-             "unregisterContentScripts", "getRegisteredContentScripts"], []),
+        contextMenus: contextMenus,
+        menus: contextMenus,
+        scripting: {
+            // `func` is a live function; it cannot be serialised as-is, so it
+            // travels as source text and is re-created on the page side. That
+            // is also why it must not close over anything - same rule the real
+            // API has, for the same reason.
+            executeScript: function(injection, callback) {
+                var payload = {};
+                for (var key in injection) {
+                    if (key !== "func")
+                        payload[key] = injection[key];
+                }
+                if (typeof injection.func === "function")
+                    payload.funcSource = injection.func.toString();
+                return callback ? wrap("scripting.executeScript")(payload, callback)
+                                : wrap("scripting.executeScript")(payload);
+            },
+            insertCSS: wrap("scripting.insertCSS"),
+            removeCSS: wrap("scripting.removeCSS"),
+            registerContentScripts: wrap("scripting.registerContentScripts"),
+            unregisterContentScripts: wrap("scripting.unregisterContentScripts"),
+            updateContentScripts: wrap("scripting.registerContentScripts"),
+            getRegisteredContentScripts: wrap("scripting.getRegisteredContentScripts"),
+            ExecutionWorld: { ISOLATED: "ISOLATED", MAIN: "MAIN" }
+        },
         downloads: unsupportedNamespace("downloads",
             ["download", "search", "cancel", "pause", "resume", "erase"],
             ["onCreated", "onChanged", "onErased"]),

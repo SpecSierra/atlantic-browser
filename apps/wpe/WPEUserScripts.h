@@ -197,17 +197,58 @@ static const char* const kSelectionBridge = R"JS(
         return null;
     }
 
-    // Returns true if an image was found at (x, y) and its URL handed to the
-    // QML image panel. Shared by both long-press triggers below.
+    function linkUrlAtPoint(x, y) {
+        var el = document.elementFromPoint(x, y);
+        while (el) {
+            if (el.tagName && el.tagName.toLowerCase() === 'a' && el.href)
+                return el.href;
+            el = el.parentElement;
+        }
+        return null;
+    }
+
+    function editableAtPoint(x, y) {
+        var el = document.elementFromPoint(x, y);
+        while (el) {
+            if (el.isContentEditable)
+                return true;
+            var tag = el.tagName ? el.tagName.toLowerCase() : '';
+            if (tag === 'textarea')
+                return true;
+            if (tag === 'input' && !/^(button|submit|reset|checkbox|radio|file|image)$/i
+                    .test(el.type || 'text'))
+                return true;
+            el = el.parentElement;
+        }
+        return false;
+    }
+
+    // Reports what was long-pressed. The image URL keeps its own field because
+    // the image panel has always been driven off it; the rest is what
+    // browser.contextMenus needs to decide which items apply. Returns true when
+    // there is anything worth showing a panel for.
     function postImageLongPress(x, y) {
         var imgUrl = imageUrlAtPoint(x, y);
-        if (!imgUrl)
-            return false;
+        var linkUrl = linkUrlAtPoint(x, y);
+        var editable = editableAtPoint(x, y);
+        var selection = '';
         try {
-            window.webkit.messageHandlers.imageLongPressBridge.postMessage(
-                { imageUrl: imgUrl, x: x, y: y });
+            var sel = window.getSelection();
+            if (sel && !sel.isCollapsed)
+                selection = String(sel).substring(0, 1000);
         } catch(e) {}
-        return true;
+
+        try {
+            window.webkit.messageHandlers.imageLongPressBridge.postMessage({
+                imageUrl: imgUrl || '',
+                linkUrl: linkUrl || '',
+                selectionText: selection,
+                editable: editable,
+                pageUrl: location.href,
+                x: x, y: y
+            });
+        } catch(e) {}
+        return !!imgUrl;
     }
 
     function beginLongPress(x, y) {

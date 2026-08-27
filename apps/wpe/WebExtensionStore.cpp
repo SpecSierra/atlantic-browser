@@ -42,9 +42,9 @@ const char *const kBrokenApis[] = {
 
 // APIs whose absence costs a feature but usually not the point of the add-on.
 const char *const kPartialApis[] = {
-    "contextMenus", "menus", "webNavigation", "cookies", "downloads", "history",
-    "bookmarks", "management", "idle", "scripting", "browsingData", "sessions",
-    "topSites", "search", "devtools", "nativeMessaging", "privacy", "tabHide",
+    "webNavigation", "cookies", "downloads", "history", "bookmarks",
+    "management", "idle", "browsingData", "sessions", "topSites", "search",
+    "devtools", "nativeMessaging", "privacy", "tabHide",
     nullptr
 };
 

@@ -24,6 +24,7 @@
 #include <QUrl>
 #include <QVariantMap>
 
+#include <memory>
 #include <vector>
 
 // Qt's `#define signals public` mangles a GDBus struct field of the same name;
@@ -342,10 +343,6 @@ void WebExtensionManager::reload()
                 "Declares an MV3 service worker; it runs as a plain background script, "
                 "with no service-worker lifecycle or events.");
         }
-        if (permissions.contains(QStringLiteral("contextMenus"))
-            || permissions.contains(QStringLiteral("menus"))) {
-            entry.warnings << QStringLiteral("Context-menu entries are not shown.");
-        }
 
         m_entries.append(entry);
     }
@@ -466,10 +463,15 @@ void WebExtensionManager::setExtensionEnabled(const QString &extensionId, bool e
         return;
     entry.enabled = enabled;
 
-    if (enabled)
+    if (enabled) {
         startBackground(entry);
-    else
+    } else {
         stopBackground(entry);
+        // A disabled extension must not keep offering menu items.
+        entry.menuItems.clear();
+        entry.dynamicScripts.clear();
+        Q_EMIT contextMenuItemsChanged();
+    }
 
     saveRegistry();
     const QModelIndex modelIndex = createIndex(index, 0);
@@ -757,7 +759,10 @@ void WebExtensionManager::installIntoPage(WebKitUserContentManager *ucm, WPEWebP
         }
 
         const QVector<ContentScriptDef> defs = extension.contentScripts();
-        if (defs.isEmpty())
+        // Not just the manifest: browser.scripting.registerContentScripts can be
+        // an extension's only injection route, and it still needs the isolated
+        // world, the bridge handler and the shim set up below.
+        if (defs.isEmpty() && entry.dynamicScripts.isEmpty())
             continue;
 
         // --- content scripts, in the extension's isolated world ---
@@ -777,6 +782,10 @@ void WebExtensionManager::installIntoPage(WebKitUserContentManager *ucm, WPEWebP
             union_ << def.matches;
             anyAllFrames = anyAllFrames || def.allFrames;
         }
+        for (const DynamicScript &script : entry.dynamicScripts) {
+            union_ << script.matches;
+            anyAllFrames = anyAllFrames || script.allFrames;
+        }
 
         // The shim goes in first and at document-start, so a document-start
         // content script already finds browser.* defined.
@@ -793,6 +802,8 @@ void WebExtensionManager::installIntoPage(WebKitUserContentManager *ucm, WPEWebP
             webkit_user_content_manager_add_script(ucm, script);
             state.scripts.append(script);
         }
+
+        applyDynamicScripts(entry, state, ucm);
 
         for (const ContentScriptDef &def : defs) {
             QVector<QByteArray> allowStorage, blockStorage;
@@ -1532,6 +1543,199 @@ void WebExtensionManager::dispatchApiCall(const QString &extensionId, const ExtC
         return;
     }
 
+    // --- contextMenus ---
+    if (api.startsWith(QLatin1String("contextMenus.")) || api.startsWith(QLatin1String("menus."))) {
+        const QString action = api.section(QLatin1Char('.'), 1);
+
+        if (action == QLatin1String("create")) {
+            const QJsonObject props = arg(0).toObject();
+            MenuItemDef item;
+            item.id = props.value(QStringLiteral("id")).toVariant().toString();
+            if (item.id.isEmpty())
+                item.id = QStringLiteral("item%1").arg(m_nextToken++);
+            item.parentId = props.value(QStringLiteral("parentId")).toVariant().toString();
+            item.title = props.value(QStringLiteral("title")).toString();
+            item.type = props.value(QStringLiteral("type")).toString(QStringLiteral("normal"));
+            item.checked = props.value(QStringLiteral("checked")).toBool(false);
+            item.enabled = props.value(QStringLiteral("enabled")).toBool(true);
+            item.visible = props.value(QStringLiteral("visible")).toBool(true);
+            const QJsonArray contexts = props.value(QStringLiteral("contexts")).toArray();
+            for (const QJsonValue &value : contexts)
+                item.contexts << value.toString();
+            const QJsonArray documents = props.value(QStringLiteral("documentUrlPatterns")).toArray();
+            for (const QJsonValue &value : documents)
+                item.documentUrlPatterns << value.toString();
+            const QJsonArray targets = props.value(QStringLiteral("targetUrlPatterns")).toArray();
+            for (const QJsonValue &value : targets)
+                item.targetUrlPatterns << value.toString();
+
+            // Creating an existing id replaces it, which is what extensions
+            // rely on when they rebuild their menu on every startup.
+            for (int i = entry->menuItems.size() - 1; i >= 0; --i) {
+                if (entry->menuItems.at(i).id == item.id)
+                    entry->menuItems.removeAt(i);
+            }
+            entry->menuItems.append(item);
+            Q_EMIT contextMenuItemsChanged();
+            ok(item.id);
+            return;
+        }
+
+        if (action == QLatin1String("update")) {
+            const QString id = arg(0).toVariant().toString();
+            const QJsonObject props = arg(1).toObject();
+            for (MenuItemDef &item : entry->menuItems) {
+                if (item.id != id)
+                    continue;
+                if (props.contains(QStringLiteral("title")))
+                    item.title = props.value(QStringLiteral("title")).toString();
+                if (props.contains(QStringLiteral("enabled")))
+                    item.enabled = props.value(QStringLiteral("enabled")).toBool(true);
+                if (props.contains(QStringLiteral("visible")))
+                    item.visible = props.value(QStringLiteral("visible")).toBool(true);
+                if (props.contains(QStringLiteral("checked")))
+                    item.checked = props.value(QStringLiteral("checked")).toBool(false);
+                if (props.contains(QStringLiteral("contexts"))) {
+                    item.contexts.clear();
+                    const QJsonArray contexts = props.value(QStringLiteral("contexts")).toArray();
+                    for (const QJsonValue &value : contexts)
+                        item.contexts << value.toString();
+                }
+                break;
+            }
+            Q_EMIT contextMenuItemsChanged();
+            ok(QJsonValue());
+            return;
+        }
+
+        if (action == QLatin1String("remove")) {
+            const QString id = arg(0).toVariant().toString();
+            for (int i = entry->menuItems.size() - 1; i >= 0; --i) {
+                if (entry->menuItems.at(i).id == id)
+                    entry->menuItems.removeAt(i);
+            }
+            Q_EMIT contextMenuItemsChanged();
+            ok(QJsonValue());
+            return;
+        }
+
+        if (action == QLatin1String("removeAll")) {
+            entry->menuItems.clear();
+            Q_EMIT contextMenuItemsChanged();
+            ok(QJsonValue());
+            return;
+        }
+    }
+
+    // --- scripting ---
+    if (api == QLatin1String("scripting.executeScript")) {
+        executeScript(extensionId, origin, seq, arg(0).toObject());
+        return; // executeScript replies from its async callback
+    }
+    if (api == QLatin1String("tabs.executeScript")) {
+        // MV2 shape: (tabId?, details). Normalise onto the MV3 injection.
+        const bool explicitId = arg(0).isDouble();
+        QJsonObject injection = (explicitId ? arg(1) : arg(0)).toObject();
+        if (explicitId) {
+            injection.insert(QStringLiteral("target"),
+                             QJsonObject{ { QStringLiteral("tabId"), arg(0).toInt() } });
+        }
+        executeScript(extensionId, origin, seq, injection);
+        return;
+    }
+    if (api == QLatin1String("scripting.insertCSS") || api == QLatin1String("scripting.removeCSS")) {
+        insertCss(extensionId, arg(0).toObject(), api.endsWith(QLatin1String("removeCSS")));
+        ok(QJsonValue());
+        return;
+    }
+    if (api == QLatin1String("tabs.insertCSS") || api == QLatin1String("tabs.removeCSS")) {
+        const bool explicitId = arg(0).isDouble();
+        QJsonObject injection = (explicitId ? arg(1) : arg(0)).toObject();
+        if (explicitId) {
+            injection.insert(QStringLiteral("target"),
+                             QJsonObject{ { QStringLiteral("tabId"), arg(0).toInt() } });
+        }
+        insertCss(extensionId, injection, api.endsWith(QLatin1String("removeCSS")));
+        ok(QJsonValue());
+        return;
+    }
+    if (api == QLatin1String("scripting.registerContentScripts")) {
+        const QJsonArray scripts = arg(0).toArray();
+        for (const QJsonValue &value : scripts) {
+            const QJsonObject object = value.toObject();
+            DynamicScript script;
+            script.id = object.value(QStringLiteral("id")).toString();
+            if (script.id.isEmpty())
+                continue;
+            const QJsonArray matches = object.value(QStringLiteral("matches")).toArray();
+            for (const QJsonValue &match : matches)
+                script.matches << match.toString();
+            const QJsonArray excludes = object.value(QStringLiteral("excludeMatches")).toArray();
+            for (const QJsonValue &match : excludes)
+                script.excludeMatches << match.toString();
+            const QJsonArray js = object.value(QStringLiteral("js")).toArray();
+            for (const QJsonValue &file : js)
+                script.js << file.toString();
+            const QJsonArray css = object.value(QStringLiteral("css")).toArray();
+            for (const QJsonValue &file : css)
+                script.css << file.toString();
+            const QString runAt = object.value(QStringLiteral("runAt")).toString();
+            if (!runAt.isEmpty())
+                script.runAt = runAt;
+            script.allFrames = object.value(QStringLiteral("allFrames")).toBool(false);
+            script.mainWorld = object.value(QStringLiteral("world")).toString()
+                                   .compare(QLatin1String("MAIN"), Qt::CaseInsensitive) == 0;
+            if (script.matches.isEmpty())
+                continue;
+
+            // Re-registering an id replaces it, as the API specifies.
+            for (int i = entry->dynamicScripts.size() - 1; i >= 0; --i) {
+                if (entry->dynamicScripts.at(i).id == script.id)
+                    entry->dynamicScripts.removeAt(i);
+            }
+            entry->dynamicScripts.append(script);
+        }
+        // Registered scripts take effect on the next load of a matching page,
+        // the same as a manifest-declared one.
+        ok(QJsonValue());
+        return;
+    }
+    if (api == QLatin1String("scripting.unregisterContentScripts")) {
+        const QJsonObject filter = arg(0).toObject();
+        const QJsonArray ids = filter.value(QStringLiteral("ids")).toArray();
+        if (ids.isEmpty() && !filter.contains(QStringLiteral("ids"))) {
+            entry->dynamicScripts.clear();
+        } else {
+            for (const QJsonValue &value : ids) {
+                const QString id = value.toString();
+                for (int i = entry->dynamicScripts.size() - 1; i >= 0; --i) {
+                    if (entry->dynamicScripts.at(i).id == id)
+                        entry->dynamicScripts.removeAt(i);
+                }
+            }
+        }
+        ok(QJsonValue());
+        return;
+    }
+    if (api == QLatin1String("scripting.getRegisteredContentScripts")) {
+        QJsonArray result;
+        for (const DynamicScript &script : entry->dynamicScripts) {
+            result.append(QJsonObject{
+                { QStringLiteral("id"), script.id },
+                { QStringLiteral("matches"), QJsonArray::fromStringList(script.matches) },
+                { QStringLiteral("excludeMatches"),
+                  QJsonArray::fromStringList(script.excludeMatches) },
+                { QStringLiteral("js"), QJsonArray::fromStringList(script.js) },
+                { QStringLiteral("css"), QJsonArray::fromStringList(script.css) },
+                { QStringLiteral("runAt"), script.runAt },
+                { QStringLiteral("allFrames"), script.allFrames },
+                { QStringLiteral("world"), script.mainWorld ? QStringLiteral("MAIN")
+                                                            : QStringLiteral("ISOLATED") } });
+        }
+        ok(result);
+        return;
+    }
+
     err(QStringLiteral("%1 is not implemented").arg(api));
 }
 
@@ -1577,4 +1781,435 @@ void WebExtensionManager::notifyTabRemoved(int tabId)
                    QJsonArray{ tabId,
                                QJsonObject{ { QStringLiteral("windowId"), 1 },
                                             { QStringLiteral("isWindowClosing"), false } } });
+}
+
+// --- browser.scripting -------------------------------------------------------
+
+WPEWebPage *WebExtensionManager::pageForTab(const QString &extensionId, int tabId) const
+{
+    const Entry *entry = entryFor(extensionId);
+    if (!entry)
+        return nullptr;
+
+    for (WPEWebPage *page : m_pageOrder) {
+        if (!page || page->tabId() != tabId)
+            continue;
+        // Same rule as a declared content script: no host access, no injection.
+        // activeTab would widen this, but it needs a user gesture to hang off
+        // and Atlantic has no extension action button to provide one yet.
+        if (!entry->extension.hasHostAccess(page->url())
+            && !isExtensionPage(extensionId, page)) {
+            return nullptr;
+        }
+        return page;
+    }
+    return nullptr;
+}
+
+QString WebExtensionManager::gatherSources(const WebExtension &extension,
+                                           const QJsonObject &injection,
+                                           const QString &inlineKey, QString *error) const
+{
+    QStringList parts;
+
+    const QJsonValue inlineValue = injection.value(inlineKey);
+    if (inlineValue.isString())
+        parts << inlineValue.toString();
+
+    // MV2 spelled the single-file form "file"; MV3 takes a "files" array.
+    QStringList files;
+    const QJsonValue filesValue = injection.value(QStringLiteral("files"));
+    if (filesValue.isArray()) {
+        const QJsonArray array = filesValue.toArray();
+        for (const QJsonValue &entry : array)
+            files << entry.toString();
+    }
+    if (injection.value(QStringLiteral("file")).isString())
+        files << injection.value(QStringLiteral("file")).toString();
+
+    for (const QString &relative : files) {
+        // Path traversal guard: an injected file must come from the package.
+        const QString base = QDir(extension.baseDir()).absolutePath();
+        const QString resolved = QDir::cleanPath(QDir(base).absoluteFilePath(relative));
+        if (!resolved.startsWith(base + QLatin1Char('/'))) {
+            *error = QStringLiteral("%1 is outside the extension").arg(relative);
+            return QString();
+        }
+        QFile file(resolved);
+        if (!file.open(QIODevice::ReadOnly)) {
+            *error = QStringLiteral("could not read %1").arg(relative);
+            return QString();
+        }
+        parts << QString::fromUtf8(file.readAll());
+    }
+
+    if (parts.isEmpty())
+        *error = QStringLiteral("nothing to inject");
+    return parts.join(QLatin1Char('\n'));
+}
+
+namespace {
+
+// Carries the reply address across the async evaluate.
+struct ScriptCallback {
+    QPointer<WebExtensionManager> manager;
+    QString extensionId;
+    WPEWebPage *originPage = nullptr;
+    bool originMainWorld = false;
+    int seq = 0;
+};
+
+} // namespace
+
+void WebExtensionManager::executeScript(const QString &extensionId, const ExtContext &origin,
+                                        int seq, const QJsonObject &injection)
+{
+    Entry *entry = entryFor(extensionId);
+    if (!entry) {
+        reply(extensionId, origin, seq, false, QJsonValue(), QStringLiteral("unknown extension"));
+        return;
+    }
+
+    const QJsonObject target = injection.value(QStringLiteral("target")).toObject();
+    const int tabId = target.contains(QStringLiteral("tabId"))
+        ? target.value(QStringLiteral("tabId")).toInt()
+        : (m_host ? m_host->extActiveTabId() : -1);
+
+    WPEWebPage *page = pageForTab(extensionId, tabId);
+    if (!page || !page->webView()) {
+        reply(extensionId, origin, seq, false, QJsonValue(),
+              QStringLiteral("Cannot access contents of the tab. Extension manifest must "
+                             "request permission to access the respective host."));
+        return;
+    }
+
+    QString source;
+    QString error;
+    // MV3 passes a function plus args; the shim has already stringified it,
+    // because a function cannot cross the bridge.
+    const QString functionSource = injection.value(QStringLiteral("funcSource")).toString();
+    if (!functionSource.isEmpty()) {
+        const QJsonArray args = injection.value(QStringLiteral("args")).toArray();
+        source = QStringLiteral("(%1).apply(null, %2);")
+                     .arg(functionSource,
+                          QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact)));
+    } else {
+        source = gatherSources(entry->extension, injection, QStringLiteral("code"), &error);
+        if (source.isEmpty()) {
+            reply(extensionId, origin, seq, false, QJsonValue(), error);
+            return;
+        }
+    }
+
+    const bool mainWorld = injection.value(QStringLiteral("world")).toString()
+                               .compare(QLatin1String("MAIN"), Qt::CaseInsensitive) == 0;
+    const QByteArray world = worldNameFor(extensionId).toUtf8();
+    const QByteArray code = source.toUtf8();
+
+    auto *callback = new ScriptCallback{ this, extensionId, origin.page, origin.mainWorld, seq };
+    webkit_web_view_evaluate_javascript(
+        page->webView(), code.constData(), -1,
+        mainWorld ? nullptr : world.constData(), nullptr, nullptr,
+        +[](GObject *object, GAsyncResult *result, gpointer userData) {
+            std::unique_ptr<ScriptCallback> callback(static_cast<ScriptCallback *>(userData));
+            GError *error = nullptr;
+            JSCValue *value = webkit_web_view_evaluate_javascript_finish(
+                WEBKIT_WEB_VIEW(object), result, &error);
+
+            if (!callback->manager) {
+                if (value)
+                    g_object_unref(value);
+                if (error)
+                    g_error_free(error);
+                return;
+            }
+            const ExtContext origin{ callback->originPage, callback->originMainWorld };
+
+            if (!value) {
+                const QString message = error ? QString::fromUtf8(error->message)
+                                              : QStringLiteral("script evaluation failed");
+                if (error)
+                    g_error_free(error);
+                callback->manager->reply(callback->extensionId, origin, callback->seq, false,
+                                         QJsonValue(), message);
+                return;
+            }
+
+            // executeScript resolves with one InjectionResult per frame; we
+            // only ever inject into the top frame, so there is exactly one.
+            QJsonValue resultValue;
+            if (gchar *json = jsc_value_to_json(value, 0)) {
+                // Wrapped in an array so a bare string or number parses;
+                // QJsonDocument will not take a naked scalar. The explicit
+                // QByteArray keeps this out of pointer-arithmetic overloads.
+                QByteArray wrapped;
+                wrapped.append('[').append(json).append(']');
+                resultValue = QJsonDocument::fromJson(wrapped).array().at(0);
+                g_free(json);
+            }
+            g_object_unref(value);
+
+            callback->manager->reply(
+                callback->extensionId, origin, callback->seq, true,
+                QJsonArray{ QJsonObject{ { QStringLiteral("frameId"), 0 },
+                                         { QStringLiteral("result"), resultValue } } });
+        },
+        callback);
+}
+
+void WebExtensionManager::insertCss(const QString &extensionId, const QJsonObject &injection,
+                                    bool remove)
+{
+    Entry *entry = entryFor(extensionId);
+    if (!entry)
+        return;
+
+    const QJsonObject target = injection.value(QStringLiteral("target")).toObject();
+    const int tabId = target.contains(QStringLiteral("tabId"))
+        ? target.value(QStringLiteral("tabId")).toInt()
+        : (m_host ? m_host->extActiveTabId() : -1);
+
+    WPEWebPage *page = pageForTab(extensionId, tabId);
+    if (!page)
+        return;
+    auto state = m_pages.find(page);
+    if (state == m_pages.end() || !state->ucm)
+        return;
+
+    QString error;
+    const QString css = gatherSources(entry->extension, injection, QStringLiteral("css"), &error);
+    if (css.isEmpty())
+        return;
+
+    // Keyed by extension + content so removeCSS can find the same sheet again;
+    // that is exactly how the API identifies it, since there is no handle.
+    const QString key = extensionId + QLatin1Char('\n') + css;
+
+    if (remove) {
+        if (WebKitUserStyleSheet *sheet = state->insertedCss.take(key)) {
+            webkit_user_content_manager_remove_style_sheet(state->ucm, sheet);
+            state->styleSheets.removeAll(sheet);
+            webkit_user_style_sheet_unref(sheet);
+        }
+        return;
+    }
+
+    if (state->insertedCss.contains(key))
+        return; // already applied; inserting twice would double the specificity
+
+    const QByteArray source = css.toUtf8();
+    const QByteArray world = worldNameFor(extensionId).toUtf8();
+    WebKitUserStyleSheet *sheet = webkit_user_style_sheet_new_for_world(
+        source.constData(), WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+        WEBKIT_USER_STYLE_LEVEL_USER, world.constData(), nullptr, nullptr);
+    webkit_user_content_manager_add_style_sheet(state->ucm, sheet);
+    state->styleSheets.append(sheet);
+    state->insertedCss.insert(key, sheet);
+}
+
+void WebExtensionManager::applyDynamicScripts(const Entry &entry, PageState &state,
+                                              WebKitUserContentManager *ucm)
+{
+    if (entry.dynamicScripts.isEmpty())
+        return;
+
+    const QString extensionId = entry.extension.id();
+    const QByteArray world = worldNameFor(extensionId).toUtf8();
+
+    for (const DynamicScript &script : entry.dynamicScripts) {
+        QVector<QByteArray> allowStorage, blockStorage;
+        std::vector<const char *> allowList =
+            patternVector(expandPatterns(script.matches), allowStorage);
+        std::vector<const char *> blockList =
+            patternVector(expandPatterns(script.excludeMatches), blockStorage);
+        const char *const *block = script.excludeMatches.isEmpty() ? nullptr : blockList.data();
+
+        const WebKitUserContentInjectedFrames frames =
+            script.allFrames ? WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES
+                             : WEBKIT_USER_CONTENT_INJECT_TOP_FRAME;
+        const WebKitUserScriptInjectionTime when =
+            script.runAt == QLatin1String("document_start")
+                ? WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START
+                : WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_END;
+
+        for (const QString &relative : script.css) {
+            QFile file(QDir(entry.extension.baseDir()).filePath(relative));
+            if (!file.open(QIODevice::ReadOnly))
+                continue;
+            const QByteArray source = file.readAll();
+            WebKitUserStyleSheet *sheet = webkit_user_style_sheet_new_for_world(
+                source.constData(), frames, WEBKIT_USER_STYLE_LEVEL_USER,
+                script.mainWorld ? nullptr : world.constData(), allowList.data(), block);
+            webkit_user_content_manager_add_style_sheet(ucm, sheet);
+            state.styleSheets.append(sheet);
+        }
+
+        for (const QString &relative : script.js) {
+            QFile file(QDir(entry.extension.baseDir()).filePath(relative));
+            if (!file.open(QIODevice::ReadOnly))
+                continue;
+            const QByteArray source = file.readAll();
+            WebKitUserScript *userScript = webkit_user_script_new_for_world(
+                source.constData(), frames, when,
+                script.mainWorld ? nullptr : world.constData(), allowList.data(), block);
+            webkit_user_content_manager_add_script(ucm, userScript);
+            state.scripts.append(userScript);
+        }
+    }
+}
+
+// --- browser.contextMenus ----------------------------------------------------
+
+bool WebExtensionManager::menuItemMatches(const MenuItemDef &item, const QVariantMap &context)
+{
+    if (!item.visible || item.type == QLatin1String("separator"))
+        return false;
+
+    const QUrl pageUrl(context.value(QStringLiteral("pageUrl")).toString());
+    const QString linkUrl = context.value(QStringLiteral("linkUrl")).toString();
+    const QString srcUrl = context.value(QStringLiteral("srcUrl")).toString();
+    const QString selectionText = context.value(QStringLiteral("selectionText")).toString();
+    const bool editable = context.value(QStringLiteral("editable")).toBool();
+
+    // Which contexts does what was pressed actually satisfy? "page" is the
+    // fallback the API defines: it applies when nothing more specific does.
+    QStringList active{ QStringLiteral("all") };
+    if (!linkUrl.isEmpty())
+        active << QStringLiteral("link");
+    if (!srcUrl.isEmpty())
+        active << context.value(QStringLiteral("mediaType"), QStringLiteral("image")).toString();
+    if (!selectionText.isEmpty())
+        active << QStringLiteral("selection");
+    if (editable)
+        active << QStringLiteral("editable");
+    if (linkUrl.isEmpty() && srcUrl.isEmpty() && selectionText.isEmpty() && !editable)
+        active << QStringLiteral("page");
+
+    QStringList wanted = item.contexts;
+    if (wanted.isEmpty())
+        wanted << QStringLiteral("page"); // the API's default
+
+    bool contextOk = false;
+    for (const QString &candidate : wanted) {
+        if (candidate == QLatin1String("all") || active.contains(candidate)) {
+            contextOk = true;
+            break;
+        }
+    }
+    if (!contextOk)
+        return false;
+
+    if (!item.documentUrlPatterns.isEmpty()) {
+        bool matched = false;
+        for (const QString &pattern : item.documentUrlPatterns)
+            matched = matched || MatchPattern::parse(pattern).matches(pageUrl);
+        if (!matched)
+            return false;
+    }
+
+    if (!item.targetUrlPatterns.isEmpty()) {
+        const QUrl target(linkUrl.isEmpty() ? srcUrl : linkUrl);
+        bool matched = false;
+        for (const QString &pattern : item.targetUrlPatterns)
+            matched = matched || MatchPattern::parse(pattern).matches(target);
+        if (!matched)
+            return false;
+    }
+
+    return true;
+}
+
+QVariantList WebExtensionManager::contextMenuItems(const QVariantMap &context) const
+{
+    QVariantList items;
+    const QString selectionText = context.value(QStringLiteral("selectionText")).toString();
+
+    for (const Entry &entry : m_entries) {
+        if (!entry.enabled)
+            continue;
+        // An extension only gets to offer items where it could have run anyway.
+        const QUrl pageUrl(context.value(QStringLiteral("pageUrl")).toString());
+        if (pageUrl.isValid() && !entry.extension.hasHostAccess(pageUrl)
+            && !entry.extension.hasPermission(QStringLiteral("activeTab"))) {
+            continue;
+        }
+
+        for (const MenuItemDef &item : entry.menuItems) {
+            if (!menuItemMatches(item, context))
+                continue;
+
+            // %s in a title is replaced with the selection, truncated the way
+            // other browsers do so a long selection cannot blow up the panel.
+            QString title = item.title;
+            if (title.contains(QLatin1String("%s"))) {
+                QString shown = selectionText.simplified();
+                if (shown.size() > 32)
+                    shown = shown.left(31) + QChar(0x2026);
+                title.replace(QLatin1String("%s"), shown);
+            }
+
+            items.append(QVariantMap{
+                { QStringLiteral("extensionId"), entry.extension.id() },
+                { QStringLiteral("extensionName"), entry.extension.name() },
+                { QStringLiteral("itemId"), item.id },
+                { QStringLiteral("title"), title },
+                { QStringLiteral("type"), item.type },
+                { QStringLiteral("checked"), item.checked },
+                { QStringLiteral("enabled"), item.enabled } });
+        }
+    }
+    return items;
+}
+
+void WebExtensionManager::activateContextMenuItem(const QString &extensionId,
+                                                  const QString &itemId,
+                                                  const QVariantMap &context)
+{
+    Entry *entry = entryFor(extensionId);
+    if (!entry || !entry->enabled)
+        return;
+
+    MenuItemDef *item = nullptr;
+    for (MenuItemDef &candidate : entry->menuItems) {
+        if (candidate.id == itemId) {
+            item = &candidate;
+            break;
+        }
+    }
+    if (!item || !item->enabled)
+        return;
+
+    const bool wasChecked = item->checked;
+    if (item->type == QLatin1String("checkbox"))
+        item->checked = !item->checked;
+    else if (item->type == QLatin1String("radio"))
+        item->checked = true;
+
+    QJsonObject info{
+        { QStringLiteral("menuItemId"), item->id },
+        { QStringLiteral("editable"), context.value(QStringLiteral("editable")).toBool() },
+        { QStringLiteral("pageUrl"), context.value(QStringLiteral("pageUrl")).toString() }
+    };
+    if (!item->parentId.isEmpty())
+        info.insert(QStringLiteral("parentMenuItemId"), item->parentId);
+    for (const char *key : { "linkUrl", "srcUrl", "selectionText", "mediaType" }) {
+        const QString value = context.value(QLatin1String(key)).toString();
+        if (!value.isEmpty())
+            info.insert(QLatin1String(key), value);
+    }
+    if (item->type == QLatin1String("checkbox") || item->type == QLatin1String("radio")) {
+        info.insert(QStringLiteral("wasChecked"), wasChecked);
+        info.insert(QStringLiteral("checked"), item->checked);
+    }
+
+    QJsonObject tab;
+    const int tabId = m_host ? m_host->extActiveTabId() : -1;
+    if (tabId >= 0) {
+        tab.insert(QStringLiteral("id"), tabId);
+        tab.insert(QStringLiteral("url"), context.value(QStringLiteral("pageUrl")).toString());
+    }
+
+    // Chrome fires this at the background context; content scripts never see it.
+    emitEvent(extensionId, ExtContext(), QStringLiteral("contextMenus.onClicked"),
+              QJsonArray{ info, tab });
 }

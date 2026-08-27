@@ -354,6 +354,82 @@ test("alarms fire locally without a round trip", (done) => {
                        "alarms must not reach the native bridge directly");
 });
 
+test("scripting.executeScript sends the function as source, not as a function", async () => {
+    const harness = makeSandbox("background");
+    const promise = harness.browser.scripting.executeScript({
+        target: { tabId: 7 },
+        func: function (a, b) { return a + b; },
+        args: [1, 2]
+    });
+    const call = harness.lastCall();
+    assert.strictEqual(call.api, "scripting.executeScript");
+    const payload = call.args[0];
+    assert.deepStrictEqual(payload.target, { tabId: 7 });
+    assert.deepStrictEqual(payload.args, [1, 2]);
+    assert.strictEqual(typeof payload.funcSource, "string");
+    assert.ok(/return a \+ b/.test(payload.funcSource), "function body must survive");
+    assert.ok(!("func" in payload), "the live function must not be sent");
+
+    harness.reply(call.seq, [{ frameId: 0, result: 3 }]);
+    assert.deepStrictEqual(await promise, [{ frameId: 0, result: 3 }]);
+});
+
+test("scripting.executeScript passes files through untouched", () => {
+    const harness = makeSandbox("background");
+    harness.browser.scripting.executeScript({ target: { tabId: 1 }, files: ["a.js"] });
+    assert.deepStrictEqual(harness.lastCall().args[0],
+                           { target: { tabId: 1 }, files: ["a.js"] });
+});
+
+test("scripting.registerContentScripts reaches the bridge", () => {
+    const harness = makeSandbox("background");
+    harness.browser.scripting.registerContentScripts([
+        { id: "s1", matches: ["https://example.com/*"], js: ["c.js"] }
+    ]);
+    const call = harness.lastCall();
+    assert.strictEqual(call.api, "scripting.registerContentScripts");
+    assert.strictEqual(call.args[0][0].id, "s1");
+});
+
+test("tabs.executeScript keeps its MV2 argument shape", () => {
+    const harness = makeSandbox("background");
+    harness.browser.tabs.executeScript(5, { code: "1+1" });
+    assert.deepStrictEqual(harness.lastCall().args, [5, { code: "1+1" }]);
+});
+
+test("contextMenus.create returns an id synchronously and mints one if absent", () => {
+    const harness = makeSandbox("background");
+    const id = harness.browser.contextMenus.create({ title: "Check text", contexts: ["selection"] });
+    assert.strictEqual(typeof id, "string");
+    assert.ok(id.length > 0, "create must return an id straight away");
+    const call = harness.lastCall();
+    assert.strictEqual(call.api, "contextMenus.create");
+    assert.strictEqual(call.args[0].id, id, "the minted id must be the one sent");
+    assert.strictEqual(call.args[0].title, "Check text");
+});
+
+test("contextMenus.create keeps a caller-supplied id", () => {
+    const harness = makeSandbox("background");
+    assert.strictEqual(harness.browser.contextMenus.create({ id: "mine", title: "x" }), "mine");
+    assert.strictEqual(harness.lastCall().args[0].id, "mine");
+});
+
+test("contextMenus.onClicked delivers info and tab", () => {
+    const harness = makeSandbox("background");
+    const seen = [];
+    harness.browser.contextMenus.onClicked.addListener((info, tab) => seen.push([info, tab]));
+    harness.event("contextMenus.onClicked",
+                  [{ menuItemId: "mine", selectionText: "hello" }, { id: 3 }]);
+    assert.strictEqual(seen.length, 1);
+    assert.strictEqual(seen[0][0].selectionText, "hello");
+    assert.strictEqual(seen[0][1].id, 3);
+});
+
+test("menus is the same namespace as contextMenus", () => {
+    const harness = makeSandbox("background");
+    assert.strictEqual(harness.browser.menus, harness.browser.contextMenus);
+});
+
 // --- background preamble -----------------------------------------------------
 //
 // The preamble is what a background script actually lands in: JSC gives us a

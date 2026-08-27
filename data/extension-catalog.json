@@ -20,9 +20,9 @@
       "slug": "darkreader",
       "name": "Dark Reader",
       "summary": "Dark mode for every website.",
-      "expected": "partial",
+      "expected": "works",
       "verified": false,
-      "note": "Dimming is a content script and should work. Its context-menu entries will not appear; use the popup instead."
+      "note": "Dimming is a content script; its context-menu entries work too now that browser.contextMenus is supported."
     },
     {
       "slug": "unpaywall",
@@ -60,41 +60,41 @@
       "slug": "simple-translate",
       "name": "Simple Translate",
       "summary": "Translates selected text in place.",
-      "expected": "partial",
+      "expected": "works",
       "verified": false,
-      "note": "Selection translation should work. Its context-menu entry will not appear."
+      "note": "Selection translation and its context-menu entry should both work."
     },
     {
       "slug": "read-aloud",
       "name": "Read Aloud",
       "summary": "Reads the page out loud.",
-      "expected": "partial",
+      "expected": "works",
       "verified": false,
-      "note": "Its context-menu entry will not appear; start it from the popup."
+      "note": "Start it from the popup or its context-menu entry."
     },
     {
       "slug": "tranquility-1",
       "name": "Tranquility Reader",
       "summary": "Strips a page down to its readable content.",
-      "expected": "partial",
+      "expected": "works",
       "verified": false,
-      "note": "Its context-menu entry will not appear; use the popup."
+      "note": "Strips the page from its context-menu entry or the popup."
     },
     {
       "slug": "image-search-options",
       "name": "Image Search Options",
       "summary": "Reverse image search from the page.",
-      "expected": "partial",
+      "expected": "works",
       "verified": false,
-      "note": "Driven entirely from the context menu, which Atlantic does not show — of limited use until that lands."
+      "note": "Driven entirely from the context menu, which Atlantic now shows on a long press."
     },
     {
       "slug": "sponsorblock",
       "name": "SponsorBlock",
       "summary": "Skips sponsored segments in YouTube videos.",
-      "expected": "partial",
+      "expected": "works",
       "verified": false,
-      "note": "Skipping is a content script and should work; the parts that rely on dynamic script injection will not."
+      "note": "Skipping is a content script; the parts that inject scripts dynamically work now that browser.scripting is supported."
     },
     {
       "slug": "ublock-origin",
