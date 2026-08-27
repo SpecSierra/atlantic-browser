@@ -73,6 +73,12 @@ Page {
                 title: qsTrId("sailfish_browser-he-settings")
             }
 
+            SectionHeader {
+                //: Section Header for the settings that are asked about most
+                //% "General"
+                text: qsTrId("atlantic-sh-general")
+            }
+
             BrowserComboBox {
                 id: homePage
 
@@ -173,12 +179,6 @@ Page {
                 }
             }
 
-            SectionHeader {
-                //: Section Header for Privacy settings
-                //% "Privacy"
-                text: qsTrId("settings_browser-sh-privacy")
-            }
-
             TextSwitch {
                 //: Label for text switch that makes all tabs closed upon closing browser application
                 //% "Close all tabs on exit"
@@ -192,213 +192,6 @@ Page {
                 automaticCheck: false
 
                 onClicked: closeAllTabsConfig.value = !closeAllTabsConfig.value
-            }
-
-            TextSwitch {
-                //% "Start browser in private browsing mode"
-                text: qsTrId("settings_browser-la-start_in_private")
-                checked: autoStartPrivateBrowser.value
-                automaticCheck: false
-                // Margins adjusted to align with other items on the page
-                leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
-                _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
-
-                onClicked: autoStartPrivateBrowser.value = !autoStartPrivateBrowser.value
-            }
-
-            TextSwitch {
-                //% "Adblock"
-                text: qsTrId("atlantic-la-ad_block")
-                //% "Block advertisements and trackers"
-                description: qsTrId("atlantic-la-ad_block_description")
-                checked: adBlockConf.value
-                automaticCheck: false
-                leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
-                _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
-                onClicked: {
-                    // dconf is the single source of truth: BrowserPage's
-                    // ConfigurationValue pushes the change into the engine via
-                    // contentItem.adBlockEnabled. The old extra
-                    // settingManager.setAdBlockEnabled(!adBlockConf.value)
-                    // call read the value AFTER the flip, so it set the engine
-                    // to the INVERSE of the visible switch state.
-                    adBlockConf.value = !adBlockConf.value
-                }
-            }
-
-            TextSwitch {
-                //% "Block cookie banners"
-                text: qsTrId("atlantic-la-cookie_banner_blocking")
-                //% "Automatically refuse cookie consent pop-ups"
-                description: qsTrId("atlantic-la-cookie_banner_blocking_description")
-                checked: cookieBannerConf.value
-                automaticCheck: false
-                leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
-                _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
-                // dconf is the single source of truth; BrowserPage's
-                // ConfigurationValue pushes the change process-wide.
-                onClicked: cookieBannerConf.value = !cookieBannerConf.value
-            }
-
-            // "Do not track" switch hidden for now — uncomment to bring it back
-            // TextSwitch {
-            //     checked: webEngineSettings.doNotTrack
-            //
-            //     //: Tell sites that I do not want to be tracked.
-            //     //% "Do not track"
-            //     text: qsTrId("settings_browser-la-tracking")
-            //     //: Tell sites that I do not want to be tracked.
-            //     //% "Tell sites that I do not want to be tracked"
-            //     description: qsTrId("settings_browser-la-tracking_description")
-            //     // Margins adjusted to align with other items on the page
-            //     leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
-            //     _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
-            //     automaticCheck: false
-            //
-            //     onClicked: doNotTrackConf.value = !webEngineSettings.doNotTrack
-            // }
-
-            // "Enable JavaScript" switch hidden for now — uncomment to bring it back
-            // TextSwitch {
-            //     //: Label for text switch that enables JavaScript globally for all tabs
-            //     //% "Enable JavaScript"
-            //     text: qsTrId("settings_browser-la-enable_javascript")
-            //     description: webEngineSettings.javascriptEnabled ?
-            //                      //% "Allowed (recommended)"
-            //                      qsTrId("settings_browser-la-enabled_javascript_description") :
-            //                      //% "Blocked, some sites may not work correctly"
-            //                      qsTrId("settings_browser-la-disable_javascript_description")
-            //     checked: webEngineSettings.javascriptEnabled
-            //     // Margins adjusted to align with other items on the page
-            //     leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
-            //     _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
-            //     automaticCheck: false
-            //
-            //     onClicked: jsEnabledConf.value = !webEngineSettings.javascriptEnabled
-            // }
-
-            // Passwords: backed by the encrypted CredentialStore (Phase 1 —
-            // manual vault; capture/autofill land in later phases).
-            BackgroundItem {
-                width: parent.width
-                contentHeight: Theme.itemSizeMedium
-                Row {
-                    width: parent.width - 2*Theme.horizontalPageMargin
-                    x: Theme.horizontalPageMargin
-                    spacing: Theme.paddingMedium
-                    anchors.verticalCenter: parent.verticalCenter
-
-                    Icon {
-                        id: loginsIcon
-                        source: "image://theme/icon-m-keys"
-                    }
-                    Label {
-                        width: parent.width - parent.spacing - loginsIcon.width
-                        //: The label for the button for accessing password management
-                        //% "Passwords"
-                        text: qsTrId("settings_browser-la-passwords")
-                        anchors.verticalCenter: loginsIcon.verticalCenter
-                    }
-                }
-                onClicked: pageStack.push("LoginsPage.qml")
-            }
-
-            BackgroundItem {
-                width: parent.width
-                contentHeight: Theme.itemSizeMedium
-                Row {
-                    width: parent.width - 2*Theme.horizontalPageMargin
-                    x: Theme.horizontalPageMargin
-                    spacing: Theme.paddingMedium
-                    anchors.verticalCenter: parent.verticalCenter
-
-                    Icon {
-                        id: clearBrowsingDataIcon
-                        source: "image://theme/icon-m-delete"
-                    }
-                    Label {
-                        width: parent.width - parent.spacing - clearBrowsingDataIcon.width
-                        //: The label for the button for accessing clear browsing data page
-                        //% "Clear browsing data"
-                        text: qsTrId("settings_browser-la-clear-browsing-data")
-                        anchors.verticalCenter: clearBrowsingDataIcon.verticalCenter
-                    }
-                }
-                onClicked: pageStack.push("PrivacySettingsPage.qml", { previousPage: page })
-            }
-
-            BackgroundItem {
-                width: parent.width
-                contentHeight: Theme.itemSizeMedium
-                Row {
-                    width: parent.width - 2*Theme.horizontalPageMargin
-                    x: Theme.horizontalPageMargin
-                    spacing: Theme.paddingMedium
-                    anchors.verticalCenter: parent.verticalCenter
-
-                    Icon {
-                        id: extensionsIcon
-                        // Ours, not the theme's: sailfish-default has no
-                        // icon-m-extension. Silica tints it like any other.
-                        source: Qt.resolvedUrl("../icons/icon-m-extension.svg")
-                        sourceSize.width: Theme.iconSizeMedium
-                        sourceSize.height: Theme.iconSizeMedium
-                    }
-                    Label {
-                        width: parent.width - parent.spacing - extensionsIcon.width
-                        //: The label for the button for managing installed browser extensions
-                        //% "Extensions"
-                        text: qsTrId("atlantic-la-extensions")
-                        anchors.verticalCenter: extensionsIcon.verticalCenter
-                    }
-                }
-                onClicked: pageStack.push("ExtensionsPage.qml")
-            }
-
-            SectionHeader {
-                //: Section Header for per-site behaviour settings
-                //% "Websites"
-                text: qsTrId("atlantic-sh-websites")
-            }
-
-            BackgroundItem {
-                width: parent.width
-                contentHeight: Theme.itemSizeMedium
-                Row {
-                    width: parent.width - 2*Theme.horizontalPageMargin
-                    x: Theme.horizontalPageMargin
-                    spacing: Theme.paddingMedium
-                    anchors.verticalCenter: parent.verticalCenter
-
-                    Icon {
-                        id: siteUaIcon
-                        source: "image://theme/icon-m-wizard"
-                    }
-                    Column {
-                        width: parent.width - parent.spacing - siteUaIcon.width
-                        anchors.verticalCenter: siteUaIcon.verticalCenter
-                        Label {
-                            width: parent.width
-                            //% "Change user agents"
-                            text: qsTrId("atlantic-he-site_user_agents")
-                        }
-                        Label {
-                            width: parent.width
-                            //% "Make selected websites see a different browser"
-                            text: qsTrId("atlantic-he-site_user_agents_description")
-                            font.pixelSize: Theme.fontSizeExtraSmall
-                            color: Theme.secondaryColor
-                            wrapMode: Text.Wrap
-                        }
-                    }
-                }
-                onClicked: pageStack.push("SiteUaSettingsPage.qml")
-            }
-
-            SectionHeader {
-                //: Section Header for Downloads settings
-                //% "Downloads"
-                text: qsTrId("settings_browser-la-downloads")
             }
 
             BrowserComboBox {
@@ -510,6 +303,143 @@ Page {
                 automaticCheck: false
                 onClicked: viewportInsetConfig.value = !viewportInsetConfig.value
             }
+            SectionHeader {
+                //: Section Header for privacy and security settings
+                //% "Privacy & security"
+                text: qsTrId("atlantic-sh-privacy_security")
+            }
+
+            TextSwitch {
+                //% "Start browser in private browsing mode"
+                text: qsTrId("settings_browser-la-start_in_private")
+                checked: autoStartPrivateBrowser.value
+                automaticCheck: false
+                // Margins adjusted to align with other items on the page
+                leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
+                _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
+
+                onClicked: autoStartPrivateBrowser.value = !autoStartPrivateBrowser.value
+            }
+
+            TextSwitch {
+                //% "Adblock"
+                text: qsTrId("atlantic-la-ad_block")
+                //% "Block advertisements and trackers"
+                description: qsTrId("atlantic-la-ad_block_description")
+                checked: adBlockConf.value
+                automaticCheck: false
+                leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
+                _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
+                onClicked: {
+                    // dconf is the single source of truth: BrowserPage's
+                    // ConfigurationValue pushes the change into the engine via
+                    // contentItem.adBlockEnabled. The old extra
+                    // settingManager.setAdBlockEnabled(!adBlockConf.value)
+                    // call read the value AFTER the flip, so it set the engine
+                    // to the INVERSE of the visible switch state.
+                    adBlockConf.value = !adBlockConf.value
+                }
+            }
+
+            TextSwitch {
+                //% "Block cookie banners"
+                text: qsTrId("atlantic-la-cookie_banner_blocking")
+                //% "Automatically refuse cookie consent pop-ups"
+                description: qsTrId("atlantic-la-cookie_banner_blocking_description")
+                checked: cookieBannerConf.value
+                automaticCheck: false
+                leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
+                _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
+                // dconf is the single source of truth; BrowserPage's
+                // ConfigurationValue pushes the change process-wide.
+                onClicked: cookieBannerConf.value = !cookieBannerConf.value
+            }
+
+            // "Do not track" switch hidden for now — uncomment to bring it back
+            // TextSwitch {
+            //     checked: webEngineSettings.doNotTrack
+            //
+            //     //: Tell sites that I do not want to be tracked.
+            //     //% "Do not track"
+            //     text: qsTrId("settings_browser-la-tracking")
+            //     //: Tell sites that I do not want to be tracked.
+            //     //% "Tell sites that I do not want to be tracked"
+            //     description: qsTrId("settings_browser-la-tracking_description")
+            //     // Margins adjusted to align with other items on the page
+            //     leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
+            //     _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
+            //     automaticCheck: false
+            //
+            //     onClicked: doNotTrackConf.value = !webEngineSettings.doNotTrack
+            // }
+
+            // "Enable JavaScript" switch hidden for now — uncomment to bring it back
+            // TextSwitch {
+            //     //: Label for text switch that enables JavaScript globally for all tabs
+            //     //% "Enable JavaScript"
+            //     text: qsTrId("settings_browser-la-enable_javascript")
+            //     description: webEngineSettings.javascriptEnabled ?
+            //                      //% "Allowed (recommended)"
+            //                      qsTrId("settings_browser-la-enabled_javascript_description") :
+            //                      //% "Blocked, some sites may not work correctly"
+            //                      qsTrId("settings_browser-la-disable_javascript_description")
+            //     checked: webEngineSettings.javascriptEnabled
+            //     // Margins adjusted to align with other items on the page
+            //     leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
+            //     _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
+            //     automaticCheck: false
+            //
+            //     onClicked: jsEnabledConf.value = !webEngineSettings.javascriptEnabled
+            // }
+
+            // Backed by the encrypted CredentialStore.
+            SettingsLinkItem {
+                iconSource: "image://theme/icon-m-keys"
+                //: The label for the button for accessing password management
+                //% "Passwords"
+                text: qsTrId("settings_browser-la-passwords")
+                //% "Saved logins, kept in an encrypted vault"
+                description: qsTrId("atlantic-la-passwords_description")
+                onClicked: pageStack.push("LoginsPage.qml")
+            }
+
+            SettingsLinkItem {
+                iconSource: "image://theme/icon-m-delete"
+                //: The label for the button for accessing clear browsing data page
+                //% "Clear browsing data"
+                text: qsTrId("settings_browser-la-clear-browsing-data")
+                //% "History, cookies, caches and site data"
+                description: qsTrId("atlantic-la-clear_browsing_data_description")
+                onClicked: pageStack.push("PrivacySettingsPage.qml", { previousPage: page })
+            }
+
+            SectionHeader {
+                //: Section Header for settings most people never need to open
+                //% "Advanced"
+                text: qsTrId("atlantic-sh-advanced")
+            }
+
+            SettingsLinkItem {
+                // Ours, not the theme's: sailfish-default has no
+                // icon-m-extension. Silica tints it like any other.
+                iconSource: Qt.resolvedUrl("../icons/icon-m-extension.svg")
+                //: The label for the button for managing installed browser extensions
+                //% "Extensions"
+                text: qsTrId("atlantic-la-extensions")
+                //% "Add-ons from addons.mozilla.org"
+                description: qsTrId("atlantic-la-extensions_description")
+                onClicked: pageStack.push("ExtensionsPage.qml")
+            }
+
+            SettingsLinkItem {
+                iconSource: "image://theme/icon-m-wizard"
+                //% "Change user agents"
+                text: qsTrId("atlantic-he-site_user_agents")
+                //% "Make selected websites see a different browser"
+                description: qsTrId("atlantic-he-site_user_agents_description")
+                onClicked: pageStack.push("SiteUaSettingsPage.qml")
+            }
+
         }
     }
 
