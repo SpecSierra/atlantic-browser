@@ -14,11 +14,11 @@ import Sailfish.Silica 1.0
 import Sailfish.Browser 1.0
 
 /*
- * Cover for "there are tabs open": the active tab's thumbnail fills the top of
- * the tile below the site's favicon and domain, which sit at the top of the
- * card on the cover glass as plain cover text — no bar laid over the picture. A second
- * line carries the tab count and a badge for a tab making noise; loading is
- * shown by a hairline and by the domain taking the highlight colour.
+ * Cover for "there are tabs open": the site's favicon and domain sit at the top
+ * of the card on the cover glass as plain cover text, and the active tab's
+ * thumbnail fills everything below them — no bar laid over the picture. A tab
+ * making noise gets a badge under the domain; loading is shown by a hairline
+ * and by the domain taking the highlight colour.
  *
  * The cover window is created by Silica from ApplicationWindow's context, so
  * nothing in this file can reach the browser's ids. Everything comes in
@@ -35,7 +35,6 @@ CoverBackground {
     readonly property bool privateMode: webView !== null && webView.privateMode
     readonly property string pageUrl: webView ? webView.url : ""
     readonly property string pageTitle: webView ? webView.title : ""
-    readonly property int tabCount: tabModel ? tabModel.count : 0
     readonly property bool loading: webView !== null && webView.loading
     readonly property bool audioActive: webView !== null && webView.contentItem !== null
                                         && webView.contentItem.mediaAudioActive
@@ -276,37 +275,15 @@ CoverBackground {
                 }
             }
 
-            Row {
-                width: parent.width
-                spacing: Theme.paddingSmall
-                visible: cover.tabCount > 1 || cover.audioActive
-
-                Image {
-                    anchors.verticalCenter: parent.verticalCenter
-                    source: "image://theme/icon-m-browser-sound?" + Theme.secondaryColor
-                    sourceSize.width: Theme.iconSizeExtraSmall
-                    sourceSize.height: Theme.iconSizeExtraSmall
-                    width: Math.round(Theme.iconSizeExtraSmall * 0.7)
-                    height: width
-                    visible: cover.audioActive
-                }
-
-                Image {
-                    anchors.verticalCenter: parent.verticalCenter
-                    source: "image://theme/icon-m-tabs?" + Theme.secondaryColor
-                    sourceSize.width: Theme.iconSizeExtraSmall
-                    sourceSize.height: Theme.iconSizeExtraSmall
-                    width: Math.round(Theme.iconSizeExtraSmall * 0.7)
-                    height: width
-                    visible: cover.tabCount > 1
-                }
-
-                Label {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: cover.tabCount > 1 ? cover.tabCount : ""
-                    font.pixelSize: Theme.fontSizeTiny
-                    color: Theme.secondaryColor
-                }
+            // Badge for a tab making noise. Nothing else shares this line:
+            // the tab count belongs in the app, not on the cover.
+            Image {
+                source: "image://theme/icon-m-browser-sound?" + Theme.secondaryColor
+                sourceSize.width: Theme.iconSizeExtraSmall
+                sourceSize.height: Theme.iconSizeExtraSmall
+                width: Math.round(Theme.iconSizeExtraSmall * 0.7)
+                height: width
+                visible: cover.audioActive
             }
         }
     }
