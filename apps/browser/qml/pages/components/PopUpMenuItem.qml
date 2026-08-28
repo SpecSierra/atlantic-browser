@@ -17,6 +17,19 @@ Item {
     property int iconWidth
     readonly property int verticalPadding: 3 * Theme.paddingSmall
 
+    // Host of the current page, "" when there is no real page (the start
+    // page, about:/file: URLs). The per-site toggles were each deriving this
+    // for themselves; the page-scoped actions now share it.
+    //
+    // webView.contentItem is NOT a usable stand-in: it is non-null straight
+    // after startup even with no tabs, so gating on it left "Desktop site"
+    // and the bookmark button live on the start page while Adblock and
+    // JavaScript beside them were correctly greyed out.
+    readonly property string pageHost: {
+        var m = /^https?:\/\/([^\/:?#]+)/.exec(webView.url || "")
+        return m ? m[1].toLowerCase() : ""
+    }
+
     height: content.height + verticalPadding * 2
 
     // Ordered for one-hand reach: the menu is bottom-anchored (PopUpMenu pushes
@@ -32,13 +45,16 @@ Item {
         spacing: Theme.paddingLarge
         y: verticalPadding
 
+        // Everything here acts on the open page, so with no page there is
+        // nothing to show rather than five greyed-out rows. The group is
+        // bottom-anchored like the rest of the menu, so what remains simply
+        // sits lower.
         Column {
             width: parent.width
+            visible: root.pageHost.length > 0
 
             OverlayListItem {
                 height: Theme.itemSizeSmall
-                enabled: webView.contentItem
-                opacity: enabled ? 1.0 : 0.5
                 iconWidth: root.iconWidth
                 horizontalOffset: root.horizontalOffset
                 iconSource: "image://theme/icon-m-computer"
@@ -57,14 +73,11 @@ Item {
             }
 
             OverlayListItem {
-                // Host of the current page ("" on about:/file: pages).
-                readonly property string _host: {
-                    var m = /^https?:\/\/([^\/:?#]+)/.exec(webView.url || "")
-                    return m ? m[1].toLowerCase() : ""
-                }
+                readonly property string _host: root.pageHost
 
                 height: Theme.itemSizeSmall
-                enabled: _host.length > 0 && adBlockEngine.value
+                // The per-site toggle means nothing with the engine off.
+                enabled: adBlockEngine.value
                 opacity: enabled ? 1.0 : 0.5
                 iconWidth: root.iconWidth
                 horizontalOffset: root.horizontalOffset
@@ -84,15 +97,9 @@ Item {
             }
 
             OverlayListItem {
-                // Host of the current page ("" on about:/file: pages).
-                readonly property string _host: {
-                    var m = /^https?:\/\/([^\/:?#]+)/.exec(webView.url || "")
-                    return m ? m[1].toLowerCase() : ""
-                }
+                readonly property string _host: root.pageHost
 
                 height: Theme.itemSizeSmall
-                enabled: _host.length > 0
-                opacity: enabled ? 1.0 : 0.5
                 iconWidth: root.iconWidth
                 horizontalOffset: root.horizontalOffset
                 iconSource: "image://theme/icon-m-browser-javascript"
@@ -100,7 +107,7 @@ Item {
                 // javascriptBlocklist resolves from BrowserPage's context (like
                 // adBlockAllowlist above). JS is on by default, so checked means
                 // enabled = host is NOT on the blocklist.
-                checked: enabled && !javascriptBlocklist.isBlocked(_host)
+                checked: !javascriptBlocklist.isBlocked(_host)
                 //: Per-site toggle: unchecking disables JavaScript on this site
                 //% "JavaScript"
                 text: qsTrId("sailfish_browser-la-javascript_on_site")
@@ -120,7 +127,6 @@ Item {
                 iconWidth: root.iconWidth
                 horizontalOffset: root.horizontalOffset
                 iconSource: "image://theme/icon-m-search-on-page"
-                enabled: webView.contentItem
                 //% "Search on page"
                 text: qsTrId("sailfish_browser-la-search_on_page")
 
@@ -132,8 +138,6 @@ Item {
 
             OverlayListItem {
                 height: Theme.itemSizeSmall
-                enabled: webView.contentItem
-                opacity: enabled ? 1.0 : 0.5
                 iconWidth: root.iconWidth
                 horizontalOffset: root.horizontalOffset
                 iconSource: "image://theme/icon-m-share"

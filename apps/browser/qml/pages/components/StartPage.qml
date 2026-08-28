@@ -28,6 +28,8 @@ Item {
     // The "+" tile: add a link to the grid. It files a link rather than
     // navigating to one, which is what the address bar is for.
     signal addFavorite()
+    // Swipe up anywhere on the page: open the address bar ready to type.
+    signal openSearch()
 
     // Which bookmark folder the quick links show. "" is the root, which is
     // where every bookmark lives until folders are used.
@@ -106,6 +108,33 @@ Item {
             GradientStop { position: 0.45; color: Qt.rgba(scrimGradient.level, scrimGradient.level, scrimGradient.level, 0.3) }
             GradientStop { position: 1.0; color: Qt.rgba(scrimGradient.level, scrimGradient.level, scrimGradient.level, 0.65) }
         }
+    }
+
+    // Swipe up to reach the address bar without stretching for the toolbar.
+    // Deliberately declared BEFORE the foreground: later siblings sit above it,
+    // so tile taps and the long-press drag are unaffected and this only picks
+    // up the empty space around them.
+    MouseArea {
+        id: swipeUpArea
+
+        property real pressY: 0
+        property bool armed: false
+
+        anchors.fill: parent
+        enabled: !root.overlayOpen
+
+        onPressed: {
+            pressY = mouse.y
+            armed = true
+        }
+        onPositionChanged: {
+            if (armed && pressY - mouse.y > Theme.itemSizeMedium) {
+                armed = false
+                root.openSearch()
+            }
+        }
+        onReleased: armed = false
+        onCanceled: armed = false
     }
 
     // All foreground elements hide while the address-bar overlay is open; the

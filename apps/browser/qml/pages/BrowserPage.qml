@@ -554,6 +554,10 @@ Page {
 
         onLoadUrl: overlay.loadPage(url, newTab)
 
+        // Swipe up on the start page. Immediate, so the address bar does not
+        // slide in behind the gesture that asked for it.
+        onOpenSearch: overlay.enterNewTabUrl(PageStackAction.Immediate)
+
         // The "+" tile files a link rather than navigating to one.
         onAddFavorite: {
             overlay.animator.showChrome()

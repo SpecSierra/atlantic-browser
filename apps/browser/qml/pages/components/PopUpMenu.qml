@@ -169,9 +169,29 @@ SilicaControl {
                 Item {
                     id: headerItem
 
-                    y: menuItem.topPadding
-                        + Math.min(0, menuFlickable.contentY)
-                        - Math.min(0, menuFlickable.contentHeight - menuFlickable.height - menuFlickable.contentY)
+                    // The menu is bottom-anchored: shorter-than-viewport
+                    // content is pushed down so the last row sits on the
+                    // footer. `slack` is that push; `bottomOverscroll` keeps
+                    // the content still when dragged past its end.
+                    //
+                    // Deliberately independent of contentY while dragging DOWN.
+                    // This used to read
+                    //     topPadding + min(0, contentY)
+                    //               - min(0, contentHeight - height - contentY)
+                    // which counts contentY twice: y became topPadding + 2*C +
+                    // slack, so the on-screen position (y - C) moved UP as the
+                    // menu was dragged down. With the background's bottom edge
+                    // pinned to the viewport and its height measured from the
+                    // top, the sheet grew taller the further it was pulled
+                    // down, then vanished. Now it just follows the finger.
+                    readonly property real maxContentY:
+                        Math.max(0, menuFlickable.contentHeight - menuFlickable.height)
+                    readonly property real slack:
+                        Math.max(0, menuFlickable.height - menuFlickable.contentHeight)
+                    readonly property real bottomOverscroll:
+                        Math.max(0, menuFlickable.contentY - maxContentY)
+
+                    y: menuItem.topPadding + slack + bottomOverscroll
 
                     width: menuFlickable.width
                     height: Theme.paddingLarge

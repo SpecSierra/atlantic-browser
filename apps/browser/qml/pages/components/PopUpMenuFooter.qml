@@ -16,6 +16,12 @@ Components.FrostedBox {
 
     readonly property real overlayOpacity: 0.15
 
+    // Same derivation as PopUpMenuItem.pageHost: "" when no real page is open.
+    readonly property string pageHost: {
+        var m = /^https?:\/\/([^\/:?#]+)/.exec(webView.url || "")
+        return m ? m[1].toLowerCase() : ""
+    }
+
     radius: 0
     tintAlpha: 0.6
 
@@ -73,7 +79,11 @@ Components.FrostedBox {
             icon.source: overlay.toolBar.bookmarked ? "image://theme/icon-m-favorite-selected"
                                                     : "image://theme/icon-m-favorite"
             icon.opacity: enabled ? 1.0 : Theme.opacityLow
-            enabled: webView.contentItem
+            // There has to be a page to bookmark. webView.contentItem is not
+            // that test: it is non-null straight after startup with no tabs
+            // open, which left this live on the start page while the per-site
+            // toggles above it were correctly greyed out.
+            enabled: root.pageHost.length > 0
             onTapped: {
                 if (overlay.toolBar.bookmarked) {
                     overlay.toolBar.removeActivePageFromBookmarks()
