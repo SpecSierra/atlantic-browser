@@ -45,7 +45,7 @@ Page {
                 onClicked: WebExtensionManager.reload()
             }
             MenuItem {
-                //% "Install from file…"
+                //% "Install from file"
                 text: qsTrId("atlantic-me-extensions_install")
                 onClicked: pageStack.animatorPush(filePickerPage)
             }

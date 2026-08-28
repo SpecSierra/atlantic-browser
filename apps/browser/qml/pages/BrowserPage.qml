@@ -658,10 +658,23 @@ Page {
         onActiveChanged: {
             var isFullScreen = webView.contentItem && webView.contentItem.fullscreen
             if (!isFullScreen && active && !overlay.enteringNewTabUrl) {
-                if (webView.hasInitialUrl
-                        || webView.tabModel.count !== 0
-                        || (WebUtils.homePage !== "about:blank" && WebUtils.homePage.length > 0)) {
+                if (webView.hasInitialUrl || webView.tabModel.count !== 0) {
                     overlay.animator.showChrome()
+                } else if (WebUtils.homePage !== "about:blank" && WebUtils.homePage.length > 0) {
+                    // Nothing to restore and a home page is set, which is the
+                    // case AddHomePageDialog describes ("shown when the browser
+                    // is opened with no tabs to load"). This used to fall into
+                    // the showChrome() branch above and load nothing at all, so
+                    // a configured home page did nothing on startup and the
+                    // start page was suppressed as well -- an empty view under
+                    // bare chrome. loadPage() normalises, so a bare host typed
+                    // into the dialog ("google.fr") still resolves, and it
+                    // shows the chrome itself once the load starts.
+                    //
+                    // Safe here because overlay.active gates on
+                    // tabModel.loaded, so the restored tab count is final by
+                    // the time this runs.
+                    overlay.loadPage(WebUtils.homePage)
                 } else {
                     overlay.startPage()
                 }

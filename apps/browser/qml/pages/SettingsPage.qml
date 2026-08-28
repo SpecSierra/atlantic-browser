@@ -123,7 +123,7 @@ Page {
                             } else {
                                 //: Instead of %1 site address will be displayed
                                 //% "Web page %1"
-                                qsTrId("sailfish_browser-me-web_page").arg(site)
+                                return qsTrId("sailfish_browser-me-web_page").arg(site)
                             }
                         }
 

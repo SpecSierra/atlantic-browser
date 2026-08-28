@@ -73,7 +73,7 @@ Page {
             busy: WebExtensionStore.busy
 
             MenuItem {
-                //% "Install from a link…"
+                //% "Install from a link"
                 text: qsTrId("atlantic-me-extension_install_link")
                 onClicked: pageStack.animatorPush(linkDialog)
             }
@@ -85,8 +85,6 @@ Page {
             PageHeader {
                 //% "Get extensions"
                 title: qsTrId("atlantic-he-extension_store")
-                //% "from addons.mozilla.org"
-                description: qsTrId("atlantic-la-extension_store_source")
             }
 
             SearchField {
