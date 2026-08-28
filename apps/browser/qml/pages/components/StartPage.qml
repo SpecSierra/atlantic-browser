@@ -10,6 +10,7 @@ import QtQuick 2.2
 import QtGraphicalEffects 1.0
 import Sailfish.Silica 1.0
 import Sailfish.Ambience 1.0
+import Sailfish.Browser 1.0
 import "." as Browser
 import "../../shared/WallpaperUtils.js" as WallpaperUtils
 
@@ -23,6 +24,20 @@ Item {
     signal loadUrl(string url, bool newTab)
     // open the address-bar entry (keyboard + suggestions)
     signal openSearch()
+    // A folder tile was tapped: the bookmarks page takes over from here, since
+    // the start page stays pinned to the one folder it is configured with.
+    signal openFolder(string folderId, string title)
+
+    // Which bookmark folder the quick links show. "" is the root, which is
+    // where every bookmark lives until folders are used.
+    property string startFolderId: ""
+
+    BookmarkFolderModel {
+        id: favoritesModel
+
+        sourceModel: root.bookmarkModel
+        folderId: root.startFolderId
+    }
 
     // true while the address-bar overlay is open (hide the foreground then)
     property bool overlayOpen: false
@@ -142,50 +157,10 @@ Item {
 
         Item { width: 1; height: Theme.paddingLarge }
 
-        // Search bar — frosted glass, lightly rounded (Sailfish chrome style)
-        Browser.FrostedBox {
-            id: searchBar
-
-            anchors.horizontalCenter: parent.horizontalCenter
-            width: parent.width
-            height: Theme.itemSizeMedium
-            radius: Theme.paddingMedium
-            blurSource: bgBlur
-            alignParent: root
-            pressed: searchArea.pressed
-
-            Row {
-                anchors.left: parent.left
-                anchors.leftMargin: Theme.paddingLarge
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: Theme.paddingMedium
-
-                Image {
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: Theme.iconSizeSmall
-                    height: Theme.iconSizeSmall
-                    source: "image://theme/icon-m-search?" + Theme.primaryColor
-                }
-
-                Label {
-                    anchors.verticalCenter: parent.verticalCenter
-                    //% "Search or type URL"
-                    text: qsTrId("sailfish_browser-ph-type_url_or_search")
-                    color: Theme.secondaryColor
-                    font.pixelSize: Theme.fontSizeMedium
-                }
-            }
-
-            MouseArea {
-                id: searchArea
-                anchors.fill: parent
-                onClicked: root.openSearch()
-            }
-        }
-
-        Item { width: 1; height: Theme.paddingLarge }
-
-        // Quick links (bookmarks) + add tile
+        // Quick links: the contents of one chosen bookmark folder, in the
+        // user's own order. Tiles are drag-reorderable, and dragging one down
+        // onto the bin removes it -- press-and-hold used to delete outright,
+        // which is now the gesture that picks a tile up instead.
         Grid {
             id: grid
 
@@ -195,13 +170,41 @@ Item {
 
             readonly property int cell: Math.floor((content.width - (columns - 1) * Theme.paddingLarge) / columns)
             readonly property int tileSize: Math.round(cell * 0.82)
+            readonly property int stride: cell + spacing
+
+            // Index of the tile being dragged, -1 when idle. Held here rather
+            // than in the delegate because every delegate needs to see it.
+            property int dragIndex: -1
+            property bool overBin: false
+
+            // Which slot a point over the grid belongs to. The grid is uniform,
+            // so this is arithmetic rather than hit-testing -- and it has to
+            // clamp, because a drag ranges outside the laid-out cells.
+            function slotAt(x, y) {
+                var col = Math.max(0, Math.min(columns - 1, Math.floor(x / stride)))
+                var row = Math.max(0, Math.floor(y / stride))
+                return Math.max(0, Math.min(favoritesModel.count - 1, row * columns + col))
+            }
 
             Repeater {
-                model: root.bookmarkModel
+                model: favoritesModel
 
                 delegate: Column {
+                    id: cellItem
+
+                    readonly property bool dragging: grid.dragIndex === index
+
                     width: grid.cell
                     spacing: Theme.paddingSmall
+                    z: dragging ? 10 : 0
+                    opacity: dragging && grid.overBin ? 0.4 : 1.0
+
+                    // Follows the finger while dragging; the Repeater keeps
+                    // re-laying the cells out underneath as rows move.
+                    transform: Translate {
+                        x: cellItem.dragging ? tileArea.dragDX : 0
+                        y: cellItem.dragging ? tileArea.dragDY : 0
+                    }
 
                     Browser.FrostedBox {
                         id: tile
@@ -215,6 +218,7 @@ Item {
 
                         Browser.FavoriteIcon {
                             anchors.centerIn: parent
+                            visible: !model.isFolder
                             icon: model.favicon
                             width: Math.round(grid.tileSize * 0.5)
                             height: width
@@ -222,15 +226,87 @@ Item {
                             sourceSize.height: width
                         }
 
+                        // A folder filed inside the start folder: opening it
+                        // hands over to the bookmarks page, since the start
+                        // page itself stays pinned to its one folder.
+                        Image {
+                            anchors.centerIn: parent
+                            visible: model.isFolder
+                            width: Math.round(grid.tileSize * 0.45)
+                            height: width
+                            source: "image://theme/icon-m-folder?" + Theme.primaryColor
+                        }
+
                         MouseArea {
                             id: tileArea
+
+                            property real pressX
+                            property real pressY
+                            property real dragDX
+                            property real dragDY
+
                             anchors.fill: parent
-                            onClicked: root.loadUrl(model.url, true)
-                            onPressAndHold: {
-                                var u = model.url
-                                //% "Removing bookmark"
-                                removeRemorse.execute(qsTrId("atlantic-la-removing_bookmark"),
-                                                      function() { if (root.bookmarkModel) root.bookmarkModel.remove(u) })
+
+                            onClicked: {
+                                if (model.isFolder)
+                                    root.openFolder(model.bookmarkId, model.title)
+                                else
+                                    root.loadUrl(model.url, true)
+                            }
+
+                            onPressed: {
+                                pressX = mouse.x
+                                pressY = mouse.y
+                                dragDX = 0
+                                dragDY = 0
+                            }
+
+                            onPressAndHold: grid.dragIndex = index
+
+                            onPositionChanged: {
+                                if (grid.dragIndex !== index)
+                                    return
+
+                                dragDX = mouse.x - pressX
+                                dragDY = mouse.y - pressY
+
+                                var p = mapToItem(grid, mouse.x, mouse.y)
+                                grid.overBin = p.y > grid.height + Theme.paddingLarge
+                                if (grid.overBin)
+                                    return
+
+                                var target = grid.slotAt(p.x, p.y)
+                                if (target !== index) {
+                                    favoritesModel.move(index, target)
+                                    // The delegate follows its row, so the drag
+                                    // has to follow it to the new index or the
+                                    // next move would come from the wrong one.
+                                    grid.dragIndex = target
+                                    // The cell moved under the finger; re-base
+                                    // the offset so the tile does not jump.
+                                    pressX = mouse.x - dragDX
+                                    pressY = mouse.y - dragDY
+                                }
+                            }
+
+                            onReleased: {
+                                if (grid.dragIndex === index && grid.overBin) {
+                                    var i = index
+                                    //% "Removing bookmark"
+                                    removeRemorse.execute(qsTrId("atlantic-la-removing_bookmark"),
+                                                          function() { favoritesModel.removeAt(i) })
+                                }
+                                grid.dragIndex = -1
+                                grid.overBin = false
+                                dragDX = 0
+                                dragDY = 0
+                            }
+
+                            onCanceled: {
+                                grid.dragIndex = -1
+                                grid.overBin = false
+                                dragDX = 0
+                                dragDY = 0
                             }
                         }
                     }
@@ -238,7 +314,7 @@ Item {
                     Label {
                         width: grid.cell
                         horizontalAlignment: Text.AlignHCenter
-                        text: WebUtils.displayableUrl(model.url)
+                        text: model.isFolder ? model.title : WebUtils.displayableUrl(model.url)
                         truncationMode: TruncationMode.Fade
                         color: Theme.primaryColor
                         font.pixelSize: Theme.fontSizeExtraSmall
@@ -250,6 +326,7 @@ Item {
             Column {
                 width: grid.cell
                 spacing: Theme.paddingSmall
+                visible: grid.dragIndex < 0
 
                 Browser.FrostedBox {
                     id: addTile
@@ -283,6 +360,31 @@ Item {
                     color: Theme.secondaryColor
                     font.pixelSize: Theme.fontSizeExtraSmall
                 }
+            }
+        }
+
+        // Drop target, only while a tile is in the air.
+        Item {
+            width: 1
+            height: grid.dragIndex >= 0 ? Theme.paddingLarge : 0
+        }
+
+        Browser.FrostedBox {
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: Theme.itemSizeExtraLarge
+            height: Theme.itemSizeMedium
+            radius: Theme.paddingMedium
+            blurSource: bgBlur
+            alignParent: root
+            visible: grid.dragIndex >= 0
+            opacity: grid.overBin ? 1.0 : Theme.opacityHigh
+
+            Image {
+                anchors.centerIn: parent
+                width: Theme.iconSizeMedium
+                height: width
+                source: "image://theme/icon-m-delete?"
+                        + (grid.overBin ? Theme.highlightColor : Theme.primaryColor)
             }
         }
     }

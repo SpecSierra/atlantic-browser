@@ -57,9 +57,23 @@ void BookmarkManager::save(const QList<Bookmark*> & bookmarks)
         title.insert("title", QJsonValue(bookmark->title()));
         title.insert("favicon", QJsonValue(bookmark->favicon()));
         title.insert("hasTouchIcon", QJsonValue(bookmark->hasTouchIcon()));
+        title.insert("id", QJsonValue(bookmark->id()));
+        if (!bookmark->parentId().isEmpty())
+            title.insert("parentId", QJsonValue(bookmark->parentId()));
+        if (bookmark->isFolder())
+            title.insert("folder", QJsonValue(true));
         items.append(QJsonValue(title));
     }
-    QJsonDocument doc(items);
+
+    // v2 is an object so folders and ids have somewhere to live; the list order
+    // inside "items" is the display order. load() still reads a bare array
+    // (v1), which is both the pre-folder file and the shipped
+    // default-content/bookmarks.json, so that stays supported rather than being
+    // a one-shot migration.
+    QJsonObject root;
+    root.insert("version", QJsonValue(2));
+    root.insert("items", items);
+    QJsonDocument doc(root);
     out.setCodec("UTF-8");
     out << doc.toJson();
     file.close();
@@ -87,8 +101,12 @@ QList<Bookmark*> BookmarkManager::load() {
     }
 
     QJsonDocument doc = QJsonDocument::fromJson(file->readAll());
-    if (doc.isArray()) {
-        QJsonArray array = doc.array();
+    // v2: { "version": 2, "items": [...] }. v1: a bare array of the same item
+    // objects without id/parentId/folder -- reading one just leaves every entry
+    // at the root with a generated id, and the next save() writes v2.
+    const QJsonArray array = doc.isObject() ? doc.object().value("items").toArray()
+                                            : doc.array();
+    if (doc.isArray() || doc.isObject()) {
         for (const QJsonValue &value : array) {
             if (value.isObject()) {
                 QJsonObject obj = value.toObject();
@@ -97,12 +115,15 @@ QList<Bookmark*> BookmarkManager::load() {
                 Bookmark* m = new Bookmark(obj.value("title").toString(),
                                            url,
                                            favicon,
-                                           obj.value("hasTouchIcon").toBool());
+                                           obj.value("hasTouchIcon").toBool(),
+                                           obj.value("id").toString(),
+                                           obj.value("parentId").toString(),
+                                           obj.value("folder").toBool());
                 bookmarks.append(m);
             }
         }
     } else {
-        qWarning() << "Bookmarks.json should be an array of items";
+        qWarning() << "bookmarks.json should be an array or a { version, items } object";
     }
     file->close();
 

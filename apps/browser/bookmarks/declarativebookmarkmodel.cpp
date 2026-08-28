@@ -42,13 +42,16 @@ DeclarativeBookmarkModel::DeclarativeBookmarkModel(QObject *parent)
     connect(FaviconManager::instance(), &FaviconManager::iconChanged,
             this, &DeclarativeBookmarkModel::updateHostFavicon);
     bookmarks = BookmarkManager::instance()->load();
+    rebuildIndexes();
+}
 
-    // Generate mapping URL -> bookmark's index in the loaded list.
-    int index(0);
-    for (const Bookmark* const bookmark : bookmarks) {
-        // Use multi insert as there might be multiple bookmark instances with the same url.
-        bookmarkIndexes.insertMulti(bookmark->url(), index);
-        index++;
+void DeclarativeBookmarkModel::rebuildIndexes()
+{
+    bookmarkIndexes.clear();
+    for (int i = 0; i < bookmarks.count(); ++i) {
+        // insertMulti: the same url may legitimately appear more than once,
+        // and does so more often now that it can be filed in two folders.
+        bookmarkIndexes.insertMulti(bookmarks.at(i)->url(), i);
     }
 }
 
@@ -59,14 +62,17 @@ QHash<int, QByteArray> DeclarativeBookmarkModel::roleNames() const
     roles[TitleRole] = "title";
     roles[FaviconRole] = "favicon";
     roles[TouchIconRole] = "hasTouchIcon";
+    roles[IdRole] = "bookmarkId";
+    roles[ParentIdRole] = "parentId";
+    roles[IsFolderRole] = "isFolder";
     return roles;
 }
 
 void DeclarativeBookmarkModel::add(const QString& url, const QString& title, const QString& favicon, bool touchIcon)
 {
     beginInsertRows(QModelIndex(), rowCount(), rowCount());
-    bookmarkIndexes.insert(url, bookmarks.count());
     bookmarks.append(new Bookmark(title, url, favicon, touchIcon));
+    rebuildIndexes();
     endInsertRows();
     emit countChanged();
     // Getter will check if active page is still bookmarked.
@@ -87,35 +93,149 @@ void DeclarativeBookmarkModel::remove(const QString& url)
 
 void DeclarativeBookmarkModel::remove(int index)
 {
-    if (index >= 0 && index < bookmarks.count()) {
-        beginRemoveRows(QModelIndex(), index, index);
-        Bookmark* bookmark = bookmarks.takeAt(index);
-        delete bookmark;
+    if (index < 0 || index >= bookmarks.count())
+        return;
 
-        // Remove index mapping and update remaining indices
-        QMap<QString, int>::iterator i = bookmarkIndexes.begin();
-        while (i != bookmarkIndexes.end()) {
-            if (i.value() == index) {
-                i = bookmarkIndexes.erase(i);
-                // Erased item was the last one.
-                if (i == bookmarkIndexes.end()) {
-                    break;
-                }
-            }
-
-            if (i.value() > index) {
-                i.value()--;
-            }
-            i++;
+    // Deleting a folder deletes what is filed in it; leaving the children
+    // behind would strand them under a parentId that no longer resolves, and
+    // nothing in the UI can reach an item in that state.
+    if (bookmarks.at(index)->isFolder()) {
+        const QString folderId = bookmarks.at(index)->id();
+        for (int i = bookmarks.count() - 1; i >= 0; --i) {
+            if (bookmarks.at(i)->parentId() == folderId)
+                removeAt(i);
         }
-
-        endRemoveRows();
-
-        emit countChanged();
-        // Getter will check if active page is still bookmarked.
-        emit activeUrlBookmarkedChanged();
-        save();
+        // The folder's own row may have shifted while its children went.
+        index = indexOfId(folderId);
+        if (index < 0)
+            return;
     }
+
+    removeAt(index);
+
+    emit countChanged();
+    // Getter will check if active page is still bookmarked.
+    emit activeUrlBookmarkedChanged();
+    save();
+}
+
+// Drops one row without saving or signalling count/bookmarked changes, so a
+// folder delete can take its children out in the same pass.
+void DeclarativeBookmarkModel::removeAt(int index)
+{
+    if (index < 0 || index >= bookmarks.count())
+        return;
+
+    beginRemoveRows(QModelIndex(), index, index);
+    delete bookmarks.takeAt(index);
+    rebuildIndexes();
+    endRemoveRows();
+}
+
+QString DeclarativeBookmarkModel::addFolder(const QString &title, const QString &parentId)
+{
+    Bookmark *folder = new Bookmark(title, QString(), QString(), false,
+                                    QString(), parentId, true);
+    beginInsertRows(QModelIndex(), rowCount(), rowCount());
+    bookmarks.append(folder);
+    rebuildIndexes();
+    endInsertRows();
+    emit countChanged();
+    save();
+    return folder->id();
+}
+
+int DeclarativeBookmarkModel::indexOfId(const QString &id) const
+{
+    for (int i = 0; i < bookmarks.count(); ++i) {
+        if (bookmarks.at(i)->id() == id)
+            return i;
+    }
+    return -1;
+}
+
+void DeclarativeBookmarkModel::removeById(const QString &id)
+{
+    remove(indexOfId(id));
+}
+
+void DeclarativeBookmarkModel::rename(const QString &id, const QString &title)
+{
+    const int row = indexOfId(id);
+    if (row < 0 || bookmarks.at(row)->title() == title)
+        return;
+
+    bookmarks.at(row)->setTitle(title);
+    const QModelIndex modelIndex = QAbstractListModel::index(row);
+    emit dataChanged(modelIndex, modelIndex, QVector<int>() << TitleRole);
+    save();
+}
+
+void DeclarativeBookmarkModel::setParentId(const QString &id, const QString &parentId)
+{
+    const int row = indexOfId(id);
+    if (row < 0 || bookmarks.at(row)->parentId() == parentId)
+        return;
+
+    // A folder cannot be filed into itself or into its own descendant; that
+    // would detach the whole branch from the root, where nothing can reach it.
+    if (bookmarks.at(row)->isFolder()) {
+        QString walk = parentId;
+        while (!walk.isEmpty()) {
+            if (walk == id)
+                return;
+            const int parentRow = indexOfId(walk);
+            if (parentRow < 0)
+                break;
+            walk = bookmarks.at(parentRow)->parentId();
+        }
+    }
+
+    bookmarks.at(row)->setParentId(parentId);
+    const QModelIndex modelIndex = QAbstractListModel::index(row);
+    emit dataChanged(modelIndex, modelIndex, QVector<int>() << ParentIdRole);
+    save();
+}
+
+void DeclarativeBookmarkModel::move(int from, int to)
+{
+    if (from == to
+            || from < 0 || from >= bookmarks.count()
+            || to < 0 || to >= bookmarks.count()) {
+        return;
+    }
+
+    // beginMoveRows wants the destination in pre-move coordinates: moving down
+    // means the row lands after the one currently at `to`.
+    if (!beginMoveRows(QModelIndex(), from, from, QModelIndex(), to > from ? to + 1 : to))
+        return;
+    bookmarks.move(from, to);
+    rebuildIndexes();
+    endMoveRows();
+    save();
+}
+
+QString DeclarativeBookmarkModel::folderTitle(const QString &id) const
+{
+    const int row = indexOfId(id);
+    if (row < 0 || !bookmarks.at(row)->isFolder())
+        return QString();
+    return bookmarks.at(row)->title();
+}
+
+QVariantList DeclarativeBookmarkModel::folders() const
+{
+    QVariantList result;
+    for (const Bookmark* const bookmark : bookmarks) {
+        if (!bookmark->isFolder())
+            continue;
+        QVariantMap entry;
+        entry.insert(QStringLiteral("id"), bookmark->id());
+        entry.insert(QStringLiteral("title"), bookmark->title());
+        entry.insert(QStringLiteral("parentId"), bookmark->parentId());
+        result.append(entry);
+    }
+    return result;
 }
 
 void DeclarativeBookmarkModel::updateFavoriteIcon(const QString &url, const QString &favicon, bool touchIcon)
@@ -182,17 +302,7 @@ void DeclarativeBookmarkModel::edit(int index, const QString& url, const QString
         bookmark->setUrl(url);
         roles << UrlRole;
 
-        // Update key indexes
-        QMap<QString, int>::iterator i = bookmarkIndexes.begin();
-        while (i != bookmarkIndexes.end()) {
-            if (i.value() == index) {
-                i = bookmarkIndexes.erase(i);
-                break;
-            }
-            ++i;
-        }
-        // Use multi insert here as the url might be already bookmarked.
-        bookmarkIndexes.insertMulti(url, index);
+        rebuildIndexes();
 
         // Getter will check if active page is still bookmarked.
         emit activeUrlBookmarkedChanged();
@@ -265,6 +375,12 @@ QVariant DeclarativeBookmarkModel::data(const QModelIndex & index, int role) con
         // A learned favicon is a real site icon, not a page thumbnail, so it
         // must not get the thumbnail mask FavoriteItem applies otherwise.
         return bookmark->hasTouchIcon() || !learnedFavicon(bookmark).isEmpty();
+    } else if (role == IdRole) {
+        return bookmark->id();
+    } else if (role == ParentIdRole) {
+        return bookmark->parentId();
+    } else if (role == IsFolderRole) {
+        return bookmark->isFolder();
     }
     return QVariant();
 }

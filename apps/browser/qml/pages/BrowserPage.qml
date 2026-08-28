@@ -552,6 +552,29 @@ Page {
         // disconnected from the start-page search bar.
         onOpenSearch: overlay.enterNewTabUrl(PageStackAction.Immediate)
         onLoadUrl: overlay.loadPage(url, newTab)
+
+        // Which folder the quick links show. Set in the bookmarks page; "" is
+        // the root, which is where everything lives until folders are used, so
+        // an unconfigured profile behaves exactly as before.
+        startFolderId: startPageFolder.value
+
+        // The start page is pinned to one folder, so opening a folder tile
+        // hands over to the bookmarks page rather than navigating in place.
+        onOpenFolder: {
+            overlay.animator.showChrome()
+            pageStack.push("BookmarkPage.qml", {
+                               bookmarkModel: overlay.bookmarkModel,
+                               folderId: folderId,
+                               folderTitle: title
+                           })
+        }
+    }
+
+    ConfigurationValue {
+        id: startPageFolder
+
+        key: "/apps/atlantic-browser/settings/start_page_folder"
+        defaultValue: ""
     }
 
     // Dismiss the open overlay by tapping the area above it. The contentDimmer's

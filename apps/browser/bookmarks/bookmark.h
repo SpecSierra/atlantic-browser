@@ -23,7 +23,21 @@ class Bookmark : public QObject
     Q_PROPERTY(QString favicon READ favicon WRITE setFavicon NOTIFY faviconChanged)
 
 public:
-    Bookmark(const QString &title, const QString &url, const QString &favicon, bool hasTouchIcon, QObject* parent = 0);
+    // A folder is a Bookmark with folder=true and no url; that keeps the model
+    // one flat list in document order, with parentId giving the tree. id is
+    // stable across saves and is what the folder UI addresses items by -- url
+    // cannot be, since folders have none and the same url may be filed twice.
+    // An empty id is generated; an empty parentId means the root.
+    Bookmark(const QString &title, const QString &url, const QString &favicon, bool hasTouchIcon,
+             const QString &id = QString(), const QString &parentId = QString(), bool folder = false,
+             QObject* parent = 0);
+
+    QString id() const { return m_id; }
+
+    QString parentId() const { return m_parentId; }
+    void setParentId(const QString &parentId);
+
+    bool isFolder() const { return m_folder; }
 
     QString title() const;
     void setTitle(const QString &title);
@@ -43,6 +57,9 @@ signals:
     void faviconChanged();
 
 private:
+    QString m_id;
+    QString m_parentId;
+    bool m_folder;
     QString m_title;
     QString m_url;
     QString m_favicon;

@@ -12,13 +12,25 @@
 #include "bookmark.h"
 #include "faviconmanager.h"
 
-Bookmark::Bookmark(const QString &title, const QString &url, const QString &favicon, bool hasTouchIcon, QObject* parent)
+#include <QUuid>
+
+Bookmark::Bookmark(const QString &title, const QString &url, const QString &favicon, bool hasTouchIcon,
+                   const QString &id, const QString &parentId, bool folder, QObject* parent)
     : QObject(parent)
+    // QUuid::WithoutBraces is Qt 5.11; the SDK here is 5.6, so strip by hand.
+    , m_id(id.isEmpty() ? QUuid::createUuid().toString().remove(QLatin1Char('{')).remove(QLatin1Char('}')) : id)
+    , m_parentId(parentId)
+    , m_folder(folder)
     , m_title(title)
     , m_url(url)
     , m_favicon(favicon)
     , m_hasTouchIcon(hasTouchIcon)
 {
+    // A folder draws its own glyph in QML and never carries a site icon, so the
+    // generic-launcher-icon substitution below must not apply to it.
+    if (m_folder)
+        return;
+
     if (m_favicon.isEmpty()) {
         m_favicon = FaviconManager::defaultDesktopBookmarkIcon();
         m_hasTouchIcon = true;
@@ -62,6 +74,11 @@ void Bookmark::setFavicon(const QString &favicon)
         m_favicon = favicon;
         emit faviconChanged();
     }
+}
+
+void Bookmark::setParentId(const QString &parentId)
+{
+    m_parentId = parentId;
 }
 
 bool Bookmark::hasTouchIcon() const

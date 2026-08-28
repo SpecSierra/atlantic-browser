@@ -4,6 +4,7 @@
 #include "browserservice.h"
 #include "declarativebookmarkmodel.h"
 #include "bookmarkfiltermodel.h"
+#include "bookmarkfoldermodel.h"
 #include "desktopbookmarkwriter.h"
 #include "downloadstatus.h"
 #include "persistenttabmodel.h"
@@ -209,6 +210,7 @@ static void registerBrowserQmlTypes()
     qmlRegisterUncreatableType<PersistentTabModel>(uri, 1, 0, "PersistentTabModel", "");
     qmlRegisterType<DeclarativeHistoryModel>(uri, 1, 0, "HistoryModel");
     qmlRegisterType<BookmarkFilterModel>(uri, 1, 0, "BookmarkFilterModel");
+    qmlRegisterType<BookmarkFolderModel>(uri, 1, 0, "BookmarkFolderModel");
     qmlRegisterType<DeclarativeLoginModel>(uri, 1, 0, "LoginModel");
     qmlRegisterType<LoginFilterModel>(uri, 1, 0, "LoginFilterModel");
     qmlRegisterType<DeclarativeTabFilterModel>(uri, 1, 0, "TabFilterModel");

@@ -33,6 +33,12 @@ bool BookmarkFilterModel::filterAcceptsRowUnbounded(int sourceRow, const QModelI
 {
     QModelIndex index = sourceModel()->index(sourceRow, 0, sourceParent);
 
+    // Folders are browsed, never searched or shown as favourites: they have no
+    // url, so every consumer of this proxy -- the overlay's favourite grid and
+    // the bookmarks search -- would render a row it cannot open.
+    if (sourceModel()->data(index, DeclarativeBookmarkModel::IsFolderRole).toBool())
+        return false;
+
     if ((sourceModel()->data(index, DeclarativeBookmarkModel::UrlRole).toString().trimmed().contains(m_search, Qt::CaseInsensitive)
          || sourceModel()->data(index, DeclarativeBookmarkModel::TitleRole).toString().trimmed().contains(m_search, Qt::CaseInsensitive))) {
         return true;

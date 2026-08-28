@@ -15,6 +15,7 @@
 #include <QAbstractListModel>
 #include <QStringList>
 #include <QMap>
+#include <QVariantList>
 
 #include "bookmark.h"
 
@@ -38,6 +39,9 @@ public:
            TitleRole,
            FaviconRole,
            TouchIconRole,
+           IdRole,
+           ParentIdRole,
+           IsFolderRole,
     };
 
     Q_INVOKABLE void add(const QString& url, const QString& title, const QString& favicon, bool touchIcon = false);
@@ -46,6 +50,24 @@ public:
     Q_INVOKABLE void updateFavoriteIcon(const QString& url, const QString& favicon, bool touchIcon);
     Q_INVOKABLE bool contains(const QString& url) const;
     Q_INVOKABLE void edit(int index, const QString& url, const QString& title);
+
+    // Folder / ordering API. Items live in one flat list whose order is the
+    // display order; parentId gives the tree. Rows are addressed by id here
+    // because a url identifies nothing once folders exist -- folders have no
+    // url, and the same url can be filed in two places.
+    Q_INVOKABLE QString addFolder(const QString &title, const QString &parentId = QString());
+    Q_INVOKABLE void removeById(const QString &id);
+    Q_INVOKABLE void rename(const QString &id, const QString &title);
+    Q_INVOKABLE void setParentId(const QString &id, const QString &parentId);
+    // Both are source-model rows. BookmarkFolderModel maps its own filtered
+    // rows onto these.
+    Q_INVOKABLE void move(int from, int to);
+    Q_INVOKABLE int indexOfId(const QString &id) const;
+    // "" when the id is not a folder, so QML can resolve a stored folder id
+    // back to a title (and notice when the folder has been deleted).
+    Q_INVOKABLE QString folderTitle(const QString &id) const;
+    // {id, title} for every folder, for the "move to folder" pickers.
+    Q_INVOKABLE QVariantList folders() const;
     // -1 when the url is not bookmarked.
     int indexOfUrl(const QString &url) const { return bookmarkIndexes.value(url, -1); }
 
@@ -61,6 +83,12 @@ public:
 
 private:
     static QString learnedFavicon(const Bookmark *bookmark);
+    // The url -> row map was maintained by hand on every mutation, with a
+    // different fix-up loop per operation. Reordering and reparenting would
+    // need two more, so it is rebuilt wholesale instead -- the list is short
+    // and this cannot drift out of sync.
+    void rebuildIndexes();
+    void removeAt(int index);
 
 private slots:
     void clearBookmarks();
