@@ -16,6 +16,7 @@
 #include <QStringList>
 #include <QMap>
 #include <QVariantList>
+#include <QTimer>
 
 #include "bookmark.h"
 
@@ -44,7 +45,9 @@ public:
            IsFolderRole,
     };
 
-    Q_INVOKABLE void add(const QString& url, const QString& title, const QString& favicon, bool touchIcon = false);
+    // Returns the new bookmark's id so a caller that added it from inside a
+    // folder can file it there; add() itself always appends at the root.
+    Q_INVOKABLE QString add(const QString& url, const QString& title, const QString& favicon, bool touchIcon = false);
     Q_INVOKABLE void remove(const QString& url);
     Q_INVOKABLE void remove(int index);
     Q_INVOKABLE void updateFavoriteIcon(const QString& url, const QString& favicon, bool touchIcon);
@@ -101,6 +104,14 @@ signals:
 
 private:
     void save();
+    // move() runs once per slot crossed while a tile is dragged, and each one
+    // used to rewrite bookmarks.json. Reordering is coalesced onto a timer;
+    // everything else still writes immediately, so only the drag can lose the
+    // last few hundred ms if the process dies mid-gesture.
+    void saveSoon();
+    void flushPendingSave();
+
+    QTimer *m_saveTimer = nullptr;
 
     QString m_activeUrl;
 

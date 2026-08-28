@@ -22,11 +22,12 @@ Item {
 
     // url, openInNewTab
     signal loadUrl(string url, bool newTab)
-    // open the address-bar entry (keyboard + suggestions)
-    signal openSearch()
     // A folder tile was tapped: the bookmarks page takes over from here, since
     // the start page stays pinned to the one folder it is configured with.
     signal openFolder(string folderId, string title)
+    // The "+" tile: add a link to the grid. It files a link rather than
+    // navigating to one, which is what the address bar is for.
+    signal addFavorite()
 
     // Which bookmark folder the quick links show. "" is the root, which is
     // where every bookmark lives until folders are used.
@@ -172,17 +173,48 @@ Item {
             readonly property int tileSize: Math.round(cell * 0.82)
             readonly property int stride: cell + spacing
 
-            // Index of the tile being dragged, -1 when idle. Held here rather
-            // than in the delegate because every delegate needs to see it.
+            // Index of the tile being dragged, -1 when idle, and the slot it
+            // is currently hovering over. Held here rather than in the delegate
+            // because every delegate needs to see them.
+            //
+            // The model is NOT reordered while dragging. QQuickRepeater
+            // regenerates its delegates on a model change, which destroys the
+            // very item holding the mouse grab: the release event is then never
+            // delivered, the drag state is stranded, and the tile is left
+            // frozen wherever it was. Tiles are displaced visually instead and
+            // the model is written once, on release.
             property int dragIndex: -1
+            property int hoverIndex: -1
             property bool overBin: false
+            // Finger position in the grid's own coordinates. The dragged tile
+            // is positioned FROM this rather than from accumulated mouse
+            // deltas, which drift off the finger as the layout shifts.
+            property real pointerX: 0
+            property real pointerY: 0
+
+            readonly property int strideX: cell + spacing
+
+            // Where a tile should sit right now: everything between the dragged
+            // tile's origin and the slot it hovers over shuffles up or down one
+            // place to open a gap.
+            function slotFor(index) {
+                if (dragIndex < 0 || hoverIndex < 0 || dragIndex === hoverIndex)
+                    return index
+                if (index === dragIndex)
+                    return hoverIndex
+                if (dragIndex < hoverIndex && index > dragIndex && index <= hoverIndex)
+                    return index - 1
+                if (hoverIndex < dragIndex && index >= hoverIndex && index < dragIndex)
+                    return index + 1
+                return index
+            }
 
             // Which slot a point over the grid belongs to. The grid is uniform,
             // so this is arithmetic rather than hit-testing -- and it has to
             // clamp, because a drag ranges outside the laid-out cells.
             function slotAt(x, y) {
-                var col = Math.max(0, Math.min(columns - 1, Math.floor(x / stride)))
-                var row = Math.max(0, Math.floor(y / stride))
+                var col = Math.max(0, Math.min(columns - 1, Math.floor(x / strideX)))
+                var row = Math.max(0, Math.floor(y / strideX))
                 return Math.max(0, Math.min(favoritesModel.count - 1, row * columns + col))
             }
 
@@ -199,12 +231,42 @@ Item {
                     z: dragging ? 10 : 0
                     opacity: dragging && grid.overBin ? 0.4 : 1.0
 
-                    // Follows the finger while dragging; the Repeater keeps
-                    // re-laying the cells out underneath as rows move.
+                    // Displacement from this tile's natural cell to the slot
+                    // it should currently occupy. Bindings, not assignments:
+                    // if an animation is ever cut short the binding still
+                    // re-evaluates to the right place, so a tile cannot be left
+                    // stranded the way a Positioner transition leaves one.
+                    readonly property int slot: grid.slotFor(index)
+                    // Not readonly: a Behavior assigns to the property it
+                    // animates, and QML rejects that on a readonly one.
+                    property real offsetX: dragging
+                            ? grid.pointerX - (cellItem.x + grid.cell / 2)
+                            : ((slot % grid.columns) - (index % grid.columns)) * grid.strideX
+                    property real offsetY: dragging
+                            ? grid.pointerY - (cellItem.y + cellItem.height / 2)
+                            : (Math.floor(slot / grid.columns) - Math.floor(index / grid.columns))
+                              * (cellItem.height + grid.spacing)
+
                     transform: Translate {
-                        x: cellItem.dragging ? tileArea.dragDX : 0
-                        y: cellItem.dragging ? tileArea.dragDY : 0
+                        x: cellItem.offsetX
+                        y: cellItem.offsetY
                     }
+
+                    // Always enabled: offsets are 0 unless a drag is in
+                    // progress, so nothing animates when the grid is merely
+                    // populated. The dragged tile is exempt -- it must track
+                    // the finger 1:1, not chase it.
+                    Behavior on offsetX {
+                        enabled: !cellItem.dragging
+                        NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
+                    }
+                    Behavior on offsetY {
+                        enabled: !cellItem.dragging
+                        NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
+                    }
+
+                    scale: dragging ? 1.12 : 1.0
+                    Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutQuad } }
 
                     Browser.FrostedBox {
                         id: tile
@@ -240,12 +302,13 @@ Item {
                         MouseArea {
                             id: tileArea
 
-                            property real pressX
-                            property real pressY
-                            property real dragDX
-                            property real dragDY
-
                             anchors.fill: parent
+
+                            function trackPointer(mouse) {
+                                var p = mapToItem(grid, mouse.x, mouse.y)
+                                grid.pointerX = p.x
+                                grid.pointerY = p.y
+                            }
 
                             onClicked: {
                                 if (model.isFolder)
@@ -254,59 +317,53 @@ Item {
                                     root.loadUrl(model.url, true)
                             }
 
-                            onPressed: {
-                                pressX = mouse.x
-                                pressY = mouse.y
-                                dragDX = 0
-                                dragDY = 0
-                            }
+                            onPressed: trackPointer(mouse)
 
-                            onPressAndHold: grid.dragIndex = index
+                            onPressAndHold: {
+                                trackPointer(mouse)
+                                grid.dragIndex = index
+                                grid.hoverIndex = index
+                            }
 
                             onPositionChanged: {
                                 if (grid.dragIndex !== index)
                                     return
 
-                                dragDX = mouse.x - pressX
-                                dragDY = mouse.y - pressY
+                                trackPointer(mouse)
 
-                                var p = mapToItem(grid, mouse.x, mouse.y)
-                                grid.overBin = p.y > grid.height + Theme.paddingLarge
-                                if (grid.overBin)
-                                    return
-
-                                var target = grid.slotAt(p.x, p.y)
-                                if (target !== index) {
-                                    favoritesModel.move(index, target)
-                                    // The delegate follows its row, so the drag
-                                    // has to follow it to the new index or the
-                                    // next move would come from the wrong one.
-                                    grid.dragIndex = target
-                                    // The cell moved under the finger; re-base
-                                    // the offset so the tile does not jump.
-                                    pressX = mouse.x - dragDX
-                                    pressY = mouse.y - dragDY
-                                }
+                                grid.overBin = grid.pointerY > grid.height + Theme.paddingLarge
+                                if (!grid.overBin)
+                                    grid.hoverIndex = grid.slotAt(grid.pointerX, grid.pointerY)
                             }
 
                             onReleased: {
-                                if (grid.dragIndex === index && grid.overBin) {
-                                    var i = index
+                                var from = grid.dragIndex
+                                var to = grid.hoverIndex
+                                var binned = grid.overBin
+
+                                // Clear first: committing the move regenerates
+                                // the delegates, and this handler's own item
+                                // goes with them.
+                                grid.dragIndex = -1
+                                grid.hoverIndex = -1
+                                grid.overBin = false
+
+                                if (from < 0)
+                                    return
+
+                                if (binned) {
                                     //% "Removing bookmark"
                                     removeRemorse.execute(qsTrId("atlantic-la-removing_bookmark"),
-                                                          function() { favoritesModel.removeAt(i) })
+                                                          function() { favoritesModel.removeAt(from) })
+                                } else if (to >= 0 && to !== from) {
+                                    favoritesModel.move(from, to)
                                 }
-                                grid.dragIndex = -1
-                                grid.overBin = false
-                                dragDX = 0
-                                dragDY = 0
                             }
 
                             onCanceled: {
                                 grid.dragIndex = -1
+                                grid.hoverIndex = -1
                                 grid.overBin = false
-                                dragDX = 0
-                                dragDY = 0
                             }
                         }
                     }
@@ -348,7 +405,7 @@ Item {
                     MouseArea {
                         id: addArea
                         anchors.fill: parent
-                        onClicked: root.openSearch()
+                        onClicked: root.addFavorite()
                     }
                 }
 

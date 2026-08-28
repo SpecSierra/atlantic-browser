@@ -24,6 +24,13 @@ DeclarativeBookmarkModel *DeclarativeBookmarkModel::primaryInstance()
 
 DeclarativeBookmarkModel::~DeclarativeBookmarkModel()
 {
+    // A drag that ended less than the coalescing interval before shutdown must
+    // still reach disk.
+    if (m_saveTimer && m_saveTimer->isActive()) {
+        m_saveTimer->stop();
+        BookmarkManager::instance()->save(bookmarks);
+    }
+
     if (s_primaryInstance == this)
         s_primaryInstance = nullptr;
 }
@@ -68,10 +75,11 @@ QHash<int, QByteArray> DeclarativeBookmarkModel::roleNames() const
     return roles;
 }
 
-void DeclarativeBookmarkModel::add(const QString& url, const QString& title, const QString& favicon, bool touchIcon)
+QString DeclarativeBookmarkModel::add(const QString& url, const QString& title, const QString& favicon, bool touchIcon)
 {
+    Bookmark *bookmark = new Bookmark(title, url, favicon, touchIcon);
     beginInsertRows(QModelIndex(), rowCount(), rowCount());
-    bookmarks.append(new Bookmark(title, url, favicon, touchIcon));
+    bookmarks.append(bookmark);
     rebuildIndexes();
     endInsertRows();
     emit countChanged();
@@ -79,6 +87,7 @@ void DeclarativeBookmarkModel::add(const QString& url, const QString& title, con
     emit activeUrlBookmarkedChanged();
 
     save();
+    return bookmark->id();
 }
 
 void DeclarativeBookmarkModel::remove(const QString& url)
@@ -212,7 +221,7 @@ void DeclarativeBookmarkModel::move(int from, int to)
     bookmarks.move(from, to);
     rebuildIndexes();
     endMoveRows();
-    save();
+    saveSoon();
 }
 
 QString DeclarativeBookmarkModel::folderTitle(const QString &id) const
@@ -349,7 +358,27 @@ void DeclarativeBookmarkModel::clearBookmarks()
 
 void DeclarativeBookmarkModel::save()
 {
+    flushPendingSave();
     BookmarkManager::instance()->save(bookmarks);
+}
+
+void DeclarativeBookmarkModel::saveSoon()
+{
+    if (!m_saveTimer) {
+        m_saveTimer = new QTimer(this);
+        m_saveTimer->setSingleShot(true);
+        m_saveTimer->setInterval(400);
+        connect(m_saveTimer, &QTimer::timeout, this, [this]() {
+            BookmarkManager::instance()->save(bookmarks);
+        });
+    }
+    m_saveTimer->start();
+}
+
+void DeclarativeBookmarkModel::flushPendingSave()
+{
+    if (m_saveTimer && m_saveTimer->isActive())
+        m_saveTimer->stop();
 }
 
 int DeclarativeBookmarkModel::rowCount(const QModelIndex & parent) const

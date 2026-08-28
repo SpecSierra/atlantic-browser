@@ -38,6 +38,10 @@ Page {
     property Item debug
     property Component tabPageComponent
     property string pendingOpenUrl: ""
+    // overlay.active drops and returns every time a page is pushed over the
+    // browser, so this handler fires far more often than "the browser just
+    // opened". Only the first pass is startup.
+    property bool _startupHandled: false
     property bool _filePickerOpen: false
     // True while the toolbar is hidden by the inactivity timer (as opposed to
     // page-driven fullscreen / scroll-hide) — the next touch brings it back.
@@ -548,10 +552,17 @@ Page {
         historyModel: historyModel
         overlayOpen: !overlay.animator.atBottom
 
-        // Open the address-bar entry immediately (no slide-up) so it doesn't feel
-        // disconnected from the start-page search bar.
-        onOpenSearch: overlay.enterNewTabUrl(PageStackAction.Immediate)
         onLoadUrl: overlay.loadPage(url, newTab)
+
+        // The "+" tile files a link rather than navigating to one.
+        onAddFavorite: {
+            overlay.animator.showChrome()
+            pageStack.animatorPush(Qt.resolvedUrl("components/AddFavoriteDialog.qml"),
+                                   {
+                                       bookmarkModel: overlay.bookmarkModel,
+                                       folderId: startPageFolder.value
+                                   })
+        }
 
         // Which folder the quick links show. Set in the bookmarks page; "" is
         // the root, which is where everything lives until folders are used, so
@@ -683,6 +694,15 @@ Page {
             if (!isFullScreen && active && !overlay.enteringNewTabUrl) {
                 if (webView.hasInitialUrl || webView.tabModel.count !== 0) {
                     overlay.animator.showChrome()
+                } else if (_startupHandled) {
+                    // Coming BACK to an empty browser -- from the bookmarks
+                    // page, a dialog, settings -- not starting one. Both
+                    // branches below are startup behaviour: startPage() opens
+                    // the URL entry ready to type, and the home page branch
+                    // navigates. Re-running either on every return meant
+                    // closing a folder popped the keyboard up, or worse,
+                    // silently loaded the home page over what you were doing.
+                    overlay.animator.showChrome()
                 } else if (WebUtils.homePage !== "about:blank" && WebUtils.homePage.length > 0) {
                     // Nothing to restore and a home page is set, which is the
                     // case AddHomePageDialog describes ("shown when the browser
@@ -701,6 +721,7 @@ Page {
                 } else {
                     overlay.startPage()
                 }
+                _startupHandled = true
             }
 
             if (!active) {
