@@ -363,6 +363,12 @@ QSizeF WPEWebContainer::preferredPageSize(const QSizeF &screenSize) const
                   height() > 0 ? height() : screenSize.height());
 }
 
+QRectF WPEWebContainer::effectiveWebContentRect(const QSizeF &screenSize) const
+{
+    const QRectF bounds(QPointF(0, 0), preferredPageSize(screenSize));
+    return m_webContentRect.isValid() ? m_webContentRect.intersected(bounds) : bounds;
+}
+
 qreal WPEWebContainer::initialPageDeviceScaleFactor(const QSizeF &screenSize) const
 {
     // The carried-forward Qt bridge still maps device scale to page zoom here.
@@ -375,17 +381,44 @@ qreal WPEWebContainer::insetPageHeight(qreal baseHeight) const
     return qMax(qreal(0), baseHeight - m_bottomInset);
 }
 
+void WPEWebContainer::applyPageGeometry(WPEWebPage *page, const QSizeF &screenSize)
+{
+    if (!page) {
+        return;
+    }
+
+    const QRectF rect = effectiveWebContentRect(screenSize);
+    page->setX(rect.x());
+    page->setY(rect.y());
+    page->setWidth(rect.width());
+    page->setHeight(insetPageHeight(rect.height()));
+}
+
 void WPEWebContainer::configurePageGeometry(WPEWebPage *page, const QSizeF &screenSize)
 {
     if (!page) {
         return;
     }
 
-    const QSizeF size = preferredPageSize(screenSize);
-    page->setWidth(size.width());
-    page->setHeight(insetPageHeight(size.height()));
-    connect(this, &QQuickItem::widthChanged, page, [this, page]() { page->setWidth(width()); });
-    connect(this, &QQuickItem::heightChanged, page, [this, page]() { page->setHeight(insetPageHeight(height())); });
+    applyPageGeometry(page, screenSize);
+    connect(this, &QQuickItem::widthChanged, page,
+            [this, page, screenSize]() { applyPageGeometry(page, screenSize); });
+    connect(this, &QQuickItem::heightChanged, page,
+            [this, page, screenSize]() { applyPageGeometry(page, screenSize); });
+}
+
+void WPEWebContainer::setWebContentRect(const QRectF &rect)
+{
+    if (m_webContentRect == rect) {
+        return;
+    }
+
+    m_webContentRect = rect;
+    const QSizeF screenSize = screenSizeOrFallback(QGuiApplication::primaryScreen());
+    for (WPEWebPage *page : m_pages) {
+        applyPageGeometry(page, screenSize);
+    }
+    emit webContentRectChanged();
 }
 
 void WPEWebContainer::setContentBottomInset(qreal inset)
@@ -400,11 +433,9 @@ void WPEWebContainer::setContentBottomInset(qreal inset)
     m_bottomInset = inset;
     // Re-lay out every live page's WebKit viewport (not just the active one) so
     // returning to a background tab already reflects the reserved strip.
-    const qreal base = height();
+    const QSizeF screenSize = screenSizeOrFallback(QGuiApplication::primaryScreen());
     for (WPEWebPage *page : m_pages) {
-        if (page) {
-            page->setHeight(insetPageHeight(base));
-        }
+        applyPageGeometry(page, screenSize);
     }
 
     if (!grew || !m_contentItem) {

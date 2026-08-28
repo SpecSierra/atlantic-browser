@@ -228,7 +228,8 @@ Page {
                                { "webView": webView, "browserPage": browserPage })
     }
 
-    // for time being make this fullscreen. TODO: avoid drawing over cutout and corner areas.
+    // Keep chrome and fullscreen media edge-to-edge. Normal web content uses
+    // webView.webContentRect below to avoid the physical display cutout.
     cutoutMode: CutoutMode.FullScreen
     background: null
     onStatusChanged: {
@@ -351,6 +352,22 @@ Page {
         maxLiveTabCount: maxliveTabs.value
         toolbarHeight: overlay.animator.opened ? overlay.toolBar.rowHeight : 0
         rotationHandler: browserPage
+        webContentRect: {
+            var inset = Math.max(0, Screen.topCutout.y + Screen.topCutout.height)
+            if (contentFullscreen || inset === 0)
+                return Qt.rect(0, 0, width, height)
+
+            switch (browserPage.orientation) {
+            case Orientation.Landscape:
+                return Qt.rect(inset, 0, Math.max(0, width - inset), height)
+            case Orientation.LandscapeInverted:
+                return Qt.rect(0, 0, Math.max(0, width - inset), height)
+            case Orientation.PortraitInverted:
+                return Qt.rect(0, 0, width, Math.max(0, height - inset))
+            default:
+                return Qt.rect(0, inset, width, Math.max(0, height - inset))
+            }
+        }
 
         // Bottom URL-bar viewport inset (dconf: viewport_inset_toolbar, default
         // OFF). When enabled, reserve the toolbar strip in the WebKit layout

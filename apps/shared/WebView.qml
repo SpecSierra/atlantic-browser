@@ -214,17 +214,11 @@ WebContainer {
         id: historyPreview
 
         // Cover exactly the live web content rect, not the whole container.
-        // The page item is parented at the container's top-left and shortened
-        // by the bottom inset (WPEWebContainer::insetPageHeight), so a preview
-        // filling the container is taller than the pixels it replaces: with
-        // PreserveAspectFit centring the shorter capture, the picture sat half
-        // a toolbar too low and its bottom ran under the URL bar. Track the
-        // page item instead — top-anchored, ending where the content does.
-        anchors {
-            left: parent.left
-            right: parent.right
-            top: parent.top
-        }
+        // The page can be offset from the container to avoid a display cutout,
+        // and is shortened by the bottom inset. Track its complete geometry.
+        x: webView.contentItem ? webView.contentItem.x : 0
+        y: webView.contentItem ? webView.contentItem.y : 0
+        width: webView.contentItem ? webView.contentItem.width : parent.width
         height: webView.contentItem ? webView.contentItem.height : parent.height
         clip: true                  // crop the surplus, never letterbox it
 
@@ -401,7 +395,10 @@ WebContainer {
     Item {
         id: selHandles
         visible: webView.contentItem && webView.contentItem.textSelectionActive
-        anchors.fill: parent
+        x: webView.contentItem ? webView.contentItem.x : 0
+        y: webView.contentItem ? webView.contentItem.y : 0
+        width: webView.contentItem ? webView.contentItem.width : parent.width
+        height: webView.contentItem ? webView.contentItem.height : parent.height
         z: 100
 
         property var ci: webView.contentItem

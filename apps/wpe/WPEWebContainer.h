@@ -12,6 +12,7 @@
 #include <QMap>
 #include <QList>
 #include <QPointer>
+#include <QRectF>
 
 #include "WebExtensionManager.h"
 
@@ -55,6 +56,7 @@ class WPEWebContainer : public QQuickItem, public WebExtensionHost
     Q_PROPERTY(bool hasInitialUrl READ hasInitialUrl NOTIFY hasInitialUrlChanged FINAL)
     Q_PROPERTY(int visibility READ fakeVisibility NOTIFY visibilityChanged FINAL)
     Q_PROPERTY(bool needChrome READ needChrome NOTIFY needChromeChanged FINAL)
+    Q_PROPERTY(QRectF webContentRect READ webContentRect WRITE setWebContentRect NOTIFY webContentRectChanged FINAL)
 
 public:
     explicit WPEWebContainer(QQuickItem *parent = nullptr);
@@ -91,6 +93,8 @@ public:
     bool hasInitialUrl() const { return !m_initialUrl.isEmpty(); }
     int fakeVisibility() const { return isVisible() ? 5 : 0; } // 5 = FullScreen
     bool needChrome() const;
+    QRectF webContentRect() const { return m_webContentRect; }
+    void setWebContentRect(const QRectF &rect);
 
     Q_INVOKABLE void load(const QString &url, const QString &title = QString(), bool newTab = false);
     Q_INVOKABLE void reload(bool force = true);
@@ -169,6 +173,7 @@ Q_SIGNALS:
     void hasInitialUrlChanged();
     void visibilityChanged();
     void needChromeChanged();
+    void webContentRectChanged();
     // New in 'next' branch
     void touched();
     void keyPressed(int key);
@@ -194,10 +199,12 @@ private:
     void initializeTabModels(int nextTabId);
     void restoreInitialContent();
     QSizeF preferredPageSize(const QSizeF &screenSize) const;
+    QRectF effectiveWebContentRect(const QSizeF &screenSize) const;
     qreal initialPageDeviceScaleFactor(const QSizeF &screenSize) const;
     // Base page height minus the reserved bottom inset (never negative). This is
     // the height handed to every WPEWebPage → the WebKit layout viewport.
     qreal insetPageHeight(qreal baseHeight) const;
+    void applyPageGeometry(WPEWebPage *page, const QSizeF &screenSize);
     void configurePageGeometry(WPEWebPage *page, const QSizeF &screenSize);
     WPEWebPage *getOrCreatePage(int tabId);
     void activatePage(int tabId);
@@ -220,6 +227,7 @@ private:
     DeclarativeTabModel *m_tabModel = nullptr;
     DeclarativeHistoryModel *m_historyModel = nullptr;
     QMap<int, WPEWebPage *> m_pages;
+    QRectF m_webContentRect;
     qreal m_bottomInset = 0.0;              // reserved bottom URL-bar strip (dip); see setContentBottomInset
     QList<int> m_mruTabs;                   // most-recently-used first; front = active
     QTimer *m_memoryPressureTimer = nullptr;
