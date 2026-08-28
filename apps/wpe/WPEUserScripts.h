@@ -175,6 +175,12 @@ static const char* const kSelectionBridge = R"JS(
     var longPressPoint = null;
     var longPressStartPoint = null;
     var longPressMoveThreshold = 12;
+    // Set when the JS touch-timer path opened the panel. That fires while the
+    // finger is still down, so unlike the contextmenu path it cannot
+    // preventDefault() the activation -- the click that arrives after touchend
+    // has to be swallowed instead, or a long press on a link would navigate to
+    // it as well as offering "Open in new tab".
+    var longPressFired = false;
 
     function cancelLongPress() {
         if (longPressTimer) {
@@ -207,6 +213,15 @@ static const char* const kSelectionBridge = R"JS(
         return null;
     }
 
+    // Only http(s) links are worth a panel: mailto:/tel:/javascript: hrefs have
+    // nothing sensible to open in a tab, and offering nothing is better than
+    // swallowing the press. contextInfo.linkUrl still carries the raw href for
+    // extensions -- this only gates the built-in action. Keep in sync with
+    // ImageActionPanel.pendingLinkUrl.
+    function isNavigableLink(url) {
+        return !!url && /^https?:\/\//i.test(url);
+    }
+
     function editableAtPoint(x, y) {
         var el = document.elementFromPoint(x, y);
         while (el) {
@@ -226,7 +241,9 @@ static const char* const kSelectionBridge = R"JS(
     // Reports what was long-pressed. The image URL keeps its own field because
     // the image panel has always been driven off it; the rest is what
     // browser.contextMenus needs to decide which items apply. Returns true when
-    // there is anything worth showing a panel for.
+    // there is anything worth showing a panel for -- a link counts, so a long
+    // press on one opens the action panel instead of falling through to
+    // word selection (and preventDefault() below stops the link activating).
     function postImageLongPress(x, y) {
         var imgUrl = imageUrlAtPoint(x, y);
         var linkUrl = linkUrlAtPoint(x, y);
@@ -248,11 +265,15 @@ static const char* const kSelectionBridge = R"JS(
                 x: x, y: y
             });
         } catch(e) {}
-        return !!imgUrl;
+        return !!imgUrl || isNavigableLink(linkUrl);
     }
 
     function beginLongPress(x, y) {
         cancelLongPress();
+        // Cleared here rather than in cancelLongPress(): touchend cancels the
+        // timer, and the click we mean to swallow only arrives after that. The
+        // next gesture's touchstart is what retires a flag nothing consumed.
+        longPressFired = false;
         longPressPoint = { x: x, y: y };
         longPressStartPoint = { x: x, y: y };
         longPressTimer = setTimeout(function() {
@@ -260,8 +281,10 @@ static const char* const kSelectionBridge = R"JS(
             if (!longPressPoint) return;
             var lx = longPressPoint.x, ly = longPressPoint.y;
             longPressPoint = null;
-            if (postImageLongPress(lx, ly))
+            if (postImageLongPress(lx, ly)) {
+                longPressFired = true;
                 return;
+            }
             if (selectWordAtPoint(lx, ly))
                 postSelectionFinal();
         }, 350);
@@ -310,6 +333,13 @@ static const char* const kSelectionBridge = R"JS(
         if ((dx * dx) + (dy * dy) > longPressMoveThreshold * longPressMoveThreshold)
             cancelLongPress();
     }, {capture: true, passive: true});
+    document.addEventListener('click', function(e) {
+        if (!longPressFired)
+            return;
+        longPressFired = false;
+        e.preventDefault();
+        e.stopPropagation();
+    }, true);
     document.addEventListener('touchcancel', cancelLongPress, {capture: true, passive: true});
     document.addEventListener('touchend', cancelLongPress, {capture: true, passive: true});
 })();
