@@ -816,6 +816,20 @@ void WPEWebContainer::onTabClosed(int tabId)
             m_contentItem = nullptr;
             emit contentItemChanged();
             emit needChromeChanged();
+            // Every one of these reads through m_contentItem, so dropping it
+            // changes them all -- but a QML binding only re-evaluates when its
+            // NOTIFY fires. Closing a tab mid-load left the URL bar showing the
+            // dead page's address and the progress bar frozen at whatever it
+            // had reached, because loading/url/loadProgress were never
+            // re-read. The same nulling further up emits the full set; this
+            // path only emitted the first two.
+            emit tabIdChanged();
+            emit urlChanged();
+            emit titleChanged();
+            emit loadingChanged();
+            emit loadProgressChanged();
+            emit canGoBackChanged();
+            emit canGoForwardChanged();
         }
     }
     // Closing the last private tab wipes the shared ephemeral session, so
