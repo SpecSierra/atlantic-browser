@@ -238,10 +238,14 @@ Column {
                             return "image://theme/icon-m-back"
                         } else if (webView.contentItem && webView.contentItem.parentId > 0) {
                             return "image://theme/icon-m-back-tab"
-                        } else if (webView.contentItem) {
-                            return "image://theme/icon-m-home"
                         }
-                        return ""
+                        // Home is the fallback whether or not a page is open.
+                        // This used to return "" with no contentItem, so
+                        // closing the last tab left the toolbar with a hole
+                        // where the button had been -- exactly the state where
+                        // "go to my home page" is the most useful thing the
+                        // button can do.
+                        return "image://theme/icon-m-home"
                     }
 
                     onStatusChanged: {
@@ -253,8 +257,9 @@ Column {
                     }
                 }
 
-                active: (webView.canGoBack || (webView.contentItem && webView.contentItem.parentId > 0)
-                         || webView.contentItem) && !findInPageActive
+                // Always available: with no page open it is the home button, and
+                // loadPage() opens a tab for the home page from nothing.
+                active: !findInPageActive
                 onTapped: {
                     if (webView.canGoBack) {
                         webView.goBack()
