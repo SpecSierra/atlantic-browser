@@ -28,6 +28,19 @@ Components.FrostedBox {
 
         height: root.height
 
+        // Duplicates the "New tab" row above on purpose: this strip is the one
+        // part of the menu that is always within thumb reach, and opening a tab
+        // is the most common reason for coming in here.
+        Shared.IconButton {
+            height: parent.height
+            width: Theme.itemSizeLarge
+            icon.source: "image://theme/icon-m-tab-new"
+            onTapped: {
+                webView.privateMode = false
+                overlay.toolBar.enterNewTabUrl()
+            }
+        }
+
         Shared.IconButton {
             height: parent.height
             width: Theme.itemSizeLarge

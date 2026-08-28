@@ -19,6 +19,12 @@ Item {
 
     height: content.height + verticalPadding * 2
 
+    // Ordered for one-hand reach: the menu is bottom-anchored (PopUpMenu pushes
+    // the content down so its last row sits on the footer), so reach improves
+    // going DOWN and the bottom group is the easy one. Page actions -- the
+    // per-site JavaScript and Adblock toggles especially -- are the rarest, so
+    // they take the top; the library group keeps the bottom because Settings is
+    // reached far more often than those toggles.
     Column {
         id: content
 
@@ -28,67 +34,6 @@ Item {
 
         Column {
             width: parent.width
-
-            OverlayListItem {
-                height: Theme.itemSizeSmall
-                iconWidth: root.iconWidth
-                horizontalOffset: root.horizontalOffset
-                iconSource: "image://theme/icon-m-tab-new"
-                //% "New tab"
-                text: qsTrId("sailfish_browser-la-new_tab")
-                onClicked: {
-                    webView.privateMode = false
-                    overlay.toolBar.enterNewTabUrl()
-                }
-            }
-
-            OverlayListItem {
-                height: Theme.itemSizeSmall
-                iconWidth: root.iconWidth
-                horizontalOffset: root.horizontalOffset
-                iconSource: "image://theme/icon-m-incognito-new"
-                //% "New private tab"
-                text: qsTrId("sailfish_browser-la-new_private_tab")
-                onClicked: {
-                    webView.privateMode = true
-                    overlay.toolBar.enterNewTabUrl()
-                }
-            }
-        }
-
-        Column {
-            width: parent.width
-
-            OverlayListItem {
-                height: Theme.itemSizeSmall
-                iconWidth: root.iconWidth
-                horizontalOffset: root.horizontalOffset
-                iconSource: "image://theme/icon-m-search-on-page"
-                enabled: webView.contentItem
-                //% "Search on page"
-                text: qsTrId("sailfish_browser-la-search_on_page")
-
-                onClicked: {
-                    overlay.toolBar.findInPageActive = true
-                    overlay.toolBar.findInPage()
-                }
-            }
-
-            OverlayListItem {
-                height: Theme.itemSizeSmall
-                enabled: webView.contentItem
-                opacity: enabled ? 1.0 : 0.5
-                iconWidth: root.iconWidth
-                horizontalOffset: root.horizontalOffset
-                iconSource: "image://theme/icon-m-share"
-                //% "Share"
-                text: qsTrId("sailfish_browser-la-share")
-
-                onClicked: {
-                    overlay.toolBar.shareActivePage()
-                    overlay.animator.showChrome()
-                }
-            }
 
             OverlayListItem {
                 height: Theme.itemSizeSmall
@@ -170,7 +115,66 @@ Item {
                     overlay.animator.showChrome()
                 }
             }
+            OverlayListItem {
+                height: Theme.itemSizeSmall
+                iconWidth: root.iconWidth
+                horizontalOffset: root.horizontalOffset
+                iconSource: "image://theme/icon-m-search-on-page"
+                enabled: webView.contentItem
+                //% "Search on page"
+                text: qsTrId("sailfish_browser-la-search_on_page")
 
+                onClicked: {
+                    overlay.toolBar.findInPageActive = true
+                    overlay.toolBar.findInPage()
+                }
+            }
+
+            OverlayListItem {
+                height: Theme.itemSizeSmall
+                enabled: webView.contentItem
+                opacity: enabled ? 1.0 : 0.5
+                iconWidth: root.iconWidth
+                horizontalOffset: root.horizontalOffset
+                iconSource: "image://theme/icon-m-share"
+                //% "Share"
+                text: qsTrId("sailfish_browser-la-share")
+
+                onClicked: {
+                    overlay.toolBar.shareActivePage()
+                    overlay.animator.showChrome()
+                }
+            }
+        }
+
+        Column {
+            width: parent.width
+
+            OverlayListItem {
+                height: Theme.itemSizeSmall
+                iconWidth: root.iconWidth
+                horizontalOffset: root.horizontalOffset
+                iconSource: "image://theme/icon-m-tab-new"
+                //% "New tab"
+                text: qsTrId("sailfish_browser-la-new_tab")
+                onClicked: {
+                    webView.privateMode = false
+                    overlay.toolBar.enterNewTabUrl()
+                }
+            }
+
+            OverlayListItem {
+                height: Theme.itemSizeSmall
+                iconWidth: root.iconWidth
+                horizontalOffset: root.horizontalOffset
+                iconSource: "image://theme/icon-m-incognito-new"
+                //% "New private tab"
+                text: qsTrId("sailfish_browser-la-new_private_tab")
+                onClicked: {
+                    webView.privateMode = true
+                    overlay.toolBar.enterNewTabUrl()
+                }
+            }
         }
 
         Column {
