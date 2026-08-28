@@ -73,6 +73,13 @@ Page {
                 title: qsTrId("sailfish_browser-he-settings")
             }
 
+            // Row order inside every section is by kind, not by importance:
+            // every row that has an icon first -- value pickers, then the rows
+            // that push a page -- and the switches last. Switches carry no icon
+            // and are only indented to line their labels up with one, so any
+            // switch above an icon row leaves a hole in the icon column.
+            // General is the section people actually go looking in, which is
+            // why Passwords sits here and "Close all tabs on exit" does not.
             SectionHeader {
                 //: Section Header for the settings that are asked about most
                 //% "General"
@@ -179,21 +186,6 @@ Page {
                 }
             }
 
-            TextSwitch {
-                //: Label for text switch that makes all tabs closed upon closing browser application
-                //% "Close all tabs on exit"
-                text: qsTrId("settings_browser-la-close_all_tabs")
-                //% "When Browser is started next time, selected home page will be loaded"
-                description: qsTrId("settings_browser-la-close_all_tabs_description")
-                checked: closeAllTabsConfig.value
-                // Margins adjusted to align with other items on the page
-                leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
-                _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
-                automaticCheck: false
-
-                onClicked: closeAllTabsConfig.value = !closeAllTabsConfig.value
-            }
-
             BrowserComboBox {
                 //% "Save destination"
                 label: qsTrId("settings_browser-la-save_destination")
@@ -238,6 +230,29 @@ Page {
                         onClicked: useDownloadDirConf.value = false
                     }
                 }
+            }
+
+            // Backed by the encrypted CredentialStore.
+            SettingsLinkItem {
+                iconSource: "image://theme/icon-m-keys"
+                //: The label for the button for accessing password management
+                //% "Passwords"
+                text: qsTrId("settings_browser-la-passwords")
+                //% "Saved logins, kept in an encrypted vault"
+                description: qsTrId("atlantic-la-passwords_description")
+                onClicked: pageStack.push("LoginsPage.qml")
+            }
+
+            SettingsLinkItem {
+                // Ours, not the theme's: sailfish-default has no
+                // icon-m-extension. Silica tints it like any other.
+                iconSource: Qt.resolvedUrl("../icons/icon-m-extension.svg")
+                //: The label for the button for managing installed browser extensions
+                //% "Extensions"
+                text: qsTrId("atlantic-la-extensions")
+                //% "Add-ons from addons.mozilla.org"
+                description: qsTrId("atlantic-la-extensions_description")
+                onClicked: pageStack.push("ExtensionsPage.qml")
             }
 
             SectionHeader {
@@ -303,10 +318,26 @@ Page {
                 automaticCheck: false
                 onClicked: viewportInsetConfig.value = !viewportInsetConfig.value
             }
+
             SectionHeader {
                 //: Section Header for privacy and security settings
                 //% "Privacy & security"
                 text: qsTrId("atlantic-sh-privacy_security")
+            }
+
+            TextSwitch {
+                //: Label for text switch that makes all tabs closed upon closing browser application
+                //% "Close all tabs on exit"
+                text: qsTrId("settings_browser-la-close_all_tabs")
+                //% "When Browser is started next time, selected home page will be loaded"
+                description: qsTrId("settings_browser-la-close_all_tabs_description")
+                checked: closeAllTabsConfig.value
+                // Margins adjusted to align with other items on the page
+                leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
+                _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
+                automaticCheck: false
+
+                onClicked: closeAllTabsConfig.value = !closeAllTabsConfig.value
             }
 
             TextSwitch {
@@ -392,15 +423,10 @@ Page {
             //     onClicked: jsEnabledConf.value = !webEngineSettings.javascriptEnabled
             // }
 
-            // Backed by the encrypted CredentialStore.
-            SettingsLinkItem {
-                iconSource: "image://theme/icon-m-keys"
-                //: The label for the button for accessing password management
-                //% "Passwords"
-                text: qsTrId("settings_browser-la-passwords")
-                //% "Saved logins, kept in an encrypted vault"
-                description: qsTrId("atlantic-la-passwords_description")
-                onClicked: pageStack.push("LoginsPage.qml")
+            SectionHeader {
+                //: Section Header for settings most people never need to open
+                //% "Advanced"
+                text: qsTrId("atlantic-sh-advanced")
             }
 
             SettingsLinkItem {
@@ -411,24 +437,6 @@ Page {
                 //% "History, cookies, caches and site data"
                 description: qsTrId("atlantic-la-clear_browsing_data_description")
                 onClicked: pageStack.push("PrivacySettingsPage.qml", { previousPage: page })
-            }
-
-            SectionHeader {
-                //: Section Header for settings most people never need to open
-                //% "Advanced"
-                text: qsTrId("atlantic-sh-advanced")
-            }
-
-            SettingsLinkItem {
-                // Ours, not the theme's: sailfish-default has no
-                // icon-m-extension. Silica tints it like any other.
-                iconSource: Qt.resolvedUrl("../icons/icon-m-extension.svg")
-                //: The label for the button for managing installed browser extensions
-                //% "Extensions"
-                text: qsTrId("atlantic-la-extensions")
-                //% "Add-ons from addons.mozilla.org"
-                description: qsTrId("atlantic-la-extensions_description")
-                onClicked: pageStack.push("ExtensionsPage.qml")
             }
 
             SettingsLinkItem {
