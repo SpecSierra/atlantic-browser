@@ -201,6 +201,14 @@ Page {
         Component.onCompleted: webView.setContentBottomInset(webView._desiredContentBottomInset)
     }
 
+    ConfigurationValue {
+        id: cropNotchConfig
+        key: "/apps/atlantic-browser/settings/crop_notch"
+        defaultValue: false
+        // Read by _notchInset (webViewFrame). A pure QML binding, so no C++
+        // side to restore on startup.
+    }
+
     function load(url, title) {
         overlay.dismiss(true)
         webView.load(url, title)
@@ -346,116 +354,147 @@ Page {
         }
     }
 
-    Shared.WebView {
-        id: webView
+    // Crop the web content to the notch-free part of the screen (setting
+    // crop_notch, default OFF). The notch sits at the top of the physical
+    // portrait screen, so after Silica rotates the page it is on a different
+    // page edge per orientation. The whole band is reserved (both sides of the
+    // notch), and the black fill behind the frame shows through it.
+    // WPEWebContainer sizes itself and its pages from its parent item, so
+    // insetting this frame is all it takes. The chrome (Overlay) stays at the
+    // page edges, so fullscreenHeight is still the page height.
+    readonly property real _notchInset: cropNotchConfig.value && Screen.hasCutouts
+                                        ? Screen.topCutout.height : 0
 
-        enabled: overlay.animator.allowContentUse
-        fullscreenHeight: browserPage.height
-        portrait: browserPage.isPortrait
-        maxLiveTabCount: maxliveTabs.value
-        toolbarHeight: overlay.animator.opened ? overlay.toolBar.rowHeight : 0
-        rotationHandler: browserPage
+    Rectangle {
+        anchors.fill: parent
+        color: "black"
+        visible: browserPage._notchInset > 0
+    }
 
-        // Bottom URL-bar viewport inset (dconf: viewport_inset_toolbar, default
-        // OFF). When enabled, reserve the toolbar strip in the WebKit layout
-        // viewport while the chrome is settled-visible, so position:fixed bottom
-        // content (hover buttons, cookie bars, chat bubbles) lays out above the
-        // URL bar instead of behind it. Gated on the *settled* "chromeVisible"
-        // state so the viewport relayouts exactly once per show/hide — the drag
-        // and fling states are distinct, so scrolling does not reflow per frame.
-        // Fullscreen video keeps the full-height viewport. The value is applied
-        // by the handler here plus the config block's Component.onCompleted
-        // (startup); C++ clamps and no-ops unchanged values.
-        //
-        // The virtual keyboard reserves its own strip on the same path, always
-        // on (no setting): an input hidden behind the keyboard is a defect, not
-        // a preference. The two insets are combined with max(), not summed —
-        // the keyboard is drawn over the toolbar strip, so reserving both would
-        // double-count the overlap and leave a dead band above the keyboard.
-        readonly property real _desiredContentBottomInset:
-            Math.max(
-                (viewportInsetConfig.value
-                 && overlay.animator.state === "chromeVisible"
-                 && !contentFullscreen)
-                ? overlay.toolBar.rowHeight : 0,
-                contentFullscreen ? 0 : virtualKeyboardObserver.contentInset)
-        on_DesiredContentBottomInsetChanged: setContentBottomInset(_desiredContentBottomInset)
-        imOpened: virtualKeyboardObserver.opened
-        canShowSelectionMarkers: !orientationFader.waitForWebContentOrientationChanged
-        historyModel: historyModel
+    Item {
+        id: webViewFrame
 
-        // Show overlay immediately at top if needed.
-        onTabModelChanged: handleModelChanges(true)
+        readonly property real _top: browserPage.orientation === Orientation.Portrait ? browserPage._notchInset : 0
+        readonly property real _bottom: browserPage.orientation === Orientation.PortraitInverted ? browserPage._notchInset : 0
+        readonly property real _left: browserPage.orientation === Orientation.Landscape ? browserPage._notchInset : 0
+        readonly property real _right: browserPage.orientation === Orientation.LandscapeInverted ? browserPage._notchInset : 0
 
-        // When a page starts loading, dismiss the overlay so the user can see/interact with content.
-        onLoadingChanged: {
-            if (loading && !overlay.animator.allowContentUse) {
-                overlay.dismiss(true)
+        x: _left
+        y: _top
+        width: browserPage.width - _left - _right
+        height: browserPage.height - _top - _bottom
+
+        Shared.WebView {
+            id: webView
+
+            enabled: overlay.animator.allowContentUse
+            fullscreenHeight: browserPage.height
+            portrait: browserPage.isPortrait
+            maxLiveTabCount: maxliveTabs.value
+            toolbarHeight: overlay.animator.opened ? overlay.toolBar.rowHeight : 0
+            rotationHandler: browserPage
+
+            // Bottom URL-bar viewport inset (dconf: viewport_inset_toolbar, default
+            // OFF). When enabled, reserve the toolbar strip in the WebKit layout
+            // viewport while the chrome is settled-visible, so position:fixed bottom
+            // content (hover buttons, cookie bars, chat bubbles) lays out above the
+            // URL bar instead of behind it. Gated on the *settled* "chromeVisible"
+            // state so the viewport relayouts exactly once per show/hide — the drag
+            // and fling states are distinct, so scrolling does not reflow per frame.
+            // Fullscreen video keeps the full-height viewport. The value is applied
+            // by the handler here plus the config block's Component.onCompleted
+            // (startup); C++ clamps and no-ops unchanged values.
+            //
+            // The virtual keyboard reserves its own strip on the same path, always
+            // on (no setting): an input hidden behind the keyboard is a defect, not
+            // a preference. The two insets are combined with max(), not summed —
+            // the keyboard is drawn over the toolbar strip, so reserving both would
+            // double-count the overlap and leave a dead band above the keyboard.
+            readonly property real _desiredContentBottomInset:
+                Math.max(
+                    (viewportInsetConfig.value
+                     && overlay.animator.state === "chromeVisible"
+                     && !contentFullscreen)
+                    ? overlay.toolBar.rowHeight : 0,
+                    contentFullscreen ? 0 : virtualKeyboardObserver.contentInset)
+            on_DesiredContentBottomInsetChanged: setContentBottomInset(_desiredContentBottomInset)
+            imOpened: virtualKeyboardObserver.opened
+            canShowSelectionMarkers: !orientationFader.waitForWebContentOrientationChanged
+            historyModel: historyModel
+
+            // Show overlay immediately at top if needed.
+            onTabModelChanged: handleModelChanges(true)
+
+            // When a page starts loading, dismiss the overlay so the user can see/interact with content.
+            onLoadingChanged: {
+                if (loading && !overlay.animator.allowContentUse) {
+                    overlay.dismiss(true)
+                }
             }
-        }
-        onChromeExposed: {
-            if (overlay.animator.atTop && overlay.searchField.focus && !WebUtils.firstUseDone) {
-                webView.chromeWindow.raise()
+            onChromeExposed: {
+                if (overlay.animator.atTop && overlay.searchField.focus && !WebUtils.firstUseDone) {
+                    webView.chromeWindow.raise()
+                }
             }
-        }
 
-        onForegroundChanged: {
-            if (foreground && webView.chromeWindow) {
-                webView.chromeWindow.raise()
+            onForegroundChanged: {
+                if (foreground && webView.chromeWindow) {
+                    webView.chromeWindow.raise()
+                }
             }
-        }
 
-        onTouched: {
-            if (contentFullscreen) {
-                fullscreenCloseVisibleTimer.restart()
+            onTouched: {
+                if (contentFullscreen) {
+                    fullscreenCloseVisibleTimer.restart()
+                }
+                if (browserPage._chromeAutoHidden && !contentFullscreen) {
+                    browserPage._chromeAutoHidden = false
+                    overlay.animator.showChrome()
+                } else if (overlay.animator.atBottom) {
+                    chromeAutoHideTimer.restart()
+                }
             }
-            if (browserPage._chromeAutoHidden && !contentFullscreen) {
-                browserPage._chromeAutoHidden = false
-                overlay.animator.showChrome()
-            } else if (overlay.animator.atBottom) {
-                chromeAutoHideTimer.restart()
+
+            onNeedChromeChanged: {
+                // Only a page-driven "show chrome" clears the auto-hidden flag:
+                // hiding via showFullscreen() echoes back here as needChrome=false
+                // (the animator writes contentItem.chrome), which must not clear it.
+                if (needChrome) {
+                    browserPage._chromeAutoHidden = false
+                    overlay.animator.showChrome()
+                } else {
+                    overlay.animator.showFullscreen()
+                }
             }
-        }
 
-        onNeedChromeChanged: {
-            // Only a page-driven "show chrome" clears the auto-hidden flag:
-            // hiding via showFullscreen() echoes back here as needChrome=false
-            // (the animator writes contentItem.chrome), which must not clear it.
-            if (needChrome) {
-                browserPage._chromeAutoHidden = false
-                overlay.animator.showChrome()
-            } else {
-                overlay.animator.showFullscreen()
+            onWebContentOrientationChanged: orientationFader.waitForWebContentOrientationChanged = false
+
+            function applyContentOrientation(orientation) {
+                orientationFader.waitForWebContentOrientationChanged = (contentItem && contentItem.active)
+
+                switch (orientation) {
+                case Orientation.None:
+                case Orientation.Portrait:
+                    updateContentOrientation(Qt.PortraitOrientation)
+                    break
+                case Orientation.Landscape:
+                    updateContentOrientation(Qt.LandscapeOrientation)
+                    break
+                case Orientation.PortraitInverted:
+                    updateContentOrientation(Qt.InvertedPortraitOrientation)
+                    break
+                case Orientation.LandscapeInverted:
+                    updateContentOrientation(Qt.InvertedLandscapeOrientation)
+                    break
+                }
             }
-        }
 
-        onWebContentOrientationChanged: orientationFader.waitForWebContentOrientationChanged = false
-
-        function applyContentOrientation(orientation) {
-            orientationFader.waitForWebContentOrientationChanged = (contentItem && contentItem.active)
-
-            switch (orientation) {
-            case Orientation.None:
-            case Orientation.Portrait:
-                updateContentOrientation(Qt.PortraitOrientation)
-                break
-            case Orientation.Landscape:
-                updateContentOrientation(Qt.LandscapeOrientation)
-                break
-            case Orientation.PortraitInverted:
-                updateContentOrientation(Qt.InvertedPortraitOrientation)
-                break
-            case Orientation.LandscapeInverted:
-                updateContentOrientation(Qt.InvertedLandscapeOrientation)
-                break
-            }
-        }
-
-        // Both model change and model count change are connected to this.
-        function handleModelChanges(openOverlayImmediately) {
-            if (webView.completed && (!webView.tabModel || webView.tabModel.count === 0)) {
-                overlay.startPage(openOverlayImmediately ? PageStackAction.Immediate
-                                                         : PageStackAction.Animated)
+            // Both model change and model count change are connected to this.
+            function handleModelChanges(openOverlayImmediately) {
+                if (webView.completed && (!webView.tabModel || webView.tabModel.count === 0)) {
+                    overlay.startPage(openOverlayImmediately ? PageStackAction.Immediate
+                                                             : PageStackAction.Animated)
+                }
             }
         }
     }

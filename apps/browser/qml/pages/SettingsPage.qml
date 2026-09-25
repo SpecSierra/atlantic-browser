@@ -319,6 +319,20 @@ Page {
                 onClicked: viewportInsetConfig.value = !viewportInsetConfig.value
             }
 
+            TextSwitch {
+                //: Keep web pages out of the screen area around the camera notch
+                //% "Hide the notch"
+                text: qsTrId("settings_browser-la-crop_notch")
+                //% "Fill the strip around the camera notch with black and fit the page below it"
+                description: qsTrId("settings_browser-la-crop_notch_description")
+                visible: Screen.hasCutouts
+                checked: cropNotchConfig.value
+                leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
+                _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
+                automaticCheck: false
+                onClicked: cropNotchConfig.value = !cropNotchConfig.value
+            }
+
             SectionHeader {
                 //: Section Header for privacy and security settings
                 //% "Privacy & security"
@@ -484,6 +498,13 @@ Page {
 
         key: "/apps/atlantic-browser/settings/viewport_inset_toolbar"
         defaultValue: true
+    }
+
+    ConfigurationValue {
+        id: cropNotchConfig
+
+        key: "/apps/atlantic-browser/settings/crop_notch"
+        defaultValue: false
     }
 
     ConfigurationValue {
