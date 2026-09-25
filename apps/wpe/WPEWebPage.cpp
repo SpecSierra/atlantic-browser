@@ -2214,8 +2214,8 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                 // but that sites feature-detect, so their absence silently
                 // downgrades a page rather than breaking it visibly. All three
                 // are plain preferences — no cmake flag, no platform work — and
-                // are present in the shipped engine (2.52.6,
-                // libWPEWebKit-2.0.so.1.9.10). Identifiers drop the "Enabled"
+                // are present in the shipped engine (2.54.0,
+                // libWPEWebKit-2.0.so.1.11.3). Identifiers drop the "Enabled"
                 // suffix, per setRuntimeFeature above.
                 //
                 //  - DataListElement: without it <datalist> parses as
@@ -2246,6 +2246,20 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                 // re-enable it. Set ATLANTIC_FORCE_GPU_DOM_RENDERING=1 to keep it on.
                 if (!envVarEnabled(qgetenv("ATLANTIC_FORCE_GPU_DOM_RENDERING")))
                     setRuntimeFeature(settings, "UseGPUProcessForDOMRendering", FALSE,
+                                      /* quietIfMissing */ true);
+
+                // Layer compositor. WPE 2.54 switched the WebKit default of
+                // UseSkiaForComposition to ON, replacing the TextureMapper
+                // compositor with a Skia one. Nearly all of our compositor work
+                // targets TextureMapper — texture-pool cap, tile-upload budget,
+                // skip-locked-layers (the 1080p judder fix), low-res tile
+                // compositing, damage-limited compositing — and none of it has
+                // been measured against the Skia compositor on this driver. Pin
+                // TextureMapper until it has; ATLANTIC_SKIA_COMPOSITION=1 opts
+                // into the Skia compositor for an A/B. The feature does not
+                // exist before 2.54, hence quietIfMissing.
+                if (!envVarEnabled(qgetenv("ATLANTIC_SKIA_COMPOSITION")))
+                    setRuntimeFeature(settings, "UseSkiaForComposition", FALSE,
                                       /* quietIfMissing */ true);
 
                 // Process isolation (top level): one WebProcess per tab, plus a
