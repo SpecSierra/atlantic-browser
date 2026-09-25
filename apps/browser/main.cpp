@@ -223,10 +223,11 @@ static int restartCountFromEnvironment()
     return restartCount;
 }
 
-// droidmedia (gst-droid's droidvdec) only drives OMX codecs. Vendors on Android 13+
-// (Jolla Phone 2: MT6858, Android 16 vendor) list Codec2 decoders only, and there
-// droidvdec crashes the WebProcess on any <video> page (device-verified; with
-// droidvdec:0, 1080p H.264 plays in software with 0 dropped frames). Only
+// On vendors that list Codec2 decoders only (Jolla Phone 2: MT6858, Android 16
+// vendor), gst-droid's droidvdec crashes the WebProcess on any <video> page; root
+// cause still unknown (droidmedia uses android::MediaCodec, so Codec2 is
+// reachable). Device-verified: with droidvdec:0, 1080p H.264 plays in software
+// with 0 dropped frames. Only
 // <MediaCodec> names count: the Codec2 list keeps OMX names as <Alias> entries.
 // No readable list means unknown, so keep HW decode (the Xperia 10 II's
 // Qualcomm OMX path). Mirrors atlantic_vendor_lacks_omx_video in the engine's
