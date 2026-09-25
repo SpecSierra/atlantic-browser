@@ -32,6 +32,7 @@ WebContainer {
     property real fullscreenHeight
     property bool imOpened
     property real toolbarHeight
+    uiPixelRatio: Theme.pixelRatio
     property string favicon: contentItem ? contentItem.favicon : ""
     property bool findInPageHasResult: contentItem ? contentItem.findInPageHasResult : false
     property bool canShowSelectionMarkers: true

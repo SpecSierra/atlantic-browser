@@ -36,6 +36,9 @@ class WPEWebContainer : public QQuickItem, public WebExtensionHost
     Q_PROPERTY(bool enabled MEMBER m_browserEnabled NOTIFY enabledChanged FINAL)
     Q_PROPERTY(bool foreground READ foreground WRITE setForeground NOTIFY foregroundChanged FINAL)
     Q_PROPERTY(int maxLiveTabCount MEMBER m_maxLiveTabCount NOTIFY maxLiveTabCountChanged FINAL)
+    // Silica Theme.pixelRatio, set from QML (C++ has no Silica or dconf
+    // access). Sets the device scale of pages created afterwards.
+    Q_PROPERTY(qreal uiPixelRatio MEMBER m_uiPixelRatio NOTIFY uiPixelRatioChanged FINAL)
     Q_PROPERTY(bool touchBlocked MEMBER m_touchBlocked NOTIFY touchBlockedChanged FINAL)
     Q_PROPERTY(bool selectionActive READ selectionActive NOTIFY selectionActiveChanged FINAL)
     Q_PROPERTY(bool loading READ loading NOTIFY loadingChanged FINAL)
@@ -139,6 +142,7 @@ Q_SIGNALS:
     void foregroundChanged();
     void allowHidingChanged();
     void maxLiveTabCountChanged();
+    void uiPixelRatioChanged();
     void touchBlockedChanged();
     void selectionActiveChanged();
     void portraitChanged();
@@ -240,6 +244,7 @@ private:
     bool m_touchBlocked = false;
     bool m_browserEnabled = true;
     int m_maxLiveTabCount = 5;
+    qreal m_uiPixelRatio = 0.0;             // Silica Theme.pixelRatio; 0 = unknown
     QString m_initialUrl;
 };
 

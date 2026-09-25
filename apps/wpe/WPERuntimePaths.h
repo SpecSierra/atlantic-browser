@@ -19,5 +19,10 @@ static constexpr const char* kLibGLDriversDir = "/usr/lib64/dri";
 static constexpr qreal kFallbackScreenWidth = 1080.0;
 static constexpr qreal kFallbackScreenHeight = 2520.0;
 static constexpr qreal kReferenceViewportWidth = 360.0;
+// Silica Theme.pixelRatio of the Xperia 10 II, where kReferenceViewportWidth
+// gives device scale 3.0. Other devices scale from it (see
+// WPEWebContainer::initialPageDeviceScaleFactor).
+static constexpr qreal kReferenceUiPixelRatio = 1.75;
+static constexpr qreal kReferenceDeviceScale = 3.0;
 
 } // namespace WPERuntimePaths

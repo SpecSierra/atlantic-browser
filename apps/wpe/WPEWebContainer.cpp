@@ -367,6 +367,18 @@ qreal WPEWebContainer::initialPageDeviceScaleFactor(const QSizeF &screenSize) co
 {
     // The carried-forward Qt bridge still maps device scale to page zoom here.
     // Keep that known-good behavior explicit until a true device-scale path exists.
+    //
+    // Scale from the Silica UI pixel ratio, so web content matches the size of
+    // the system UI (and follows the user's display-scale setting). The screen
+    // width alone oversized it on the Jolla Phone 2: 1032px / 360 = 2.87 at
+    // pixelRatio 1.5. The Xperia 10 II is the reference (1.75 -> 3.0); the
+    // Jolla gets 2.57, rounded to 2.5. Quarter steps keep the scale off odd
+    // fractions, whose tile-edge rounding shows as seams.
+    if (m_uiPixelRatio > 0.0) {
+        const qreal scale = WPERuntimePaths::kReferenceDeviceScale
+                            * m_uiPixelRatio / WPERuntimePaths::kReferenceUiPixelRatio;
+        return qMax(qreal(1.0), qRound(scale * 4.0) / 4.0);
+    }
     return screenSize.width() / WPERuntimePaths::kReferenceViewportWidth;
 }
 
