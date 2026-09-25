@@ -162,7 +162,7 @@ static void logStartupContext(int argc, char *argv[])
         QDir().mkpath(startupLogInfo.absolutePath());
     }
 
-    int logfd = open(WPERuntimePaths::kBrowserStartupLog, O_WRONLY | O_CREAT | O_APPEND, 0644);
+    int logfd = open(WPERuntimePaths::kBrowserStartupLog, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (logfd < 0) {
         return;
     }
