@@ -20,6 +20,7 @@
 #include <QFile>
 #include <QQuickView>
 #include <QQuickWindow>
+#include <QRegularExpression>
 #include <QSet>
 #include <QStringList>
 #include <QSurfaceFormat>
@@ -222,6 +223,34 @@ static int restartCountFromEnvironment()
     return restartCount;
 }
 
+// droidmedia (gst-droid's droidvdec) only drives OMX codecs. Vendors on Android 13+
+// (Jolla Phone 2: MT6858, Android 16 vendor) list Codec2 decoders only, and there
+// droidvdec crashes the WebProcess on any <video> page (device-verified; with
+// droidvdec:0, 1080p H.264 plays in software with 0 dropped frames). Only
+// <MediaCodec> names count: the Codec2 list keeps OMX names as <Alias> entries.
+// No readable list means unknown, so keep HW decode (the Xperia 10 II's
+// Qualcomm OMX path). Mirrors atlantic_vendor_lacks_omx_video in the engine's
+// runtime-common.sh, which icon launches (sailjail -> .bin) never source.
+static bool vendorLacksOmxVideoDecoder()
+{
+    static const QRegularExpression omxVideoDecoder(
+        QStringLiteral("<MediaCodec[^>]*name=\"OMX\\.[^\"]*video[^\"]*decoder"),
+        QRegularExpression::CaseInsensitiveOption);
+    bool foundList = false;
+    for (const QString &dirPath : { QStringLiteral("/vendor/etc"), QStringLiteral("/odm/etc") }) {
+        const QDir dir(dirPath);
+        for (const QString &name : dir.entryList({ QStringLiteral("media_codecs*.xml") }, QDir::Files)) {
+            QFile file(dir.filePath(name));
+            if (!file.open(QIODevice::ReadOnly))
+                continue;
+            foundList = true;
+            if (omxVideoDecoder.match(QString::fromUtf8(file.readAll())).hasMatch())
+                return false;
+        }
+    }
+    return foundList;
+}
+
 static void configureBrowserProcessEnvironment()
 {
     auto needsUtf8Locale = [](const char *value) {
@@ -275,6 +304,13 @@ static void configureBrowserProcessEnvironment()
     }
     if (qgetenv("WEBKIT_GST_ENABLE_HLS_SUPPORT").isEmpty())
         qputenv("WEBKIT_GST_ENABLE_HLS_SUPPORT", "1");
+    // Icon launches skip runtime-common.sh, so apply its HW-decoder auto-detection
+    // here too. ATLANTIC_DISABLE_HW_DECODER=0/1 or an explicit rank list wins.
+    if (qgetenv("GST_PLUGIN_FEATURE_RANK").isEmpty()) {
+        const QByteArray disableHw = qgetenv("ATLANTIC_DISABLE_HW_DECODER");
+        if (disableHw.isEmpty() ? vendorLacksOmxVideoDecoder() : envVarEnabled(disableHw))
+            qputenv("GST_PLUGIN_FEATURE_RANK", "droidvdec:0,droidvenc:0,droidadec:0");
+    }
 
     // Kinetic-fling deceleration friction (webkit-kinetic-decel-friction-env.patch).
     // Upstream's friction=4 (desktop trackpad tuning) makes a hard touch flick coast
