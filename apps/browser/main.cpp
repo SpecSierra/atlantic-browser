@@ -547,6 +547,44 @@ static void joinBrowserMemoryCgroup()
             static_cast<int>(getpid()));
 }
 
+// RAM tier. The memory defaults (runtime-common.sh, baked into the sailjail
+// profile for icon launches) were sized for the 3.5 GB Xperia 10 II, where a
+// reddit feed OOM'd the phone until bfcache and the RAM caches were given up
+// (ATLANTIC_CACHE_MODEL=viewer) and purging started at a 700 MB WebProcess
+// footprint. On a >= 8 GB device (Jolla Phone 2, 12 GB) that trade buys
+// nothing and costs Back: the page process sits permanently above 700 MB, so
+// even a non-zero bfcache is pruned on every 3 s poll. Measured on the J2
+// (2026-09-27, edition.cnn.com -> example.org -> Back): viewer/700 = full
+// reload, DCL 3.4-3.7 s, load 5.8-6.4 s; web/4000 = bfcache restore in ~0.4 s,
+// for ~0.5 GB more WebProcess RSS (5.6 GB still available). Raising the
+// threshold alone changed neither reddit scroll fps nor footprint.
+// ATLANTIC_MEMORY_TIER=low keeps the 3.5 GB defaults on any device.
+static void configureMemoryTierFromRam()
+{
+    qint64 memTotalKb = 0;
+    QFile meminfo(QStringLiteral("/proc/meminfo"));
+    if (meminfo.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        const QList<QByteArray> lines = meminfo.readAll().split('\n');
+        for (const QByteArray &line : lines) {
+            if (line.startsWith("MemTotal:")) {
+                memTotalKb = line.mid(9).trimmed().split(' ').value(0).toLongLong();
+                break;
+            }
+        }
+    }
+
+    static constexpr qint64 kHighTierMinKb = 7LL * 1024 * 1024; // "8 GB" parts report ~7.3-7.6 GiB
+    const bool forcedLow = qgetenv("ATLANTIC_MEMORY_TIER") == QByteArrayLiteral("low");
+    const bool high = !forcedLow && memTotalKb >= kHighTierMinKb;
+    if (high) {
+        qputenv("ATLANTIC_CACHE_MODEL", QByteArrayLiteral("web"));
+        qputenv("WEBKIT_MEMORY_BASE_THRESHOLD_MB", QByteArrayLiteral("4000"));
+    }
+    fprintf(stderr, "[ATLANTIC] memory tier: %s (MemTotal %lld MB%s) cache_model=%s base_threshold=%s MB\n",
+            high ? "high" : "low", static_cast<long long>(memTotalKb / 1024), forcedLow ? ", forced low" : "",
+            qgetenv("ATLANTIC_CACHE_MODEL").constData(), qgetenv("WEBKIT_MEMORY_BASE_THRESHOLD_MB").constData());
+}
+
 static void configureGpuModeFromCapabilities()
 {
     const GpuCapabilityProbeResult probe = probeGpuCapability();
@@ -945,6 +983,7 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     QScopedPointer<QGuiApplication> app(new QGuiApplication(argc, argv));
     logStartupPhase("qguiapp-created");
     configureGpuModeFromCapabilities();
+    configureMemoryTierFromRam();
     QScopedPointer<QQuickView> view(new QQuickView);
 
     configureBrowserApplication(app.data(), view.data());
