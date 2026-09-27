@@ -312,6 +312,8 @@ struct GpuCapabilityProbeResult {
     QString glVendor;
     QString glRenderer;
     QString glVersion;
+    bool isAdreno = false;
+    bool isMali = false;
 };
 
 static bool extensionListContains(const QByteArray &extensions, const char *extension)
@@ -372,9 +374,14 @@ static void queryEglDetailsFromCurrentContext(GpuCapabilityProbeResult *result)
         return;
     }
 
-    QLibrary eglLibrary(QStringLiteral("EGL"));
+    // SFOS ships only the versioned libEGL.so.1 (no dev symlink), so the bare
+    // "EGL" name never loaded and every device read as egl=unknown.
+    QLibrary eglLibrary(QStringLiteral("EGL"), 1);
     if (!eglLibrary.load()) {
-        return;
+        eglLibrary.setFileName(QStringLiteral("EGL"));
+        if (!eglLibrary.load()) {
+            return;
+        }
     }
 
     using EglGetCurrentDisplayFn = EGLDisplay (*)(void);
@@ -467,6 +474,8 @@ static GpuCapabilityProbeResult probeGpuCapability()
     context.doneCurrent();
 
     parseOpenGlesVersion(result.glVersion.toLatin1(), &result.glesMajor, &result.glesMinor);
+    result.isAdreno = result.glRenderer.contains(QStringLiteral("Adreno"), Qt::CaseInsensitive);
+    result.isMali = result.glRenderer.contains(QStringLiteral("Mali"), Qt::CaseInsensitive);
     result.probeSucceeded = !result.glRenderer.isEmpty() && !result.glVersion.isEmpty();
 
     QStringList reasons;
@@ -483,6 +492,13 @@ static GpuCapabilityProbeResult probeGpuCapability()
     // thread here; surfaceless-capable stacks (Mali, desktop) keep multi-thread.
     if (!result.hasEglSurfacelessContext) {
         reasons << QStringLiteral("no-egl-surfaceless-context");
+    }
+    // The libhybris Adreno stays conservative whatever its EGL advertises: its
+    // driver ignores cross-context eglWaitSyncKHR, and CPU raster beat every GPU
+    // mode there (docs/investigations/gpu-raster-tile-size.md in atlantic-engine).
+    // Until the EGL probe was fixed this was implied by egl=unknown.
+    if (result.isAdreno) {
+        reasons << QStringLiteral("adreno");
     }
 
     QStringList advisoryReasons;
@@ -569,6 +585,30 @@ static void configureGpuModeFromCapabilities()
             : QByteArrayLiteral("gpu(preset)");
     } else if (presetThreads) {
         paintingMode = QByteArrayLiteral("gpu(preset-threads)");
+    } else if (probe.isMali && !hasPresetConservative) {
+        // "gpu-mali" (Jolla Phone 2, Mali-G610): GPU tile painting on the
+        // compositor thread (as gpu-explicit), plus two settings measured on
+        // the device (build 722, heavy fling bench, see
+        // docs/investigations/jolla-gpu-black-tiles.md in atlantic-engine):
+        //  - WEBKIT_TILE_GPU_READBACK_SYNC=1: a whole-tile GPU replay is
+        //    otherwise intermittently lost (black tile until a later repaint;
+        //    root cause open). 0/12 black vs 7/18 without it.
+        //  - low-res tiles off (WEBKIT_LOWRES_TILE_SCALE=1.0): under GPU paint
+        //    the low-res pass plus the sharpen repaint costs more than painting
+        //    full-res (55.1 fps / p95 21.5 ms vs 53.4 / 32.5 with it). The
+        //    runtime env pre-sets 0.3 on every launch path, so this overrides
+        //    it; ATLANTIC_GPU_KEEP_LOWRES=1 keeps it.
+        // Together: 55.1 fps vs 45.4 for CPU painting + low-res. CPU painting
+        // stays one env away: WEBKIT_SKIA_ENABLE_CPU_RENDERING=1 or
+        // ATLANTIC_GPU_CONSERVATIVE=1.
+        qputenv("WEBKIT_RASTER_ON_COMPOSITOR_THREAD", QByteArrayLiteral("1"));
+        gpuPaintingThreads = QByteArrayLiteral("1");
+        qputenv("WEBKIT_SKIA_GPU_PAINTING_THREADS", gpuPaintingThreads);
+        if (!qEnvironmentVariableIsSet("WEBKIT_TILE_GPU_READBACK_SYNC"))
+            qputenv("WEBKIT_TILE_GPU_READBACK_SYNC", QByteArrayLiteral("1"));
+        if (qgetenv("ATLANTIC_GPU_KEEP_LOWRES") != QByteArrayLiteral("1"))
+            qputenv("WEBKIT_LOWRES_TILE_SCALE", QByteArrayLiteral("1.0"));
+        paintingMode = QByteArrayLiteral("gpu-mali(auto)");
     } else if (conservativeEffective) {
         const bool forceGlFinish = qEnvironmentVariableIsSet("ATLANTIC_GPU_FORCE_GLFINISH")
             && qgetenv("ATLANTIC_GPU_FORCE_GLFINISH") != QByteArrayLiteral("0");
