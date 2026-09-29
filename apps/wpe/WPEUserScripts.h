@@ -1568,8 +1568,6 @@ static const char* const kSelectBridge = R"JS(
 (function() {
     if (window.__wpeSelectBridgeInstalled) return;
     window.__wpeSelectBridgeInstalled = true;
-    console.error('[WPE-SELECT-JS] selectBridge JS installed, handlers=' +
-        (window.webkit && window.webkit.messageHandlers ? 'YES' : 'NO'));
 
     function handleSelectActivation(e) {
         var el = e.target;
@@ -1577,7 +1575,9 @@ static const char* const kSelectBridge = R"JS(
             el = el.parentElement;
         }
         if (!el || !el.tagName || el.tagName.toLowerCase() !== 'select') return;
-        console.error('[WPE-SELECT-JS] intercepted ' + e.type + ' on <select>, options=' + el.options.length);
+        // Leave what the menu cannot represent to WebKit: a disabled control
+        // must stay inert, and multi-selects / list boxes need real selection.
+        if (el.disabled || el.multiple || el.size > 1) return;
         e.preventDefault();
         e.stopImmediatePropagation();
         var opts = [];
@@ -1590,7 +1590,6 @@ static const char* const kSelectBridge = R"JS(
                 options: opts,
                 selectedIndex: el.selectedIndex
             });
-            console.error('[WPE-SELECT-JS] postMessage sent');
         } catch(ex) {
             console.error('[WPE-SELECT-JS] postMessage error: ' + ex);
         }
@@ -1599,7 +1598,6 @@ static const char* const kSelectBridge = R"JS(
     document.addEventListener('touchstart',  handleSelectActivation, {capture: true, passive: true});
     document.addEventListener('pointerdown', handleSelectActivation, true);
     document.addEventListener('click',       handleSelectActivation, true);
-    console.error('[WPE-SELECT-JS] event listeners registered');
 })();
 )JS";
 
@@ -1802,15 +1800,18 @@ static const char* const kLoginBridge = R"JS(
         } catch (e) {}
     }
 
-    function attach() {
+    // One delegated listener instead of per-field listeners re-attached from
+    // an unthrottled MutationObserver: that observer ran a document-wide
+    // querySelectorAll on every mutation batch of every page. findFields() now
+    // only runs when a field actually takes focus.
+    document.addEventListener('focusin', function(e) {
+        var t = e.target;
+        if (!t || t.tagName !== 'INPUT')
+            return;
         var f = findFields();
-        if (!f) return;
-        [f.user, f.pass].forEach(function(el) {
-            if (!el || el.__atlBound) return;
-            el.__atlBound = true;
-            el.addEventListener('focus', requestFill);
-        });
-    }
+        if (f && (t === f.user || t === f.pass))
+            requestFill();
+    }, true);
 
     // Capture on submit: offer to save/update the credentials the user just
     // entered. Listens at the document in the capture phase so it fires even if
@@ -1828,16 +1829,6 @@ static const char* const kLoginBridge = R"JS(
     }
     document.addEventListener('submit', onSubmit, true);
 
-    if (document.readyState === 'loading')
-        document.addEventListener('DOMContentLoaded', attach);
-    else
-        attach();
-
-    // Re-scan for SPA / late-injected login forms.
-    try {
-        new MutationObserver(function() { attach(); })
-            .observe(document.documentElement, { childList: true, subtree: true });
-    } catch (e) {}
 })();
 )JS";
 
