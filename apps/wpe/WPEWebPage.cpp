@@ -1797,10 +1797,21 @@ static void onLoginBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page
     webkit_user_script_unref(script);
 }
 
+// ATLANTIC_LOG_IME=1: one line per keyboard/IME event, to diagnose composition
+// problems (repeated or lost characters) from a single reproduction.
+static bool imeLoggingEnabled()
+{
+    static const bool enabled = qEnvironmentVariableIsSet("ATLANTIC_LOG_IME");
+    return enabled;
+}
+
 bool dispatchTextToFocusedElement(WPEWebPage* page, const QString& text, int replaceBeforeCaret)
 {
     if (!page)
         return false;
+
+    if (imeLoggingEnabled())
+        qInfo().noquote() << "[IME] dispatch text=" << text << "replaceBefore=" << replaceBeforeCaret;
 
     if (replaceBeforeCaret < 0)
         replaceBeforeCaret = 0;
@@ -4060,6 +4071,13 @@ void WPEWebPage::inputMethodEvent(QInputMethodEvent *event)
     if (!event)
         return;
 
+    if (imeLoggingEnabled())
+        qInfo().noquote() << "[IME] event commit=" << event->commitString()
+                          << "preedit=" << event->preeditString()
+                          << "replStart=" << event->replacementStart()
+                          << "replLen=" << event->replacementLength()
+                          << "lastPreedit=" << m_lastPreeditText;
+
     bool handled = false;
     const QString committed = event->commitString();
     const QString preedit = event->preeditString();
@@ -4188,6 +4206,11 @@ void WPEWebPage::keyPressEvent(QKeyEvent *event)
     if (!event) {
         return;
     }
+
+    if (imeLoggingEnabled())
+        qInfo().noquote() << "[IME] key press key=" << event->key() << "text=" << event->text()
+                          << "intercept=" << shouldInterceptSoftKeyboardEvent(event)
+                          << "lastPreedit=" << m_lastPreeditText;
 
     if (shouldInterceptSoftKeyboardEvent(event)) {
         if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
