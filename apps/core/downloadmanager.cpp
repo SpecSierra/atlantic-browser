@@ -67,7 +67,9 @@ void DownloadManager::cancelActiveTransfers()
 {
     for (qulonglong downloadId : m_statusCache.keys()) {
         if (m_statusCache.value(downloadId) == DownloadStatus::Started) {
-            cancelTransfer(m_download2transferMap.value(downloadId));
+            // Cancel by download id: the transfer id may be unmapped (0), which
+            // would ask the transfer engine to finish an unrelated transfer.
+            cancel(int(downloadId));
         }
     }
 }
