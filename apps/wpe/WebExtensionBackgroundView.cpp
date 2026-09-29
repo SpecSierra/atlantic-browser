@@ -94,6 +94,9 @@ WebExtensionBackgroundView::WebExtensionBackgroundView(WebExtensionManager *mana
 WebExtensionBackgroundView::~WebExtensionBackgroundView()
 {
     if (m_webView) {
+        g_signal_handlers_disconnect_by_data(m_webView, this);
+        if (WebKitUserContentManager *ucm = webkit_web_view_get_user_content_manager(m_webView))
+            g_signal_handlers_disconnect_by_data(ucm, this);
         // try_close() only *asks* the page to close, and a background page has
         // no UI to honour the request — the view outlived us and kept its whole
         // WebProcess alive, so a reload() left one orphan per extension behind.

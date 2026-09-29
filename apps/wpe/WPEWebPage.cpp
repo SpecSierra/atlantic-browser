@@ -2702,6 +2702,16 @@ const QList<WPEWebPage *> &WPEWebPage::liveInstances()
 
 WPEWebPage::~WPEWebPage()
 {
+    // The WebView can outlive this object (in-flight snapshot / evaluate_javascript
+    // tasks hold a reference), and every handler below was connected with `this`
+    // as user data. Cut them before the QObject goes away.
+    if (WebKitWebView *wv = webView()) {
+        g_signal_handlers_disconnect_by_data(wv, this);
+        if (WebKitUserContentManager *ucm = webkit_web_view_get_user_content_manager(wv))
+            g_signal_handlers_disconnect_by_data(ucm, this);
+        if (WebKitFindController *fc = webkit_web_view_get_find_controller(wv))
+            g_signal_handlers_disconnect_by_data(fc, this);
+    }
     if (m_pendingPermission) {
         webkit_permission_request_deny(WEBKIT_PERMISSION_REQUEST(m_pendingPermission));
         g_object_unref(m_pendingPermission);
