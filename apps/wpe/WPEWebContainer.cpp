@@ -805,15 +805,17 @@ void WPEWebContainer::setJavaScriptBlocklist(const QString &json)
 void WPEWebContainer::onActiveTabChanged(int activeTabId)
 {
     activatePage(activeTabId);
-    WebExtensionManager::instance()->notifyTabActivated(activeTabId);
+    if (!m_privateMode)
+        WebExtensionManager::instance()->notifyTabActivated(activeTabId);
 }
 
 void WPEWebContainer::onTabAdded(int tabId)
 {
     // Pre-create the page so it's ready
     WPEWebPage *page = getOrCreatePage(tabId);
-    WebExtensionManager::instance()->notifyTabCreated(
-        tabId, page ? page->url().toString() : QString());
+    if (!m_privateMode)
+        WebExtensionManager::instance()->notifyTabCreated(
+            tabId, page ? page->url().toString() : QString());
     // A newly-added background tab must not blow the live-tab budget: if we're
     // already at the cap it will be discarded here and reload when first shown.
     enforceLiveTabBudget();
@@ -821,7 +823,8 @@ void WPEWebContainer::onTabAdded(int tabId)
 
 void WPEWebContainer::onTabClosed(int tabId)
 {
-    WebExtensionManager::instance()->notifyTabRemoved(tabId);
+    if (!m_privateMode)
+        WebExtensionManager::instance()->notifyTabRemoved(tabId);
     m_mruTabs.removeAll(tabId);
     WPEWebPage::removeHistoryPreviewsForTab(tabId);
     WPEWebPage *page = m_pages.take(tabId);
@@ -1104,8 +1107,9 @@ void WPEWebContainer::onPageUrlChanged()
     emit urlChanged();
     emit titleChanged();
 
-    WebExtensionManager::instance()->notifyTabUpdated(page->tabId(), newUrl, page->title(),
-                                                      page->isLoading());
+    if (!page->privateBrowsing())
+        WebExtensionManager::instance()->notifyTabUpdated(page->tabId(), newUrl, page->title(),
+                                                          page->isLoading());
 
     // Update tab model
     if (m_tabModel) {
@@ -1178,7 +1182,8 @@ void WPEWebContainer::setActiveTabRendered(bool r)
 QJsonArray WPEWebContainer::extQueryTabs(const QJsonObject &query)
 {
     QJsonArray result;
-    if (!m_tabModel)
+    // Extensions never see private tabs.
+    if (!m_tabModel || m_privateMode)
         return result;
 
     const int activeId = m_tabModel->activeTabId();
@@ -1215,6 +1220,8 @@ QJsonArray WPEWebContainer::extQueryTabs(const QJsonObject &query)
 
 int WPEWebContainer::extCreateTab(const QString &url, bool active)
 {
+    if (m_privateMode)
+        return 0;
     load(url, QString(), true);
     Q_UNUSED(active) // a new tab is always the active one here
     return m_tabModel ? m_tabModel->activeTabId() : 0;
@@ -1222,7 +1229,7 @@ int WPEWebContainer::extCreateTab(const QString &url, bool active)
 
 bool WPEWebContainer::extUpdateTab(int tabId, const QJsonObject &properties)
 {
-    if (!m_tabModel)
+    if (!m_tabModel || m_privateMode)
         return false;
 
     if (properties.value(QStringLiteral("active")).toBool(false))
@@ -1249,6 +1256,8 @@ bool WPEWebContainer::extUpdateTab(int tabId, const QJsonObject &properties)
 
 bool WPEWebContainer::extRemoveTab(int tabId)
 {
+    if (m_privateMode)
+        return false;
     closeTab(tabId);
     return true;
 }

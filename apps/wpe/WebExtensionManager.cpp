@@ -913,6 +913,12 @@ void WebExtensionManager::installIntoPage(WebKitUserContentManager *ucm, WPEWebP
 
     forgetPage(page);
 
+    // Extensions do not run in private tabs: no content scripts, no bridge, no
+    // API view of them. (Chrome and Firefox make that an explicit per-extension
+    // opt-in; there is no such switch here, so the safe default is off.)
+    if (page->privateBrowsing())
+        return;
+
     PageState state;
     state.ucm = ucm;
 

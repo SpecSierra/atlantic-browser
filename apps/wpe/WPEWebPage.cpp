@@ -2632,7 +2632,8 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                     case WEBKIT_LOAD_FINISHED:  stage = QStringLiteral("onCompleted"); break;
                     default: return;
                     }
-                    WebExtensionManager::instance()->notifyNavigation(page->tabId(), url, stage);
+                    if (!page->privateBrowsing())
+                        WebExtensionManager::instance()->notifyNavigation(page->tabId(), url, stage);
 
                     // browser.history.onVisited. A finished load is exactly
                     // when the visit is recorded — except in a private tab,
