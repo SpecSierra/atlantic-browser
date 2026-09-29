@@ -88,6 +88,17 @@ QString DesktopBookmarkWriter::uniqueDesktopFileName(QString title)
         filePath = BrowserPaths::dataLocation();
     }
     title = title.simplified().replace(QString(" "), QString("-"));
+    // The title becomes part of a file name: a '/' (common in page titles)
+    // made the path point into a directory that does not exist, and glob
+    // characters would have skewed the name filter below.
+    for (int i = 0; i < title.size(); ++i) {
+        const QChar c = title.at(i);
+        if (c == QLatin1Char('/') || c == QLatin1Char('\\') || c == QLatin1Char('*')
+                || c == QLatin1Char('?') || c == QLatin1Char('[') || c == QLatin1Char(']')
+                || c.unicode() < 0x20)
+            title[i] = QLatin1Char('_');
+    }
+    title = title.left(80);
 
     QDir dir(filePath);
     dir.mkpath(filePath);
@@ -108,13 +119,16 @@ QString DesktopBookmarkWriter::uniqueDesktopFileName(QString title)
 QString DesktopBookmarkWriter::write(const QString &url, const QString &title, const QString &icon)
 {
     QString fileName = uniqueDesktopFileName(title);
+    // Values are single-line keys: a newline would let the title or URL inject
+    // further desktop-entry keys (Exec=...).
+    auto oneLine = [](QString v) { return v.trimmed().replace(QLatin1Char('\n'), QLatin1Char(' ')).replace(QLatin1Char('\r'), QLatin1Char(' ')); };
     QString desktopFileData = QString("[Desktop Entry]\n" \
                                       "Type=Link\n" \
                                       "Name=%1\n" \
                                       "Icon=%2\n" \
                                       "URL=%3\n" \
-                                      "Comment=%4\n").arg(title.trimmed(), icon,
-                                                          url.trimmed(), title.trimmed());
+                                      "Comment=%4\n").arg(oneLine(title), oneLine(icon),
+                                                          oneLine(url), oneLine(title));
     QFile desktopFile(fileName);
     if (desktopFile.open(QFile::WriteOnly)) {
         desktopFile.write(desktopFileData.toUtf8());
