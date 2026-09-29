@@ -471,8 +471,19 @@ bool WebExtensionManager::dispatchCookiesApi(const QString &extensionId, const E
         QString domain = details.value(QStringLiteral("domain")).toString();
         if (domain.isEmpty())
             domain = url.host();
-        else if (!domain.startsWith(QLatin1Char('.')))
-            domain.prepend(QLatin1Char('.')); // an explicit domain is a domain cookie
+        else {
+            if (!domain.startsWith(QLatin1Char('.')))
+                domain.prepend(QLatin1Char('.')); // an explicit domain is a domain cookie
+            // Host access was checked for `url` only: the domain must cover that
+            // host, otherwise an extension could plant cookies on hosts it has
+            // no permission for.
+            const QString bare = domain.mid(1).toLower();
+            const QString host = url.host().toLower();
+            if (bare.isEmpty() || !(host == bare || host.endsWith(QLatin1Char('.') + bare))) {
+                fail(QStringLiteral("cookies.set domain does not match url"));
+                return true;
+            }
+        }
 
         QString path = details.value(QStringLiteral("path")).toString();
         if (path.isEmpty()) {
