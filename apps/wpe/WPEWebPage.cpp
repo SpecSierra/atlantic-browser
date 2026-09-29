@@ -2473,13 +2473,25 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                     }
                     const QString cachePath = dir + QStringLiteral("/engine.dat");
                     AdBlockListUpdater::start();
-                    if (!AdBlockEngine::instance().loadFromCache(cachePath)) {
-                        qWarning() << "[ADBLOCK] engine not available — falling back to content blocker only";
+                    bool engineLoaded = AdBlockEngine::instance().loadFromCache(cachePath);
+                    if (!engineLoaded && dir != QLatin1String("/usr/share/atlantic-browser")) {
+                        // A downloaded engine that will not load must not take
+                        // blocking down with it: fall back to the shipped copy
+                        // (as the WebProcess extension does) and drop the bad
+                        // stamp so the next start does not choose it again.
+                        qWarning() << "[ADBLOCK] updated engine unusable; using the shipped copy";
+                        QFile::remove(updated + QStringLiteral("/engine.version"));
+                        dir = QStringLiteral("/usr/share/atlantic-browser");
+                        engineLoaded = AdBlockEngine::instance().loadFromCache(
+                            dir + QStringLiteral("/engine.dat"));
+                    }
+                    if (!engineLoaded) {
+                        qWarning() << "[ADBLOCK] engine not available — blocking is off";
                     } else {
                         // Scriptlet resources live next to the engine cache;
                         // without them every ##+js(...) rule is a no-op.
                         AdBlockEngine::instance().loadResources(
-                            QFileInfo(cachePath).path() + QStringLiteral("/adblock-resources.json"));
+                            dir + QStringLiteral("/adblock-resources.json"));
                     }
                 }
             }

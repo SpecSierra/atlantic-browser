@@ -7,6 +7,7 @@
  */
 
 #include "AdBlockListUpdater.h"
+#include "AdBlockEngine.h"
 
 #include <QDateTime>
 #include <QDebug>
@@ -171,6 +172,34 @@ void AdBlockListUpdater::onFileReply(QNetworkReply* reply)
         qWarning() << "[ADBLOCK-UPDATE]" << m_currentFile << "download failed:"
                    << reply->errorString();
         return;
+    }
+    // Redirects are followed, so check where the bytes actually came from:
+    // an https base must not be downgraded to plain http on the way, and the
+    // payloads are ~17 MB at most.
+    if (m_baseUrl.startsWith(QLatin1String("https://"))
+            && reply->url().scheme() != QLatin1String("https")) {
+        qWarning() << "[ADBLOCK-UPDATE]" << m_currentFile << "arrived over a downgraded redirect";
+        return;
+    }
+    if (data.size() > 64 * 1024 * 1024) {
+        qWarning() << "[ADBLOCK-UPDATE]" << m_currentFile << "is implausibly large";
+        return;
+    }
+    // A payload the engine cannot read must never be published: the browser
+    // would otherwise pick it by version stamp on the next start.
+    if (m_currentFile == QLatin1String("engine.dat")) {
+        AtlanticAdblockEngine* probe = atlantic_adblock_create_from_cache(
+            reinterpret_cast<const uint8_t*>(data.constData()), size_t(data.size()));
+        if (!probe) {
+            qWarning() << "[ADBLOCK-UPDATE] engine.dat does not deserialize; discarding update";
+            return;
+        }
+        atlantic_adblock_destroy(probe);
+    } else if (m_currentFile == QLatin1String("adblock-resources.json")) {
+        if (!data.startsWith('[')) {
+            qWarning() << "[ADBLOCK-UPDATE] resources payload is not a JSON array; discarding";
+            return;
+        }
     }
     QSaveFile out(cacheDir() + QLatin1Char('/') + m_currentFile + QStringLiteral(".new"));
     if (!out.open(QIODevice::WriteOnly) || out.write(data) != data.size() || !out.commit()) {
