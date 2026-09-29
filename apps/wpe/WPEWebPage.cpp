@@ -47,6 +47,9 @@
 #include <QVector>
 #include <array>
 #include <memory>
+#include <string>
+#include <vector>
+#include <initializer_list>
 
 #include "WPEQtViewLoadRequest.h"
 #include "WPEUserScripts.h"
@@ -1157,6 +1160,50 @@ static void removeAutoconsent(WebKitUserContentManager* ucm)
     }
 }
 
+// Match patterns ("https://*.host/*") for scripts that only ever act on a few
+// sites. Without an allow list a script is parsed and run in every frame of
+// every page only to return on its own hostname test.
+static void hostScopedPatterns(std::initializer_list<const char*> hosts,
+                               std::vector<std::string>& storage)
+{
+    for (const char* h : hosts) {
+        storage.push_back(std::string("https://*.") + h + "/*");
+        storage.push_back(std::string("http://*.") + h + "/*");
+    }
+}
+
+static void addHostScopedScript(WebKitUserContentManager* ucm, const char* source,
+                                WebKitUserScriptInjectionTime when,
+                                std::initializer_list<const char*> hosts)
+{
+    std::vector<std::string> patterns;
+    hostScopedPatterns(hosts, patterns);
+    std::vector<const char*> allow;
+    for (const std::string& p : patterns)
+        allow.push_back(p.c_str());
+    allow.push_back(nullptr);
+    WebKitUserScript* script = webkit_user_script_new(
+        source, WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES, when, allow.data(), nullptr);
+    webkit_user_content_manager_add_script(ucm, script);
+    webkit_user_script_unref(script);
+}
+
+static void addHostScopedStyleSheet(WebKitUserContentManager* ucm, const char* css,
+                                    std::initializer_list<const char*> hosts)
+{
+    std::vector<std::string> patterns;
+    hostScopedPatterns(hosts, patterns);
+    std::vector<const char*> allow;
+    for (const std::string& p : patterns)
+        allow.push_back(p.c_str());
+    allow.push_back(nullptr);
+    WebKitUserStyleSheet* sheet = webkit_user_style_sheet_new(
+        css, WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES, WEBKIT_USER_STYLE_LEVEL_USER,
+        allow.data(), nullptr);
+    webkit_user_content_manager_add_style_sheet(ucm, sheet);
+    webkit_user_style_sheet_unref(sheet);
+}
+
 static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* page)
 {
     g_signal_connect(ucm, "script-message-received::selectionBridge",
@@ -1203,28 +1250,26 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
     // a cosmetic nicety that costs too much on this hardware.
     // Also suppress the tap-highlight flash (blue overlay on long-press / tap
     // of links) — purely cosmetic removal of a visual delay.
-    const gchar* perfCssJs = WPEUserScripts::kPerfCss;
-    WebKitUserScript* perfScript = webkit_user_script_new(
-        perfCssJs,
-        WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
-        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_END,
-        nullptr, nullptr);
-    webkit_user_content_manager_add_script(ucm, perfScript);
-    webkit_user_script_unref(perfScript);
+    // As a user style sheet (user-origin !important beats author !important)
+    // it is part of the document's first style resolution. The old form
+    // appended a <style> with a universal selector at DOCUMENT_END in every
+    // frame, which forced one extra full-document style recalc per document.
+    {
+        WebKitUserStyleSheet* perfSheet = webkit_user_style_sheet_new(
+            WPEUserScripts::kPerfCssSheet, WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+            WEBKIT_USER_STYLE_LEVEL_USER, nullptr, nullptr);
+        webkit_user_content_manager_add_style_sheet(ucm, perfSheet);
+        webkit_user_style_sheet_unref(perfSheet);
+    }
 
     // YouTube player icons come up blank on WPE: the legacy play button
     // (.ytp-svg-fill) computes black, and the mobile player's <c3-icon> control
     // glyphs (fullscreen/seek/mute/prev-next) fail to paint as inline <svg>.
     // kYouTubeIconFix forces the former white and re-issues the latter as
     // data-URI -webkit-mask-images sourced from YouTube's own SVG. See header.
-    const gchar* ytIconFixJs = WPEUserScripts::kYouTubeIconFix;
-    WebKitUserScript* ytIconFixScript = webkit_user_script_new(
-        ytIconFixJs,
-        WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
-        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_END,
-        nullptr, nullptr);
-    webkit_user_content_manager_add_script(ucm, ytIconFixScript);
-    webkit_user_script_unref(ytIconFixScript);
+    addHostScopedScript(ucm, WPEUserScripts::kYouTubeIconFix,
+                        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_END, { "youtube.com" });
+    addHostScopedStyleSheet(ucm, ".ytp-svg-fill{fill:#fff !important;}", { "youtube.com" });
 
     // Generic CSS-mask icon healer. Replaces the old YouTube-specific CSS
     // override (hardcoded English aria-label selectors + hand-drawn glyphs,
@@ -1297,14 +1342,8 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
     // (an earlier content-visibility approach here was removed — it halved scroll
     // fps). Set ATLANTIC_DISABLE_REDDIT_PERF=1 to disable.
     if (!envVarEnabled(qgetenv("ATLANTIC_DISABLE_REDDIT_PERF"))) {
-        const gchar* redditPerfJs = WPEUserScripts::kRedditPerf;
-        WebKitUserScript* redditScript = webkit_user_script_new(
-            redditPerfJs,
-            WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
-            WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
-            nullptr, nullptr);
-        webkit_user_content_manager_add_script(ucm, redditScript);
-        webkit_user_script_unref(redditScript);
+        addHostScopedScript(ucm, WPEUserScripts::kRedditPerf,
+                            WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START, { "reddit.com" });
     }
 
     // MSE prebuffer cap. hls.js buffers its SourceBuffer up to its config limits
@@ -1336,14 +1375,9 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
     // frames (the player can be iframed). YouTube-scoped inside the script. Set
     // ATLANTIC_DISABLE_YT_H264=1 to disable.
     if (!envVarEnabled(qgetenv("ATLANTIC_DISABLE_YT_H264"))) {
-        const gchar* ytH264Js = WPEUserScripts::kYouTubeH264;
-        WebKitUserScript* ytH264Script = webkit_user_script_new(
-            ytH264Js,
-            WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
-            WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
-            nullptr, nullptr);
-        webkit_user_content_manager_add_script(ucm, ytH264Script);
-        webkit_user_script_unref(ytH264Script);
+        addHostScopedScript(ucm, WPEUserScripts::kYouTubeH264,
+                            WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+                            { "youtube.com", "youtube-nocookie.com", "youtu.be" });
     }
 
     // MGP-player (pornhub-family) playback fix: hide MediaSource so the player
@@ -1352,13 +1386,9 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
     // detector; all frames (embeds). Site-scoped inside the script. Set
     // ATLANTIC_DISABLE_MGP_HLS=1 to disable.
     if (!envVarEnabled(qgetenv("ATLANTIC_DISABLE_MGP_HLS"))) {
-        WebKitUserScript* mgpScript = webkit_user_script_new(
-            WPEUserScripts::kMgpNativeHls,
-            WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
-            WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
-            nullptr, nullptr);
-        webkit_user_content_manager_add_script(ucm, mgpScript);
-        webkit_user_script_unref(mgpScript);
+        addHostScopedScript(ucm, WPEUserScripts::kMgpNativeHls,
+                            WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+                            { "pornhub.com", "pornhub.org", "youporn.com", "redtube.com", "tube8.com" });
     }
 
     // Twitch playback fix. The Android-Chrome UA quirk (atlanticUserAgentForUrl)
@@ -1370,14 +1400,8 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
     // Twitch's player autoplays; all frames since the player can be iframed.
     // Twitch-scoped inside the script. Set ATLANTIC_DISABLE_TWITCH=1 to disable.
     if (!envVarEnabled(qgetenv("ATLANTIC_DISABLE_TWITCH"))) {
-        const gchar* twitchJs = WPEUserScripts::kTwitch;
-        WebKitUserScript* twitchScript = webkit_user_script_new(
-            twitchJs,
-            WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
-            WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
-            nullptr, nullptr);
-        webkit_user_content_manager_add_script(ucm, twitchScript);
-        webkit_user_script_unref(twitchScript);
+        addHostScopedScript(ucm, WPEUserScripts::kTwitch,
+                            WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START, { "twitch.tv" });
     }
 }
 

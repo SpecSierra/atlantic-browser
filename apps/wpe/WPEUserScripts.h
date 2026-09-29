@@ -487,16 +487,11 @@ static const char* const kEditableFocusTracker = R"JS(
 })();
 )JS";
 
-static const char* const kPerfCss = R"JS(
-(function() {
-    if (document.getElementById('__wpe_perf_style')) return;
-    var s = document.createElement('style');
-    s.id = '__wpe_perf_style';
-    s.textContent = '* { backdrop-filter: none !important; -webkit-backdrop-filter: none !important;'
-                  + ' -webkit-tap-highlight-color: rgba(0,0,0,0) !important; }';
-    (document.head || document.documentElement).appendChild(s);
-})();
-)JS";
+// Injected as a USER STYLE SHEET (not a script): it is part of the first style
+// resolution instead of a late author <style> with a universal selector.
+static const char* const kPerfCssSheet =
+    "* { backdrop-filter: none !important; -webkit-backdrop-filter: none !important;"
+    " -webkit-tap-highlight-color: rgba(0,0,0,0) !important; }";
 
 // YouTube player control icons come up blank on WPE 2.52. There are TWO distinct
 // players and TWO distinct icon mechanisms — this fixes both:
@@ -528,13 +523,7 @@ static const char* const kPerfCss = R"JS(
 //    (already-fine) action icons and other sites are untouched.
 static const char* const kYouTubeIconFix = R"JS(
 (function() {
-    if (!document.getElementById('__wpe_yt_icon_fix')) {
-        var s = document.createElement('style');
-        s.id = '__wpe_yt_icon_fix';
-        s.textContent = '.ytp-svg-fill{fill:#fff !important;}';
-        (document.head || document.documentElement).appendChild(s);
-    }
-
+    // (.ytp-svg-fill is a host-scoped user style sheet, see WPEWebPage.cpp.)
     if (!/(^|\.)youtube\.com$/.test(location.hostname)) return;
     if (window.__wpeYtPlayerIconFix) return;
     window.__wpeYtPlayerIconFix = true;
