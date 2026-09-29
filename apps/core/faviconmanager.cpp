@@ -9,6 +9,7 @@
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include <QFile>
+#include <QSaveFile>
 #include <QTextStream>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -73,7 +74,7 @@ void FaviconManager::save(const QString &type)
         return;
     }
     QString path = QString("%1/%2.json").arg(dataLocation).arg(type);
-    QFile file(path);
+    QSaveFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         qWarning() << "Can't create favicons file " << path;
         return;
@@ -92,7 +93,9 @@ void FaviconManager::save(const QString &type)
     QJsonDocument doc(items);
     out.setCodec("UTF-8");
     out << doc.toJson();
-    file.close();
+    out.flush();
+    if (!file.commit())
+        qWarning() << "Can't write favicons file " << path;
 }
 
 // After calling load it must be safe to assume the type exists in the map
