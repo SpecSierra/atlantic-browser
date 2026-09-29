@@ -11,6 +11,7 @@
 #include "bookmarkmanager.h"
 #include <QDebug>
 #include <QFile>
+#include <QSaveFile>
 #include <QTextStream>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -43,7 +44,8 @@ void BookmarkManager::save(const QList<Bookmark*> & bookmarks)
         return;
     }
     QString path = dataLocation + "/bookmarks.json";
-    QFile file(path);
+    // QSaveFile: a crash mid-write used to leave a truncated bookmarks.json.
+    QSaveFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         qWarning() << "Can't create file " << path;
         return;
@@ -76,7 +78,9 @@ void BookmarkManager::save(const QList<Bookmark*> & bookmarks)
     QJsonDocument doc(root);
     out.setCodec("UTF-8");
     out << doc.toJson();
-    file.close();
+    out.flush();
+    if (!file.commit())
+        qWarning() << "Can't write file " << path;
 }
 
 void BookmarkManager::clear()
