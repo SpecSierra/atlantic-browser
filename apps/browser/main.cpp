@@ -258,7 +258,6 @@ static void configureBrowserProcessEnvironment()
 
     unsetenv("MOZ_DISABLE_CRASH_GUARD");
     unsetenv("MOZ_WEBGL_PREFER_EGL");
-    setenv("WEBKIT_DISABLE_SANDBOX", "1", 1);
     if (!envVarEnabled(qgetenv("ATLANTIC_KEEP_QT_OPENGL_NO_BGRA"))) {
         unsetenv("QT_OPENGL_NO_BGRA");
     }
