@@ -138,6 +138,15 @@ void SearchEngineModel::add(const QString &title, const QString &url)
             return;
         }
     }
+    // Offers come from web pages; do not let one flood the list.
+    int offers = 0;
+    for (const SearchEngine& e : m_searchEngines) {
+        if (e.status == Status::Available)
+            ++offers;
+    }
+    if (offers >= 20 || title.size() > 100)
+        return;
+
     SearchEngine engine(url, title, Status::Available);
     beginInsertRows(QModelIndex(), rowCount(), rowCount());
     m_searchEngines.append(engine);
