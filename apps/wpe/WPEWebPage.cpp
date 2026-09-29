@@ -824,6 +824,14 @@ gboolean onDecidePolicy(WebKitWebView* webView, WebKitPolicyDecision* decision, 
         const guint statusCode = response ? webkit_uri_response_get_status_code(response) : 0;
         if (!webkit_response_policy_decision_is_mime_type_supported(responseDecision)
             && statusCode != 204 /* No Content */) {
+            // Only a navigation of the page itself may turn into a download.
+            // An ad iframe or a hidden subframe answering with an unsupported
+            // type used to start one on its own (and, with "save destination"
+            // on, saved it without any prompt).
+            if (!webkit_response_policy_decision_is_main_frame_main_resource(responseDecision)) {
+                webkit_policy_decision_ignore(decision);
+                return TRUE;
+            }
             webkit_policy_decision_download(decision);
             return TRUE;
         }
