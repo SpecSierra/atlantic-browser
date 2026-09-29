@@ -827,14 +827,6 @@ gboolean onDecidePolicy(WebKitWebView* webView, WebKitPolicyDecision* decision, 
         const guint statusCode = response ? webkit_uri_response_get_status_code(response) : 0;
         if (!webkit_response_policy_decision_is_mime_type_supported(responseDecision)
             && statusCode != 204 /* No Content */) {
-            // Only a navigation of the page itself may turn into a download.
-            // An ad iframe or a hidden subframe answering with an unsupported
-            // type used to start one on its own (and, with "save destination"
-            // on, saved it without any prompt).
-            if (!webkit_response_policy_decision_is_main_frame_main_resource(responseDecision)) {
-                webkit_policy_decision_ignore(decision);
-                return TRUE;
-            }
             webkit_policy_decision_download(decision);
             return TRUE;
         }
@@ -860,12 +852,17 @@ gboolean onDecidePolicy(WebKitWebView* webView, WebKitPolicyDecision* decision, 
         const gchar* mainUri = webkit_web_view_get_uri(webView);
         const QUrl mainUrl(mainUri ? QString::fromUtf8(mainUri) : QString());
         const QUrl dest(QString::fromUtf8(uri));
-        // Only web pages are routed into the view. A javascript: URL loaded
-        // through the API runs in the *main frame's* origin even when the
-        // click came from a cross-origin iframe, and data:/file: navigations
-        // would put script-free-of-origin content in the top level.
+        // Only web pages (and the external-handler / blob links a target=_blank
+        // anchor legitimately has) are routed into the view. A javascript: URL
+        // loaded through the API runs in the *main frame's* origin even when the
+        // click came from a cross-origin iframe, and data:/file:/about:
+        // navigations would put origin-less content in the top level.
         const QString destScheme = dest.scheme().toLower();
-        if (destScheme != QLatin1String("http") && destScheme != QLatin1String("https")) {
+        static const QStringList kRoutedSchemes {
+            QStringLiteral("http"), QStringLiteral("https"), QStringLiteral("mailto"),
+            QStringLiteral("tel"), QStringLiteral("sms"), QStringLiteral("blob")
+        };
+        if (!kRoutedSchemes.contains(destScheme)) {
             qInfo() << "[ADBLOCK] popup blocked (scheme" << destScheme << "):" << uri;
             webkit_policy_decision_ignore(decision);
             return TRUE;
