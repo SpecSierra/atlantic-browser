@@ -440,7 +440,9 @@ void WPEWebContainer::setContentBottomInset(qreal inset)
 void WPEWebContainer::initializeTabModels(int nextTabId)
 {
     m_persistentTabModel = new PersistentTabModel(nextTabId, nullptr);
-    m_privateTabModel = new PrivateTabModel(nextTabId + 100, nullptr);
+    // Private ids live in their own range: both models share m_pages keyed by
+    // tab id, and "+100" collided once 100 persistent tabs had been opened.
+    m_privateTabModel = new PrivateTabModel(nextTabId + 1000000, nullptr);
 
     m_tabModel = m_persistentTabModel;
     connect(m_tabModel, SIGNAL(activeTabChanged(int)), this, SLOT(onActiveTabChanged(int)));

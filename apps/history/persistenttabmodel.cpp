@@ -63,7 +63,10 @@ void PersistentTabModel::tabsAvailable(const QList<Tab> &tabs)
         }
     }
 
-    if (m_nextTabId != maxTabId + 1) {
+    // Never move the counter backwards within a run: closing the last tab
+    // reports an empty list, and reusing ids would resurrect stale thumbnails
+    // and page objects keyed by the old id.
+    if (m_nextTabId < maxTabId + 1) {
         m_nextTabId = maxTabId + 1;
     }
 
