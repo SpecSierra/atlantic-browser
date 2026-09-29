@@ -656,6 +656,10 @@ void WPEWebContainer::componentComplete()
     // bubblewrap requires explicit allowlisting of paths needed by the subprocesses.
     configureSandboxPaths();
 
+    // Previews of pages from an earlier run can never be shown again (the
+    // back/forward list does not survive a restart) and are page screenshots.
+    WPEWebPage::clearHistoryPreviews();
+
     // Qt Quick routes input events based on item bounding-box.  If the
     // container has size 0×0 (no QML anchor/size binding from the page),
     // touch events are never delivered to WPEQtView children.  Initialise
@@ -819,6 +823,7 @@ void WPEWebContainer::onTabClosed(int tabId)
 {
     WebExtensionManager::instance()->notifyTabRemoved(tabId);
     m_mruTabs.removeAll(tabId);
+    WPEWebPage::removeHistoryPreviewsForTab(tabId);
     WPEWebPage *page = m_pages.take(tabId);
     const bool wasPrivate = page && page->privateBrowsing();
     if (page) {

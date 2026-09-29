@@ -7,6 +7,7 @@
 #include "dbmanager.h"
 #include "faviconmanager.h"
 #include "../wpe/AdBlockEngine.h"
+#include "../wpe/WPEWebPage.h"
 
 #include <MDConfItem>
 #include <QCoreApplication>
@@ -90,6 +91,8 @@ SettingManager *SettingManager::instance()
 void SettingManager::clearHistory(int period)
 {
     DBManager::instance()->clearHistory(period);
+    // Page screenshots kept for "instant Back" are history too.
+    WPEWebPage::clearHistoryPreviews();
 }
 
 void SettingManager::clearCookiesAndSiteData()
@@ -126,6 +129,7 @@ void SettingManager::clearPasswords()
 
 void SettingManager::clearCache()
 {
+    WPEWebPage::clearHistoryPreviews();
     WebKitWebsiteDataManager *manager =
         webkit_network_session_get_website_data_manager(webkit_network_session_get_default());
     WebKitWebsiteDataTypes types = static_cast<WebKitWebsiteDataTypes>(

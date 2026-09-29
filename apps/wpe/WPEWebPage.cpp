@@ -3385,7 +3385,8 @@ QString historyPreviewFile(int tabId, const QUrl &url)
     if (!url.isValid() || url.isEmpty())
         return QString();
     const QByteArray key = QByteArray::number(tabId) + '|' + url.toEncoded();
-    return historyPreviewDir() + QLatin1Char('/')
+    // The tab id leads the name so a closed tab's files can be found again.
+    return historyPreviewDir() + QLatin1Char('/') + QString::number(tabId) + QLatin1Char('-')
            + QString::fromLatin1(QCryptographicHash::hash(key, QCryptographicHash::Sha1).toHex())
            + QStringLiteral(".jpg");
 }
@@ -3455,8 +3456,29 @@ void WPEWebPage::captureHistoryPreview()
     captureHistoryPreview(url());
 }
 
+void WPEWebPage::removeHistoryPreviewsForTab(int tabId)
+{
+    QDir dir(historyPreviewDir());
+    const QStringList files = dir.entryList(
+        QStringList() << QStringLiteral("%1-*").arg(tabId), QDir::Files);
+    for (const QString &name : files)
+        dir.remove(name);
+}
+
+void WPEWebPage::clearHistoryPreviews()
+{
+    QDir dir(historyPreviewDir());
+    const QStringList files = dir.entryList(QDir::Files);
+    for (const QString &name : files)
+        dir.remove(name);
+}
+
 void WPEWebPage::captureHistoryPreview(const QUrl &key)
 {
+    // A screenshot of a private page must never reach the disk.
+    if (privateBrowsing())
+        return;
+
     WebKitWebView *wv = webView();
     if (!wv)
         return;

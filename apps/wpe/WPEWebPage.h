@@ -332,6 +332,10 @@ public:
     Q_INVOKABLE void goForward();
     // Cached preview file for a history entry, or empty when none was stored.
     Q_INVOKABLE QString historyPreviewFor(const QUrl &url) const;
+
+    // Screenshot cache for "instant Back": nothing else deletes these files.
+    static void removeHistoryPreviewsForTab(int tabId);
+    static void clearHistoryPreviews();
     Q_INVOKABLE void forceChrome(bool forced);
     Q_INVOKABLE void suspendView();
     Q_INVOKABLE void resumeView();
