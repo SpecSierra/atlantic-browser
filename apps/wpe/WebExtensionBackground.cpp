@@ -236,7 +236,10 @@ void WebExtensionBackground::startFetch(int requestId, const QString &url, const
         // Extension-local reads go through the same fetch() call in real
         // browsers; serve them straight off disk instead of over the network.
         if (target.scheme() == QLatin1String(WebExtensionManager::kScheme)) {
-            QFile file(QDir(m_baseDir).filePath(target.path().mid(1)));
+            // Same guard as the scheme handler: stay inside the package.
+            const QString base = QDir(m_baseDir).absolutePath();
+            const QString resolved = QDir::cleanPath(QDir(base).absoluteFilePath(target.path().mid(1)));
+            QFile file(resolved.startsWith(base + QLatin1Char('/')) ? resolved : QString());
             const bool ok = file.open(QIODevice::ReadOnly);
             const QString content = ok ? QString::fromUtf8(file.readAll()) : QString();
             evaluate(QStringLiteral("__atlFetchDone(%1,%2,%3,\"\",{},%4,%5);")

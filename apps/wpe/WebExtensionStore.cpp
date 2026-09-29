@@ -517,7 +517,18 @@ void WebExtensionStore::finishDownload(const QString &slug, const QString &expec
         QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
         + QStringLiteral("/extension-downloads");
     QDir().mkpath(directory);
-    const QString path = QStringLiteral("%1/%2.xpi").arg(directory, slug);
+    // slug is a store slug, or the whole URL for a pasted package link: it can
+    // never be used as a path component as it is.
+    QString fileStem = slug;
+    for (int i = 0; i < fileStem.size(); ++i) {
+        const QChar c = fileStem.at(i);
+        if (!c.isLetterOrNumber() && c != QLatin1Char('-') && c != QLatin1Char('_'))
+            fileStem[i] = QLatin1Char('_');
+    }
+    fileStem = fileStem.left(80);
+    if (fileStem.isEmpty())
+        fileStem = QStringLiteral("package");
+    const QString path = QStringLiteral("%1/%2.xpi").arg(directory, fileStem);
 
     QFile package(path);
     if (!package.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
