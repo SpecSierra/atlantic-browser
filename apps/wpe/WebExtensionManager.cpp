@@ -849,8 +849,26 @@ QString WebExtensionManager::worldNameFor(const QString &extensionId)
 
 QString WebExtensionManager::handlerNameFor(const QString &extensionId, bool mainWorld)
 {
-    return (mainWorld ? QStringLiteral("atlExtPage_") : QStringLiteral("atlExt_"))
-        + sanitize(extensionId);
+    if (!mainWorld)
+        return QStringLiteral("atlExt_") + sanitize(extensionId);
+
+    // The main-world handler is visible to every page and frame in the view
+    // (the glib API has no origin allow-list for handlers), and extension ids
+    // are public. A per-run random suffix keeps web content from guessing the
+    // name; handleBridgeMessage() additionally refuses senders that are not
+    // the extension's own page.
+    static const QString secret = [] {
+        QFile urandom(QStringLiteral("/dev/urandom"));
+        QByteArray bytes;
+        if (urandom.open(QIODevice::ReadOnly))
+            bytes = urandom.read(16);
+        if (bytes.size() < 16) {
+            for (int i = bytes.size(); i < 16; ++i)
+                bytes.append(char(qrand() & 0xff));
+        }
+        return QString::fromLatin1(bytes.toHex());
+    }();
+    return QStringLiteral("atlExtPage_") + sanitize(extensionId) + QLatin1Char('_') + secret;
 }
 
 QString WebExtensionManager::buildShim(const Entry &entry, const QString &context,
@@ -1255,6 +1273,14 @@ void WebExtensionManager::writeStorage(const QString &extensionId, const QString
 void WebExtensionManager::handleBridgeMessage(const QString &extensionId, WPEWebPage *page,
                                               bool mainWorld, const QString &json)
 {
+    // A main-world message is only legitimate from the extension's own page.
+    // Web content can reach the handler too, so the sender's document is
+    // checked here rather than trusted. (page == nullptr is the background.)
+    if (mainWorld && page && !isExtensionPage(extensionId, page)) {
+        qWarning() << "[WEBEXT] dropped a bridge message for" << extensionId
+                   << "from a non-extension page";
+        return;
+    }
     const QJsonObject payload = QJsonDocument::fromJson(json.toUtf8()).object();
     dispatchApiCall(extensionId, ExtContext{ page, mainWorld },
                     payload.value(QStringLiteral("seq")).toInt(),
