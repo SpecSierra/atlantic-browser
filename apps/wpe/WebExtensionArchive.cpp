@@ -41,6 +41,10 @@ const quint32 kEndOfCentralDirectory = 0x06054b50; // PK\5\6
 const quint32 kCentralFileHeader      = 0x02014b50; // PK\1\2
 const quint32 kLocalFileHeader        = 0x04034b50; // PK\3\4
 const quint32 kZip64Sentinel          = 0xFFFFFFFF;
+// Extensions are small; these bound memory and disk use for a hostile package.
+const quint64 kMaxEntrySize   = 64ull * 1024 * 1024;
+const quint64 kMaxTotalSize   = 256ull * 1024 * 1024;
+const qint64  kMaxArchiveSize = 128ll * 1024 * 1024;
 
 // The EOCD is last, but a variable-length comment may follow it, so scan back.
 int findEndOfCentralDirectory(const QByteArray &data)
@@ -72,7 +76,18 @@ bool isSafeEntryName(const QString &name)
 
 bool inflateRaw(const QByteArray &input, quint64 expectedSize, QByteArray *output, QString *error)
 {
+    // expectedSize comes from the (untrusted) central directory. Never let it
+    // narrow: int(expectedSize) went negative for 2-4 GiB, QByteArray clamped
+    // that to an empty buffer, and zlib was still told it could write 4 GiB.
+    if (expectedSize > kMaxEntrySize) {
+        *error = QStringLiteral("entry is too large");
+        return false;
+    }
     output->resize(int(expectedSize));
+    if (output->size() != int(expectedSize)) {
+        *error = QStringLiteral("out of memory");
+        return false;
+    }
     if (expectedSize == 0)
         return true;
 
@@ -116,6 +131,9 @@ bool WebExtensionArchive::extract(const QString &archivePath, const QString &des
     if (!archive.open(QIODevice::ReadOnly))
         return fail(QStringLiteral("cannot open %1: %2")
                         .arg(QFileInfo(archivePath).fileName(), archive.errorString()));
+    if (archive.size() > kMaxArchiveSize)
+        return fail(QStringLiteral("%1 is too large to be an extension package")
+                        .arg(QFileInfo(archivePath).fileName()));
     const QByteArray data = archive.readAll();
     archive.close();
 
@@ -154,6 +172,7 @@ bool WebExtensionArchive::extract(const QString &archivePath, const QString &des
 
     qint64 cursor = qint64(directoryOffset) + delta;
     int extracted = 0;
+    quint64 totalSize = 0;
 
     for (int i = 0; i < entryCount; ++i) {
         if (cursor + 46 > data.size() || readU32(data, int(cursor)) != kCentralFileHeader)
@@ -215,6 +234,10 @@ bool WebExtensionArchive::extract(const QString &archivePath, const QString &des
         // Sizes and offsets come from the central directory; the local header is
         // read only to find where its variable-length fields end, because a
         // streamed entry's copies of them are all zero.
+        totalSize += uncompressedSize;
+        if (uncompressedSize > kMaxEntrySize || totalSize > kMaxTotalSize)
+            return fail(QStringLiteral("the package is too large when unpacked"));
+
         const qint64 local = qint64(localOffset) + delta;
         if (local < 0 || local + 30 > data.size()
             || readU32(data, int(local)) != kLocalFileHeader) {

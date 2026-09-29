@@ -485,6 +485,10 @@ void WebExtensionStore::finishDownload(const QString &slug, const QString &expec
         return;
     }
 
+    if (reply->size() > 128 * 1024 * 1024) {
+        fail(tr("Could not download %1: the package is too large.").arg(label));
+        return;
+    }
     const QByteArray payload = reply->readAll();
     if (payload.isEmpty()) {
         fail(tr("Could not download %1: the package was empty.").arg(label));
