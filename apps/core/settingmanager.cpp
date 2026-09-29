@@ -6,6 +6,7 @@
 #include "settingmanager.h"
 #include "dbmanager.h"
 #include "faviconmanager.h"
+#include "../browser/settings/credentialstore.h"
 #include "../wpe/AdBlockEngine.h"
 #include "../wpe/WPEWebPage.h"
 
@@ -124,6 +125,7 @@ void SettingManager::clearCookiesAndSiteData()
 
 void SettingManager::clearPasswords()
 {
+    CredentialStore::instance()->wipe();
     FaviconManager::instance()->clear("logins");
 }
 

@@ -78,6 +78,10 @@ public:
     // Close the handle and drop the key from memory.
     void lock();
 
+    // Deletes the vault file (locking first). Irreversible; used by "Clear
+    // browsing data -> Saved passwords".
+    bool wipe();
+
     // All data accessors return empty / -1 / false while locked.
     QList<QPair<int, QVariantMap>> all();
     int insert(const QVariantMap &fields);

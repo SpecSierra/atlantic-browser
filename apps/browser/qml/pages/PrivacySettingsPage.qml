@@ -106,9 +106,8 @@ Page {
 
                     //% "Saved passwords"
                     text: qsTrId("settings_browser-la-clear_passwords")
-                    // Hidden: no password manager in the WPE port yet, so
-                    // there is nothing to clear.
-                    visible: false
+                    // Deletes the password vault (irreversible), so it is
+                    // never pre-checked.
                     checked: false
                 }
 

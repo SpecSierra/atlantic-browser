@@ -379,6 +379,18 @@ void CredentialStore::lock()
     }
 }
 
+bool CredentialStore::wipe()
+{
+    lock();
+    const QString path = databasePath();
+    if (path.isNull())
+        return false;
+    const bool ok = !QFile::exists(path) || QFile::remove(path);
+    setVaultUnreadable(false);
+    emit lockedChanged();
+    return ok;
+}
+
 QList<QPair<int, QVariantMap>> CredentialStore::all()
 {
     QList<QPair<int, QVariantMap>> out;
