@@ -13,6 +13,8 @@
 // Heuristic: does the entered text look like a URL (vs. a search query)?
 function isUrl(text) {
     text = text.trim();
+    // A URL never contains whitespace: "node.js tutorial" is a search.
+    if (/\s/.test(text)) return false;
     if (text.indexOf("://") !== -1) return true;
     if (text.indexOf("about:") === 0) return true;
     if (/^[a-zA-Z0-9\-]+\.[a-zA-Z]{2,}/.test(text)) return true;
