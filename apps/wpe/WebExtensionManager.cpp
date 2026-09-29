@@ -838,6 +838,13 @@ void WebExtensionManager::handleSchemeRequest(WebKitURISchemeRequest *request, g
     webkit_uri_scheme_response_set_status(response, 200, "OK");
 
     SoupMessageHeaders *headers = soup_message_headers_new(SOUP_MESSAGE_HEADERS_RESPONSE);
+    // set_http_headers() replaces the header set the loader sees, and on 2.54 the
+    // type given to set_content_type() is not carried over: a fetch() of an
+    // extension script came back with no Content-Type at all, and a module
+    // import (LanguageTool's loader: import(runtime.getURL("/content.js")))
+    // fails its strict JavaScript-MIME check with "Importing a module script
+    // failed". So state the type in the headers too.
+    soup_message_headers_append(headers, "Content-Type", mimeType.constData());
     soup_message_headers_append(headers, "Access-Control-Allow-Origin", "*");
     // Only what a resource fetch needs; extension resources are read-only.
     soup_message_headers_append(headers, "Access-Control-Allow-Methods", "GET");
