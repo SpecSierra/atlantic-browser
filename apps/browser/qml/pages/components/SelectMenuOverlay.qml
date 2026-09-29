@@ -14,7 +14,13 @@ Item {
 
     visible: webView && webView.contentItem !== null && webView.contentItem.selectMenuActive
     z: 1000
-    anchors.fill: webView
+    // webView sits inside BrowserPage's webViewFrame (notch crop), so it is not a
+    // sibling and `anchors.fill: webView` would silently leave this 0x0. Follow
+    // the frame's geometry instead.
+    x: webView ? webView.parent.x : 0
+    y: webView ? webView.parent.y : 0
+    width: webView ? webView.parent.width : 0
+    height: webView ? webView.parent.height : 0
 
     function dismiss() {
         if (webView.contentItem) webView.contentItem.closeSelectMenu()
