@@ -121,7 +121,9 @@ bool BrowserService::callerMatchesService(const QString &serviceName) const
 
     // Test this against pid of serviceName which works also inside
     // sandbox. If that matches, then the caller is serviceName.
-    if (callerServicePid == connection().interface()->servicePid(serviceName).value()) {
+    // Fail closed: an unresolved service pid (0 / error) must never match.
+    const QDBusReply<uint> servicePid = connection().interface()->servicePid(serviceName);
+    if (servicePid.isValid() && servicePid.value() != 0 && callerServicePid == servicePid.value()) {
         return true;
     }
 
