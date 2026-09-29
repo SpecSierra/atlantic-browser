@@ -243,6 +243,13 @@ bool WebExtension::loadFromDirectory(const QString &dir, QString *error)
     m_homepageUrl = manifest.value(QStringLiteral("homepage_url")).toString();
     m_icons = manifest.value(QStringLiteral("icons")).toObject();
     m_id = deriveId(manifest, m_name);
+    // The id names a directory (extensions/<id>, extension-data/<id>) that is
+    // later removed recursively, so it must be a plain single path component.
+    // slugify() keeps dots, which let a gecko id of ".." resolve to the
+    // browser's whole data directory.
+    static const QRegularExpression kSafeId(QStringLiteral("^[a-z0-9][a-z0-9._-]*$"));
+    if (!kSafeId.match(m_id).hasMatch() || m_id.contains(QLatin1String("..")))
+        return fail(QStringLiteral("the extension id \"%1\" is not usable").arg(m_id));
 
     // MV2 lumps host patterns into "permissions"; MV3 splits them out. Keep the
     // two lists separate either way so the UI can show API permissions apart

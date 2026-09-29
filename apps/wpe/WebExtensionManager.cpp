@@ -459,6 +459,13 @@ bool WebExtensionManager::install(const QString &path)
     }
 
     const QString target = QDir(extensionsDirectory()).filePath(probe.id());
+    // Belt and braces next to WebExtension's id check: the target must be a
+    // direct child of the extensions directory before anything is deleted.
+    if (QFileInfo(target).absoluteDir().absolutePath()
+            != QDir(extensionsDirectory()).absolutePath()) {
+        setLastError(QStringLiteral("Refusing to install %1: unsafe extension id").arg(probe.name()));
+        return false;
+    }
     if (QFileInfo::exists(target) && !removeTree(target)) {
         setLastError(QStringLiteral("Cannot replace the existing copy of %1").arg(probe.name()));
         return false;
@@ -493,7 +500,9 @@ bool WebExtensionManager::uninstall(const QString &extensionId)
         setLastError(QStringLiteral("Removed %1 from the list, but its files are still on disk")
                          .arg(extensionId));
     }
-    removeTree(QDir(extensionDataDirectory()).filePath(extensionId));
+    if (QFileInfo(QDir(extensionDataDirectory()).filePath(extensionId)).absoluteDir().absolutePath()
+            == QDir(extensionDataDirectory()).absolutePath())
+        removeTree(QDir(extensionDataDirectory()).filePath(extensionId));
     for (auto it = m_storageCache.begin(); it != m_storageCache.end();) {
         if (it.key().startsWith(extensionId + QLatin1Char('/')))
             it = m_storageCache.erase(it);
