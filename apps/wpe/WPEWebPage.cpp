@@ -4079,6 +4079,7 @@ void WPEWebPage::inputMethodEvent(QInputMethodEvent *event)
                           << "lastPreedit=" << m_lastPreeditText;
 
     bool handled = false;
+    bool replacementConsumed = false;
     const QString committed = event->commitString();
     const QString preedit = event->preeditString();
     const bool committedIsNewlineOnly = !committed.isEmpty()
@@ -4106,7 +4107,18 @@ void WPEWebPage::inputMethodEvent(QInputMethodEvent *event)
             (nowMs - m_lastSoftKeyboardTextTimeMs < 200);
 
         if (!duplicateOfRecentSoftKey) {
-            const int replaceBefore = m_lastPreeditText.size();
+            int replaceBefore = m_lastPreeditText.size();
+            // The keyboard can commit a word together with the punctuation that
+            // ended it as one "replace the N characters before the caret" event
+            // (typing "https" then ":" arrives as commit "https:" replacing 5).
+            // Those N characters are already in the field as literal text, so
+            // the commit itself must remove them; the generic replacement
+            // handling below would otherwise delete them a second time.
+            if (event->replacementLength() > 0
+                && event->replacementStart() + event->replacementLength() == 0) {
+                replaceBefore = qMax(replaceBefore, event->replacementLength());
+                replacementConsumed = true;
+            }
             if (m_subframeEditableFocus) {
                 // JS dispatch can't reach a cross-origin subframe; type natively.
                 sendNativeTextViaKeys(committed, replaceBefore);
@@ -4137,7 +4149,7 @@ void WPEWebPage::inputMethodEvent(QInputMethodEvent *event)
         m_lastPreeditText.clear();
     }
 
-    const int deleteCount = event->replacementLength();
+    const int deleteCount = replacementConsumed ? 0 : event->replacementLength();
     if (deleteCount > 0) {
         const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
         const bool duplicateOfRecentSoftBackspace =
