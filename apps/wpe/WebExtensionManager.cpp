@@ -1236,6 +1236,13 @@ void WebExtensionManager::broadcastEvent(const QString &name, const QJsonArray &
 
 // --- storage ----------------------------------------------------------------
 
+// The area is a path component; only the four real storage areas may name one.
+static bool isKnownStorageArea(const QString &area)
+{
+    return area == QLatin1String("local") || area == QLatin1String("sync")
+        || area == QLatin1String("session") || area == QLatin1String("managed");
+}
+
 QString WebExtensionManager::storagePath(const QString &extensionId, const QString &area) const
 {
     return QStringLiteral("%1/%2/storage-%3.json")
@@ -1326,6 +1333,10 @@ void WebExtensionManager::dispatchApiCall(const QString &extensionId, const ExtC
     // --- storage ---
     if (api.startsWith(QLatin1String("storage."))) {
         const QString area = arg(0).toString();
+        if (!isKnownStorageArea(area)) {
+            err(QStringLiteral("unknown storage area"));
+            return;
+        }
         QJsonObject data = readStorage(extensionId, area);
 
         if (api == QLatin1String("storage.get")) {
