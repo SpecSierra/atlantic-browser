@@ -17,6 +17,44 @@
 #include <QUrl>
 #include <QDir>
 #include <QFile>
+#include <QHostAddress>
+#include <QImageReader>
+
+namespace {
+
+// The page decides which icon URL is fetched, and it is fetched from the UI
+// process (outside the ad blocker and the web content sandbox). Keep it to
+// public web hosts: no loopback, link-local or private-range targets.
+bool isPublicWebUrl(const QUrl &url)
+{
+    if (url.scheme() != QLatin1String("http") && url.scheme() != QLatin1String("https"))
+        return false;
+    const QString host = url.host().toLower();
+    if (host.isEmpty() || host == QLatin1String("localhost") || host.endsWith(QLatin1String(".localhost"))
+            || host.endsWith(QLatin1String(".local")))
+        return false;
+    QHostAddress address;
+    if (address.setAddress(host)) {
+        if (address.isLoopback() || address.isNull())
+            return false;
+        if (address.protocol() == QAbstractSocket::IPv4Protocol) {
+            const quint32 ip = address.toIPv4Address();
+            if ((ip >> 24) == 10 || (ip >> 24) == 127 || (ip >> 16) == 0xC0A8
+                    || (ip >> 20) == 0xAC1 || (ip >> 16) == 0xA9FE || (ip >> 24) == 0)
+                return false;
+        } else {
+            const Q_IPV6ADDR v6 = address.toIPv6Address();
+            if ((v6[0] & 0xfe) == 0xfc || (v6[0] == 0xfe && (v6[1] & 0xc0) == 0x80))
+                return false;
+        }
+    }
+    return true;
+}
+
+const qint64 kMaxIconBytes = 512 * 1024;
+const int kMaxIconDimension = 1024;
+
+} // namespace
 
 DataFetcher::DataFetcher(QObject *parent)
     : QObject(parent)
@@ -50,6 +88,12 @@ void DataFetcher::fetch(const QString &url)
         emit dataChanged();
     } else {
         m_networkData.clear();
+        if (m_type == Favicon && !isPublicWebUrl(m_url)) {
+            m_data.clear();
+            updateStatus(Error);
+            emit dataChanged();
+            return;
+        }
         QNetworkRequest request(m_url);
         if (m_type == Favicon) {
             // Some CDNs 403 icon requests without a Referer, and a few serve
@@ -58,6 +102,14 @@ void DataFetcher::fetch(const QString &url)
             request.setAttribute(QNetworkRequest::FollowRedirectsAttribute, true);
         }
         QNetworkReply *reply = m_networkAccessManager.get(request);
+        if (m_type == Favicon || m_type == Icon) {
+            // Icons are small; stop a hostile server from streaming us gigabytes.
+            connect(reply, &QNetworkReply::downloadProgress, reply,
+                    [reply](qint64 received, qint64) {
+                if (received > kMaxIconBytes)
+                    reply->abort();
+            });
+        }
         connect(reply, &QNetworkReply::finished, this, &DataFetcher::dataReady);
         // qOverload(T functionPointer) would be handy to resolve right error method but it is introduced only
         // in Qt5.7. QNetWorkReply has signal error(QNetworkReply::NetworkError) and method error().
@@ -121,7 +173,16 @@ void DataFetcher::saveAsImage()
         m_data = defaultIcon();
     } else {
         QImage image;
-        image.loadFromData(m_networkData);
+        if (m_networkData.size() <= kMaxIconBytes) {
+            QBuffer probe(&m_networkData);
+            probe.open(QIODevice::ReadOnly);
+            QImageReader reader(&probe);
+            const QSize declared = reader.size();
+            if (declared.isValid() ? (declared.width() <= kMaxIconDimension
+                                      && declared.height() <= kMaxIconDimension)
+                                   : true)
+                image = reader.read();
+        }
         if (image.width() < m_minimumIconSize || image.height() < m_minimumIconSize) {
             m_data = defaultIcon();
         } else {
@@ -148,10 +209,22 @@ void DataFetcher::saveAsFavicon()
     m_data.clear();
 
     QImage image;
-    if (!m_networkData.isEmpty()) {
+    if (!m_networkData.isEmpty() && m_networkData.size() <= kMaxIconBytes) {
         // Let Qt sniff the format: the extension lies often enough (.ico files
         // serving PNG, .png serving SVG) that trusting it costs real icons.
-        image.loadFromData(m_networkData);
+        // Ask for the declared size first: a tiny file can claim tens of
+        // thousands of pixels per side and would be decoded into gigabytes.
+        QBuffer probe(&m_networkData);
+        probe.open(QIODevice::ReadOnly);
+        QImageReader reader(&probe);
+        const QSize declared = reader.size();
+        // Formats whose handler cannot report a size up front (.ico) store
+        // raw pixels, so their file size already bounds the decode.
+        if (declared.isValid() ? (declared.width() <= kMaxIconDimension
+                                  && declared.height() <= kMaxIconDimension)
+                               : true) {
+            image = reader.read();
+        }
     }
 
     if (image.isNull()) {
