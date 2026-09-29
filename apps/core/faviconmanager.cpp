@@ -266,6 +266,7 @@ void FaviconManager::fetchCandidate(const QString &type, const QString &pageUrl,
 
     DataFetcher *dataFetcher = new DataFetcher(this);
     dataFetcher->setType(DataFetcher::Favicon);
+    dataFetcher->setPageUrl(QUrl(pageUrl));
 
     std::shared_ptr<QMetaObject::Connection> dataConn = std::make_shared<QMetaObject::Connection>();
     *dataConn = connect(dataFetcher, &DataFetcher::dataChanged, this,

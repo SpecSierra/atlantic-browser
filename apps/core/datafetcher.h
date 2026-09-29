@@ -42,6 +42,9 @@ public:
     bool hasAcceptedTouchIcon();
     Type type() const;
     void setType(Type type);
+    // The page an icon belongs to. A favicon on a private/LAN address is only
+    // fetched when it is served by that same host (you are already browsing it).
+    void setPageUrl(const QUrl &pageUrl) { m_pageUrl = pageUrl; }
 
 signals:
     void statusChanged();
@@ -68,6 +71,7 @@ private:
     bool m_hasAcceptedTouchIcon;
     QByteArray m_networkData;
     QUrl m_url;
+    QUrl m_pageUrl;
     Type m_type;
 };
 

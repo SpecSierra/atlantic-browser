@@ -88,7 +88,10 @@ void DataFetcher::fetch(const QString &url)
         emit dataChanged();
     } else {
         m_networkData.clear();
-        if (m_type == Favicon && !isPublicWebUrl(m_url)) {
+        if (m_type == Favicon && !isPublicWebUrl(m_url)
+                && !(m_url.scheme().startsWith(QLatin1String("http"))
+                     && !m_pageUrl.host().isEmpty()
+                     && m_url.host().compare(m_pageUrl.host(), Qt::CaseInsensitive) == 0)) {
             m_data.clear();
             updateStatus(Error);
             emit dataChanged();
