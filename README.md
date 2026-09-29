@@ -101,8 +101,10 @@ extension code. Design record, limits and the device-verification plan:
 `webkit_user_script_new_for_world()` into their own world, `atlantic-ext-<id>`;
 Chrome match patterns pass to WebKit unchanged except `<all_urls>`, which is
 expanded. Extension pages (popup, options) are ordinary tabs on
-`atlantic-extension://<id>/…` and get a *second* handler in the default world,
-allow-listed to their own origin. The scheme is registered secure and
+`atlantic-extension://<id>/…` and get a *second* handler in the default world.
+WebKit's glib API has no origin allow-list for script-message handlers, so that
+handler's name carries a per-run random secret and `handleBridgeMessage` drops
+any message whose page is not an extension page. The scheme is registered secure and
 CORS-enabled, with a path-traversal guard and `web_accessible_resources`
 enforced in the handler.
 
@@ -208,7 +210,7 @@ SQLite via `DBManager` (singleton) and `DBWorker` (dedicated `QThread`).
 | `PersistentTabModel` | SQLite — persisted tabs |
 | `PrivateTabModel` | in-memory only |
 | `DeclarativeHistoryModel` | SQLite — history (skipped in private mode) |
-| `DeclarativeBookmarkModel` | SQLite — bookmarks |
+| `DeclarativeBookmarkModel` | `bookmarks.json` (atomic writes) — bookmarks |
 | `DeclarativeLoginModel` | the password vault — `CredentialStore` over SQLCipher, unlocked by a master password |
 | `SearchEngineModel` | `data/searchEngines/` |
 
