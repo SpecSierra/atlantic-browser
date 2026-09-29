@@ -635,6 +635,12 @@ static void configureGpuModeFromCapabilities()
         //    full-res (55.1 fps / p95 21.5 ms vs 53.4 / 32.5 with it). The
         //    runtime env pre-sets 0.3 on every launch path, so this overrides
         //    it; ATLANTIC_GPU_KEEP_LOWRES=1 keeps it.
+        //  - WEBKIT_COMPOSITOR_GL_FINISH=1: glFinish after each composite. The
+        //    frame is handed to the Qt process as an EGLImage with no GPU
+        //    fence, and with tile raster sharing the GPU queue the composite
+        //    finishes late, so Qt sampled a half-rendered frame (bottom of the
+        //    screen lagging while fast-scrolling YouTube). Device-verified
+        //    cured; ATLANTIC_ACK_ON_SAMPLE=0 alone did not. fps cost unmeasured.
         // Together: 55.1 fps vs 45.4 for CPU painting + low-res. CPU painting
         // stays one env away: WEBKIT_SKIA_ENABLE_CPU_RENDERING=1 or
         // ATLANTIC_GPU_CONSERVATIVE=1.
@@ -645,6 +651,8 @@ static void configureGpuModeFromCapabilities()
             qputenv("WEBKIT_TILE_GPU_READBACK_SYNC", QByteArrayLiteral("1"));
         if (qgetenv("ATLANTIC_GPU_KEEP_LOWRES") != QByteArrayLiteral("1"))
             qputenv("WEBKIT_LOWRES_TILE_SCALE", QByteArrayLiteral("1.0"));
+        if (!qEnvironmentVariableIsSet("WEBKIT_COMPOSITOR_GL_FINISH"))
+            qputenv("WEBKIT_COMPOSITOR_GL_FINISH", QByteArrayLiteral("1"));
         paintingMode = QByteArrayLiteral("gpu-mali(auto)");
     } else if (conservativeEffective) {
         const bool forceGlFinish = qEnvironmentVariableIsSet("ATLANTIC_GPU_FORCE_GLFINISH")
