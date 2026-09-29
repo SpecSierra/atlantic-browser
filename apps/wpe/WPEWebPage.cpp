@@ -849,6 +849,16 @@ gboolean onDecidePolicy(WebKitWebView* webView, WebKitPolicyDecision* decision, 
         const gchar* mainUri = webkit_web_view_get_uri(webView);
         const QUrl mainUrl(mainUri ? QString::fromUtf8(mainUri) : QString());
         const QUrl dest(QString::fromUtf8(uri));
+        // Only web pages are routed into the view. A javascript: URL loaded
+        // through the API runs in the *main frame's* origin even when the
+        // click came from a cross-origin iframe, and data:/file: navigations
+        // would put script-free-of-origin content in the top level.
+        const QString destScheme = dest.scheme().toLower();
+        if (destScheme != QLatin1String("http") && destScheme != QLatin1String("https")) {
+            qInfo() << "[ADBLOCK] popup blocked (scheme" << destScheme << "):" << uri;
+            webkit_policy_decision_ignore(decision);
+            return TRUE;
+        }
         if (AdBlockEngine::isEnabled() && !AdBlockEngine::isAllowlistedUrl(mainUrl)) {
             // A window.open with no user gesture behind it is a scripted
             // popup; nothing legitimate opens windows uninvited.
