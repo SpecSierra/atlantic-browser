@@ -247,7 +247,7 @@ bool WebExtension::loadFromDirectory(const QString &dir, QString *error)
     // later removed recursively, so it must be a plain single path component.
     // slugify() keeps dots, which let a gecko id of ".." resolve to the
     // browser's whole data directory.
-    static const QRegularExpression kSafeId(QStringLiteral("^[a-z0-9][a-z0-9._-]*$"));
+    static const QRegularExpression kSafeId(QStringLiteral("^[a-z0-9_][a-z0-9._-]*$"));
     if (!kSafeId.match(m_id).hasMatch() || m_id.contains(QLatin1String("..")))
         return fail(QStringLiteral("the extension id \"%1\" is not usable").arg(m_id));
 
