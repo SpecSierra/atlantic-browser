@@ -1095,6 +1095,77 @@ static bool s_cookieBannerBlocking = true;
 static const char* kAutoconsentScriptKey = "atlantic-autoconsent-script";
 static const char* kScrollUnlockScriptKey = "atlantic-cookie-scroll-unlock-script";
 
+// The shipped bundle is autoconsent.standalone.js, DuckDuckGo's build for
+// manual testing. It initializes itself from a hard-coded config that turns on
+// verbose console logging and "heuristic detection", and both cost real
+// WebProcess main-thread time in every frame of every page:
+//
+//  - Heuristic detection is telemetry. detectHeuristics() only records which
+//    cookie-banner phrases the page contains into the state autoconsent
+//    reports, and nothing here reads those reports. But every findCmp()
+//    attempt runs it -- up to detectRetries + 1 = 21 attempts per document,
+//    ~500 ms apart for ~10 s after DOMContentLoaded whenever no CMP is found,
+//    in the top frame and in every iframe. Each call reads
+//    document.documentElement.innerText (a forced style + layout flush, then
+//    the whole rendered text serialized) and runs ~140 backtracking regexes
+//    like /et.{0,100}nos.{0,100}partenaires/gi over up to 100 KB of it.
+//  - The logs are thousands of console messages per page load; with developer
+//    extras on, the inspector's console buffer keeps each one and its
+//    arguments (rule-name arrays, DOM nodes) alive.
+//
+// Both are switched off in that config block before the script is injected.
+// Rule-based CMP handling, prehide, and the popup heuristic that actually
+// dismisses unknown banners (heuristicMode) are unchanged. A bundle without the
+// block is injected as-is. ATLANTIC_AUTOCONSENT_DEBUG=1 keeps the bundle's own
+// config (verbose logs in the inspector console, for debugging a CMP).
+static void applyLeanAutoconsentConfig(QByteArray& source)
+{
+    if (envVarEnabled(qgetenv("ATLANTIC_AUTOCONSENT_DEBUG"))) {
+        qInfo() << "[COOKIE-BANNER] ATLANTIC_AUTOCONSENT_DEBUG: keeping the bundle's own config";
+        return;
+    }
+
+    static const QRegularExpression anchor(
+        QStringLiteral("const\\s+config\\s*=\\s*\\{\\s*isMainWorld"));
+    // Latin-1 maps each byte to one QChar, so indices below are byte offsets
+    // and everything outside the (ASCII) config block is spliced back verbatim.
+    const QString text = QString::fromLatin1(source);
+    const QRegularExpressionMatch m = anchor.match(text);
+    if (!m.hasMatch()) {
+        qWarning() << "[COOKIE-BANNER] standalone config block not found; bundle config left as shipped";
+        return;
+    }
+
+    // The object literal runs from its opening brace to the matching close.
+    const int open = text.indexOf(QLatin1Char('{'), m.capturedStart());
+    int depth = 0;
+    int close = -1;
+    for (int i = open; i < text.size(); ++i) {
+        if (text.at(i) == QLatin1Char('{')) {
+            ++depth;
+        } else if (text.at(i) == QLatin1Char('}') && --depth == 0) {
+            close = i;
+            break;
+        }
+    }
+    if (open < 0 || close < 0) {
+        qWarning() << "[COOKIE-BANNER] standalone config block unterminated; bundle config left as shipped";
+        return;
+    }
+
+    QString block = text.mid(open, close - open + 1);
+    const QString original = block;
+    for (const char* key : { "enableHeuristicDetection", "lifecycle", "rulesteps", "waits" }) {
+        block.replace(QRegularExpression(QStringLiteral("\\b%1\\s*:\\s*true\\b").arg(QLatin1String(key))),
+                      QStringLiteral("%1: false").arg(QLatin1String(key)));
+    }
+    if (block == original)
+        return;
+
+    source = source.left(open) + block.toLatin1() + source.mid(close + 1);
+    qInfo() << "[COOKIE-BANNER] autoconsent: heuristic telemetry and debug logging off";
+}
+
 static const QByteArray& autoconsentScriptSource()
 {
     static const QByteArray source = [] {
@@ -1103,10 +1174,12 @@ static const QByteArray& autoconsentScriptSource()
         QByteArray data;
         if (f.open(QIODevice::ReadOnly))
             data = f.readAll();
-        if (data.isEmpty())
+        if (data.isEmpty()) {
             qWarning() << "[COOKIE-BANNER] autoconsent.js missing or empty at" << f.fileName();
-        else
+        } else {
             qInfo() << "[COOKIE-BANNER] autoconsent loaded," << data.size() / 1024 << "KB";
+            applyLeanAutoconsentConfig(data);
+        }
         return data;
     }();
     return source;
