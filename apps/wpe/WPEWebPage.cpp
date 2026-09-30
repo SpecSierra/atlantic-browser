@@ -2567,9 +2567,19 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                     const gchar* uri = webkit_web_view_get_uri(view);
                     if (!uri)
                         return;
+                    QString lazyScript;
                     AdBlockEngine::instance().installCosmetics(
                         webkit_web_view_get_user_content_manager(view),
-                        QUrl(QString::fromUtf8(uri)));
+                        QUrl(QString::fromUtf8(uri)), &lazyScript);
+                    // The lazy attribute-hide matcher was just added as a
+                    // document-start user script, which does not run in the
+                    // document that is already loading: run it here too
+                    // (idempotent — it guards on window.__atlLazyHides).
+                    if (!lazyScript.isEmpty()) {
+                        const QByteArray js = lazyScript.toUtf8();
+                        webkit_web_view_evaluate_javascript(view, js.constData(), -1,
+                                                            nullptr, nullptr, nullptr, nullptr, nullptr);
+                    }
                 }),
                 nullptr);
 
@@ -5452,10 +5462,15 @@ void WPEWebPage::applyAdBlockEnabledGlobally(bool enabled)
                 AdBlockEngine::resetCosmetics(ucm);
                 // Also drop the generic-hide rules already injected in the page.
                 page->runJavaScript(QStringLiteral(
-                    "(function(){var s=document.getElementById('__atl_adblock_gen_hide');"
-                    "if(s)s.parentNode.removeChild(s);})()"));
+                    "(function(){var ids=['__atl_adblock_gen_hide','__atl_adblock_lazy_hide'];"
+                    "for(var i=0;i<ids.length;i++){var s=document.getElementById(ids[i]);"
+                    "if(s)s.parentNode.removeChild(s);}"
+                    "var l=window.__atlLazyHides;if(l){l.off=true;delete window.__atlLazyHides;}})()"));
             } else if (const gchar* uri = webkit_web_view_get_uri(wv)) {
-                AdBlockEngine::instance().installCosmetics(ucm, QUrl(QString::fromUtf8(uri)));
+                QString lazyScript;
+                AdBlockEngine::instance().installCosmetics(ucm, QUrl(QString::fromUtf8(uri)), &lazyScript);
+                if (!lazyScript.isEmpty())
+                    page->runJavaScript(lazyScript);
             }
         }
         emit page->adBlockEnabledChanged();

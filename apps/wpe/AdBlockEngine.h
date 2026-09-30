@@ -60,7 +60,12 @@ public:
     // a document-start user style sheet on the view's content manager (once
     // per host per manager). Call at load-committed so the CSS is present
     // before the document first paints — no ad flash / layout shift.
-    void installCosmetics(WebKitUserContentManager* ucm, const QUrl& url);
+    // immediateScript (optional): receives the lazy attribute-hide matcher when it
+    // was newly installed for this host. A user script added at load-committed
+    // does not run in the document that is already loading, so the caller must
+    // evaluate this in the current page as well.
+    void installCosmetics(WebKitUserContentManager* ucm, const QUrl& url,
+                          QString* immediateScript = nullptr);
     // Remove all installed cosmetic sheets (adblock toggled off).
     static void resetCosmetics(WebKitUserContentManager* ucm);
 

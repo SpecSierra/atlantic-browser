@@ -8,6 +8,10 @@
 
 #include "AdBlockEngine.h"
 #include "WPEWebPage.h"
+#include "WPEUserScripts.h"
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QRegularExpression>
 #include <QFile>
 #include <QFileInfo>
 #include <QDebug>
@@ -169,7 +173,7 @@ static QVector<WebKitUserScript*>* installedScripts(WebKitUserContentManager* uc
     return scripts;
 }
 
-void AdBlockEngine::installCosmetics(WebKitUserContentManager* ucm, const QUrl& url)
+void AdBlockEngine::installCosmetics(WebKitUserContentManager* ucm, const QUrl& url, QString* immediateScript)
 {
     if (!m_engine || !s_enabled || !ucm || isAllowlistedUrl(url)) return;
 
@@ -185,6 +189,8 @@ void AdBlockEngine::installCosmetics(WebKitUserContentManager* ucm, const QUrl& 
 
     QString css;
     int ruleCount = 0;
+    QString lazyScript;
+    int lazyCount = 0;
     if (cr.hide_selectors && *cr.hide_selectors) {
         // One rule per selector: the list can contain uBO procedural selectors
         // (e.g. ":has-text(...)") that are NOT valid CSS. In a stylesheet an
@@ -193,11 +199,65 @@ void AdBlockEngine::installCosmetics(WebKitUserContentManager* ucm, const QUrl& 
         // (The Rust side newline-separates selectors for the same reason.)
         const QStringList sels =
             QString::fromUtf8(cr.hide_selectors).split(QLatin1Char('\n'), QString::SkipEmptyParts);
+
+        // Single-attribute selectors ([href^="x"], a[title="y"], ...) go to the
+        // lazy matcher instead of the static sheet (see kLazyAttrHidesTemplate).
+        // Anything more complex (compound, :not(), flags, escapes, empty value)
+        // stays static so its semantics are exactly the browser's own.
+        // ATLANTIC_LAZY_ATTR_HIDES=0 disables the split; below kLazyMinRules the
+        // sheet is small enough that the split buys nothing.
+        static const QRegularExpression attrRe(QStringLiteral(
+            "^(?:([a-zA-Z][a-zA-Z0-9-]*))?\\[\\s*([a-zA-Z_][\\w-]*)\\s*"
+            "(?:([*^$]?=)\\s*(?:\"([^\"\\\\]+)\"|'([^'\\\\]+)'|([^\\s\\]\"'\\\\]+))\\s*)?\\]$"));
+        static const bool lazyEnabled = qgetenv("ATLANTIC_LAZY_ATTR_HIDES") != "0";
+        constexpr int kLazyMinRules = 32;
+
+        QJsonArray lazyRules;
+        QStringList staticSels;
         for (const QString& s : sels) {
             const QString t = s.trimmed();
             if (t.isEmpty()) continue;
+            bool lazy = false;
+            if (lazyEnabled) {
+                const QRegularExpressionMatch m = attrRe.match(t);
+                if (m.hasMatch()) {
+                    const QString opText = m.captured(3);
+                    QString value = m.captured(4);
+                    if (value.isEmpty()) value = m.captured(5);
+                    if (value.isEmpty()) value = m.captured(6);
+                    const bool hasOp = !opText.isEmpty();
+                    if (!hasOp || !value.isEmpty()) {
+                        int op = 0;
+                        if (opText == QLatin1String("="))       op = 1;
+                        else if (opText == QLatin1String("^=")) op = 2;
+                        else if (opText == QLatin1String("$=")) op = 3;
+                        else if (opText == QLatin1String("*=")) op = 4;
+                        lazyRules.append(QJsonArray{ m.captured(1).toLower(), m.captured(2).toLower(),
+                                                     op, hasOp ? value : QString(), t });
+                        lazy = true;
+                    }
+                }
+            }
+            if (!lazy) staticSels.append(t);
+        }
+        if (lazyRules.size() < kLazyMinRules) {
+            // Too few to matter: put everything back in the static sheet.
+            staticSels.clear();
+            for (const QString& s : sels) {
+                const QString t = s.trimmed();
+                if (!t.isEmpty()) staticSels.append(t);
+            }
+            lazyRules = QJsonArray();
+        }
+        for (const QString& t : staticSels) {
             css += t + QLatin1String("{display:none!important}\n");
             ++ruleCount;
+        }
+        if (!lazyRules.isEmpty() && qgetenv("ATLANTIC_NO_COSMETIC_SHEET") != "1") {
+            lazyCount = lazyRules.size();
+            lazyScript = QString::fromUtf8(WPEUserScripts::kLazyAttrHidesTemplate);
+            lazyScript.replace(QStringLiteral("/*RULES*/[]"),
+                               QString::fromUtf8(QJsonDocument(lazyRules).toJson(QJsonDocument::Compact)));
         }
     }
     // generated_css last: it is untrusted list content and a stray brace in it
@@ -230,7 +290,24 @@ void AdBlockEngine::installCosmetics(WebKitUserContentManager* ucm, const QUrl& 
             allowList, nullptr);
         webkit_user_content_manager_add_style_sheet(ucm, sheet);
         webkit_user_style_sheet_unref(sheet);
-        qInfo() << "[ADBLOCK] cosmetic sheet installed for" << host << "-" << ruleCount << "rules";
+        qInfo() << "[ADBLOCK] cosmetic sheet installed for" << host << "-" << ruleCount << "rules"
+                << "+" << lazyCount << "lazy attribute rules";
+    }
+
+    // Lazy attribute-hide matcher: document-start script for every later load of
+    // this host, plus (via immediateScript) the caller runs it in the document
+    // that is loading right now.
+    if (!lazyScript.isEmpty()) {
+        WebKitUserScript* lazy = webkit_user_script_new(
+            lazyScript.toUtf8().constData(),
+            WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+            WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+            allowList, nullptr);
+        webkit_user_content_manager_add_script(ucm, lazy);
+        installedScripts(ucm, true)->append(lazy);
+        if (immediateScript)
+            *immediateScript = lazyScript;
+        qInfo() << "[ADBLOCK] lazy attribute hides installed for" << host << "-" << lazyCount << "rules";
     }
 
     // ##+js(...) scriptlets as a document-start user script (they must run

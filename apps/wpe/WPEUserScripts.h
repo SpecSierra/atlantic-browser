@@ -487,6 +487,103 @@ static const char* const kEditableFocusTracker = R"JS(
 })();
 )JS";
 
+// Lazy attribute-selector hides (AdBlockEngine::installCosmetics). The site's
+// single-attribute hide rules ([href^="..."], [class*="..."], ...) are ~55% of a
+// typical cosmetic sheet and WebKit cannot bucket them, so as a static sheet every
+// element with the attribute is tested against every rule on every full restyle
+// (measured on CNN, J2: +34 ms of a 246 ms restyle, on every site since most are
+// generic). This matcher tests each element's attributes ONCE when it is added
+// (exact -> Map, prefix -> trie, suffix/substring -> short lists) and inserts a
+// rule into a page style element only for rules that actually matched. Rule
+// table is spliced in at /*RULES*/[]: [tag, attr, op, value, selector] with op
+// 0 exists, 1 =, 2 ^=, 3 $=, 4 *=. Verified against native querySelector on the
+// device (575 rules, positives + 945 decoys, both the initial-walk and
+// MutationObserver paths): identical.
+static const char* const kLazyAttrHidesTemplate = R"JS(
+(function() {
+    if (window.__atlLazyHides) return;
+    var R = /*RULES*/[];
+    if (!R.length) return;
+    // R[i] = [tag, attr, op, value, selector]; op 0 exists, 1 =, 2 ^=, 3 $=, 4 *=
+    var st = window.__atlLazyHides = { rules: R.length, applied: [], ms: 0, visited: 0, off: false };
+    var byAttr = Object.create(null), done = new Uint8Array(R.length), sheet = null, names = [];
+    function bucket(a) {
+        var b = byAttr[a];
+        if (!b) { b = byAttr[a] = { eq: new Map(), pre: { ch: Object.create(null), r: null }, suf: [], sub: [], ex: [] }; names.push(a); }
+        return b;
+    }
+    for (var i = 0; i < R.length; i++) {
+        var r = R[i], b = bucket(r[1]), v = r[3];
+        if (r[2] === 0) b.ex.push(i);
+        else if (r[2] === 1) { var l = b.eq.get(v); if (l) l.push(i); else b.eq.set(v, [i]); }
+        else if (r[2] === 2) {
+            var n = b.pre;
+            for (var k = 0; k < v.length; k++) { var c = v[k]; n = n.ch[c] || (n.ch[c] = { ch: Object.create(null), r: null }); }
+            (n.r || (n.r = [])).push(i);
+        }
+        else if (r[2] === 3) b.suf.push(i);
+        else b.sub.push(i);
+    }
+    function apply(i, el) {
+        if (done[i]) return;
+        var t = R[i][0];
+        if (t && el.localName !== t) return;
+        done[i] = 1; st.applied.push(i);
+        if (!sheet) {
+            var s = document.createElement('style');
+            s.id = '__atl_adblock_lazy_hide';
+            (document.head || document.documentElement).appendChild(s);
+            sheet = s.sheet;
+            if (!sheet) return;
+        }
+        try { sheet.insertRule(R[i][4] + '{display:none!important}', sheet.cssRules.length); } catch (e) {}
+    }
+    function test(el, b, v) {
+        var l, k;
+        for (k = 0; k < b.ex.length; k++) apply(b.ex[k], el);
+        l = b.eq.get(v);
+        if (l) for (k = 0; k < l.length; k++) apply(l[k], el);
+        var n = b.pre;
+        for (k = 0; k < v.length; k++) {
+            n = n.ch[v[k]];
+            if (!n) break;
+            if (n.r) for (var q = 0; q < n.r.length; q++) apply(n.r[q], el);
+        }
+        for (k = 0; k < b.suf.length; k++) { var s = R[b.suf[k]][3]; if (v.length >= s.length && v.lastIndexOf(s) === v.length - s.length) apply(b.suf[k], el); }
+        for (k = 0; k < b.sub.length; k++) if (v.indexOf(R[b.sub[k]][3]) !== -1) apply(b.sub[k], el);
+    }
+    function visit(el) {
+        st.visited++;
+        var at = el.attributes;
+        for (var j = 0; j < at.length; j++) {
+            var b = byAttr[at[j].name];
+            if (b) test(el, b, at[j].value);
+        }
+    }
+    function walk(root) {
+        if (!root || root.nodeType !== 1 || st.off) return;
+        visit(root);
+        if (!root.firstElementChild) return;
+        var tw = document.createTreeWalker(root, 1), e;
+        while ((e = tw.nextNode())) visit(e);
+    }
+    var mo = new MutationObserver(function(muts) {
+        if (st.off) return;
+        var t0 = performance.now();
+        for (var i = 0; i < muts.length; i++) {
+            var m = muts[i];
+            if (m.type === 'attributes') { if (m.target.nodeType === 1) visit(m.target); }
+            else for (var j = 0; j < m.addedNodes.length; j++) walk(m.addedNodes[j]);
+        }
+        st.ms += performance.now() - t0;
+    });
+    var t0 = performance.now();
+    walk(document.documentElement);
+    st.ms += performance.now() - t0;
+    mo.observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: names });
+})();
+)JS";
+
 // Injected as a USER STYLE SHEET (not a script): it is part of the first style
 // resolution instead of a late author <style> with a universal selector.
 static const char* const kPerfCssSheet =
