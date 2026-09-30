@@ -7,22 +7,46 @@
  */
 
 #include "AdBlockEngine.h"
+#include "AdBlockListUpdater.h"
 #include "WPEWebPage.h"
 #include "WPEUserScripts.h"
+#include <QElapsedTimer>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QMutexLocker>
 #include <QRegularExpression>
 #include <QFile>
 #include <QFileInfo>
 #include <QDebug>
+#include <QRunnable>
 #include <QSet>
 #include <QStandardPaths>
+#include <QThreadPool>
 #include <QTimer>
 #include <QUrl>
 #include <QVector>
 
 bool AdBlockEngine::s_enabled = true;
 QStringList AdBlockEngine::s_allowlist;
+
+namespace {
+
+const char kShippedListDir[] = "/usr/share/atlantic-browser";
+// Upper bound on a caller's wait for the initial load. The load takes a
+// fraction of a second; this only keeps a load that never finishes from
+// wedging the GUI thread.
+const unsigned long kLoadWaitMs = 5000;
+
+} // namespace
+
+// Qt 5.6 has no QRunnable::create(), hence a class; a friend so load() can
+// stay private.
+class AdBlockEngineLoader : public QRunnable
+{
+public:
+    AdBlockEngineLoader() { setAutoDelete(true); }
+    void run() override { AdBlockEngine::instance().load(); }
+};
 
 AdBlockEngine& AdBlockEngine::instance()
 {
@@ -32,31 +56,118 @@ AdBlockEngine& AdBlockEngine::instance()
 
 AdBlockEngine::~AdBlockEngine()
 {
-    if (m_engine) atlantic_adblock_destroy(m_engine);
+    {
+        // Never free the engine out from under a load that is still running.
+        QMutexLocker locker(&m_loadMutex);
+        if (m_loadStarted && !m_loadSettled)
+            m_loadDone.wait(&m_loadMutex, kLoadWaitMs);
+    }
+    if (m_ready.loadAcquire() && m_engine)
+        atlantic_adblock_destroy(m_engine);
 }
 
-bool AdBlockEngine::loadFromCache(const QString& path)
+void AdBlockEngine::startLoading()
+{
+    QMutexLocker locker(&m_loadMutex);
+    if (m_loadStarted)
+        return;
+    m_loadStarted = true;
+    QThreadPool::globalInstance()->start(new AdBlockEngineLoader);
+}
+
+void AdBlockEngine::load()
+{
+    QElapsedTimer timer;
+    timer.start();
+
+    // Prefer whichever of the shipped copy and the updater's downloaded copy
+    // carries the higher engine.version stamp (the WebProcess extension
+    // applies the same rule).
+    const QString shipped = QLatin1String(kShippedListDir);
+    QString dir = shipped;
+    const QString updated = AdBlockListUpdater::cacheDir();
+    if (QFileInfo::exists(updated + QStringLiteral("/engine.dat"))
+        && AdBlockListUpdater::versionIn(updated) > AdBlockListUpdater::versionIn(dir)) {
+        dir = updated;
+        qInfo() << "[ADBLOCK] using updated lists, version" << AdBlockListUpdater::versionIn(updated);
+    }
+    AtlanticAdblockEngine* engine = createFromCache(dir + QStringLiteral("/engine.dat"));
+    if (!engine && dir != shipped) {
+        // A downloaded engine that will not load must not take blocking down
+        // with it: fall back to the shipped copy (as the WebProcess extension
+        // does) and drop the bad stamp so the next start does not choose it
+        // again.
+        qWarning() << "[ADBLOCK] updated engine unusable; using the shipped copy";
+        QFile::remove(updated + QStringLiteral("/engine.version"));
+        dir = shipped;
+        engine = createFromCache(dir + QStringLiteral("/engine.dat"));
+    }
+    if (!engine) {
+        qWarning() << "[ADBLOCK] engine not available — blocking is off";
+    } else {
+        // Scriptlet resources live next to the engine cache; without them every
+        // ##+js(...) rule is a no-op. Loaded before publishing, so no caller can
+        // see the engine without them.
+        loadResources(engine, dir + QStringLiteral("/adblock-resources.json"));
+    }
+
+    {
+        QMutexLocker locker(&m_loadMutex);
+        m_engine = engine;
+        m_loadSettled = true;
+        m_ready.storeRelease(1);
+    }
+    m_loadDone.wakeAll();
+    qInfo() << "[ADBLOCK] engine" << (engine ? "ready" : "unavailable") << "after"
+            << timer.elapsed() << "ms, loaded off the GUI thread";
+}
+
+AtlanticAdblockEngine* AdBlockEngine::readyEngine()
+{
+    if (m_ready.loadAcquire())
+        return m_engine;
+
+    // Nothing may need the engine without a load in flight.
+    startLoading();
+
+    QElapsedTimer waited;
+    waited.start();
+    QMutexLocker locker(&m_loadMutex);
+    while (!m_loadSettled) {
+        const qint64 left = qint64(kLoadWaitMs) - waited.elapsed();
+        if (left <= 0 || !m_loadDone.wait(&m_loadMutex, static_cast<unsigned long>(left)))
+            break;
+    }
+    const bool settled = m_loadSettled;
+    locker.unlock();
+
+    qInfo() << "[ADBLOCK] waited" << waited.elapsed() << "ms for the engine"
+            << (settled ? "" : "-- gave up");
+    return settled ? m_engine : nullptr;
+}
+
+AtlanticAdblockEngine* AdBlockEngine::createFromCache(const QString& path)
 {
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly)) {
         qWarning() << "[ADBLOCK] engine cache not found:" << path;
-        return false;
+        return nullptr;
     }
     QByteArray data = f.readAll();
-    m_engine = atlantic_adblock_create_from_cache(
+    AtlanticAdblockEngine* engine = atlantic_adblock_create_from_cache(
         reinterpret_cast<const uint8_t*>(data.constData()),
         static_cast<size_t>(data.size()));
-    if (!m_engine) {
+    if (!engine) {
         qWarning() << "[ADBLOCK] failed to deserialize engine cache";
-        return false;
+        return nullptr;
     }
     qInfo() << "[ADBLOCK] engine loaded from" << (data.size() / 1024) << "KB cache";
-    return true;
+    return engine;
 }
 
-bool AdBlockEngine::loadResources(const QString& path)
+bool AdBlockEngine::loadResources(AtlanticAdblockEngine* engine, const QString& path)
 {
-    if (!m_engine) return false;
+    if (!engine) return false;
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly)) {
         qWarning() << "[ADBLOCK] scriptlet resources not found:" << path;
@@ -64,7 +175,7 @@ bool AdBlockEngine::loadResources(const QString& path)
     }
     QByteArray data = f.readAll();
     const bool ok = atlantic_adblock_use_resources_json(
-        m_engine,
+        engine,
         reinterpret_cast<const uint8_t*>(data.constData()),
         static_cast<size_t>(data.size()));
     if (ok)
@@ -76,12 +187,14 @@ bool AdBlockEngine::loadResources(const QString& path)
 
 QString AdBlockEngine::genericHides(const QUrl& url, const QByteArray& classes, const QByteArray& ids)
 {
-    if (!m_engine || !s_enabled || isAllowlistedUrl(url)) return QString();
+    if (!s_enabled || isAllowlistedUrl(url)) return QString();
     if (classes.isEmpty() && ids.isEmpty()) return QString();
+    AtlanticAdblockEngine* engine = readyEngine();
+    if (!engine) return QString();
 
     QByteArray urlUtf8 = url.toString().toUtf8();
     char* sels = atlantic_adblock_get_generic_hides(
-        m_engine, urlUtf8.constData(), classes.constData(), ids.constData());
+        engine, urlUtf8.constData(), classes.constData(), ids.constData());
     if (!sels) return QString();
     QString result = QString::fromUtf8(sels);
     atlantic_adblock_free_string(sels);
@@ -129,9 +242,11 @@ QByteArray AdBlockEngine::allowlistJoined()
 
 bool AdBlockEngine::shouldBlockPopup(const QUrl& pageUrl, const QUrl& popupUrl)
 {
-    if (!m_engine || !s_enabled) return false;
+    if (!s_enabled) return false;
     if (isAllowlistedUrl(pageUrl)) return false;
     if (!popupUrl.scheme().startsWith(QLatin1String("http"))) return false;
+    AtlanticAdblockEngine* engine = readyEngine();
+    if (!engine) return false;
 
     const QByteArray src = pageUrl.toString().toUtf8();
     const QByteArray req = popupUrl.toString().toUtf8();
@@ -141,7 +256,7 @@ bool AdBlockEngine::shouldBlockPopup(const QUrl& pageUrl, const QUrl& popupUrl)
     // the engine only ever sees as a GET. $method rules keyed to other verbs
     // correctly do not match here.
     MatchResult r = atlantic_adblock_match_network_v2(
-        m_engine, src.constData(), req.constData(), "document", thirdParty, "GET");
+        engine, src.constData(), req.constData(), "document", thirdParty, "GET");
     // A popup can't carry a surrogate redirect; only a plain match blocks.
     const bool block = r.matched && !r.redirect;
     atlantic_adblock_free_match_result(r);
@@ -175,7 +290,7 @@ static QVector<WebKitUserScript*>* installedScripts(WebKitUserContentManager* uc
 
 void AdBlockEngine::installCosmetics(WebKitUserContentManager* ucm, const QUrl& url, QString* immediateScript)
 {
-    if (!m_engine || !s_enabled || !ucm || isAllowlistedUrl(url)) return;
+    if (!s_enabled || !ucm || isAllowlistedUrl(url)) return;
 
     const QString host = url.host();
     if (host.isEmpty() || !url.scheme().startsWith(QLatin1String("http"))) return;
@@ -184,8 +299,11 @@ void AdBlockEngine::installCosmetics(WebKitUserContentManager* ucm, const QUrl& 
         g_object_get_data(G_OBJECT(ucm), kInstalledHostsKey));
     if (hosts && hosts->contains(host)) return;
 
+    AtlanticAdblockEngine* engine = readyEngine();
+    if (!engine) return;
+
     QByteArray urlUtf8 = url.toString().toUtf8();
-    CosmeticResult cr = atlantic_adblock_get_cosmetic(m_engine, urlUtf8.constData());
+    CosmeticResult cr = atlantic_adblock_get_cosmetic(engine, urlUtf8.constData());
 
     QString css;
     int ruleCount = 0;

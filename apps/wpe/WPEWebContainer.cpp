@@ -658,6 +658,11 @@ void WPEWebContainer::componentComplete()
     // bubblewrap requires explicit allowlisting of paths needed by the subprocesses.
     configureSandboxPaths();
 
+    // The UI-side ad-block engine (cosmetics, popups) loads on a worker thread;
+    // starting it here, before any web view exists, gives it the rest of the
+    // startup to finish before the first page commits and needs it.
+    AdBlockEngine::instance().startLoading();
+
     // Previews of pages from an earlier run can never be shown again (the
     // back/forward list does not survive a restart) and are page screenshots.
     WPEWebPage::clearHistoryPreviews();

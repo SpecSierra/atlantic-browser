@@ -1007,7 +1007,9 @@ static void onAdblockClassIdMessage(WebKitUserContentManager*, JSCValue* value, 
     WPEWebPage* page = static_cast<WPEWebPage*>(userData);
     if (!page || !value)
         return;
-    if (!AdBlockEngine::isEnabled() || !AdBlockEngine::instance().isLoaded())
+    // Not isLoaded(): a batch that arrives while the engine is still loading
+    // is sent only once, so genericHides() waits for the load instead.
+    if (!AdBlockEngine::isEnabled())
         return;
 
     gchar* json = jsc_value_to_json(value, 0);
@@ -2574,39 +2576,11 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                     // returns the default and would stomp the QML-pushed
                     // state back to enabled on every start.
                     qInfo() << "[ADBLOCK] enabled (persisted):" << AdBlockEngine::isEnabled();
-                    // Prefer whichever of the shipped copy and the updater's
-                    // downloaded copy carries the higher engine.version stamp
-                    // (the WebProcess extension applies the same rule).
-                    QString dir = QStringLiteral("/usr/share/atlantic-browser");
-                    const QString updated = AdBlockListUpdater::cacheDir();
-                    if (QFileInfo::exists(updated + QStringLiteral("/engine.dat"))
-                        && AdBlockListUpdater::versionIn(updated) > AdBlockListUpdater::versionIn(dir)) {
-                        dir = updated;
-                        qInfo() << "[ADBLOCK] using updated lists, version"
-                                << AdBlockListUpdater::versionIn(updated);
-                    }
-                    const QString cachePath = dir + QStringLiteral("/engine.dat");
                     AdBlockListUpdater::start();
-                    bool engineLoaded = AdBlockEngine::instance().loadFromCache(cachePath);
-                    if (!engineLoaded && dir != QLatin1String("/usr/share/atlantic-browser")) {
-                        // A downloaded engine that will not load must not take
-                        // blocking down with it: fall back to the shipped copy
-                        // (as the WebProcess extension does) and drop the bad
-                        // stamp so the next start does not choose it again.
-                        qWarning() << "[ADBLOCK] updated engine unusable; using the shipped copy";
-                        QFile::remove(updated + QStringLiteral("/engine.version"));
-                        dir = QStringLiteral("/usr/share/atlantic-browser");
-                        engineLoaded = AdBlockEngine::instance().loadFromCache(
-                            dir + QStringLiteral("/engine.dat"));
-                    }
-                    if (!engineLoaded) {
-                        qWarning() << "[ADBLOCK] engine not available — blocking is off";
-                    } else {
-                        // Scriptlet resources live next to the engine cache;
-                        // without them every ##+js(...) rule is a no-op.
-                        AdBlockEngine::instance().loadResources(
-                            dir + QStringLiteral("/adblock-resources.json"));
-                    }
+                    // Normally already started by the container before any
+                    // view existed (WPEWebContainer::componentComplete); the
+                    // engine loads on a worker thread either way.
+                    AdBlockEngine::instance().startLoading();
                 }
             }
             if (WebKitNetworkSession* session = webkit_web_view_get_network_session(wv)) {

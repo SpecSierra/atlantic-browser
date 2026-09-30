@@ -7,9 +7,12 @@
  */
 
 #pragma once
+#include <QAtomicInt>
+#include <QByteArray>
+#include <QMutex>
 #include <QString>
 #include <QStringList>
-#include <QByteArray>
+#include <QWaitCondition>
 
 // The UI-process AdBlockEngine handles cosmetic filtering and popup
 // (new-window navigation) blocking; per-request network blocking lives in the
@@ -50,11 +53,15 @@ class AdBlockEngine {
 public:
     static AdBlockEngine& instance();
 
-    bool loadFromCache(const QString& path);
-    // uBO scriptlet/redirect resources (Brave adblock-resources JSON); not part
-    // of the engine cache, load after loadFromCache. Enables ##+js(...) rules.
-    bool loadResources(const QString& path);
-    bool isLoaded() const { return m_engine != nullptr; }
+    // Loads the engine (engine.dat from the shipped or updated list dir, plus
+    // the scriptlet resources) on a worker thread. Idempotent. It used to load
+    // on the GUI thread when the first web view was created: ~16 MB read,
+    // checksummed, copied and verified in the middle of startup. Every entry
+    // point below waits for the load (bounded) if it runs first, so what is
+    // blocked or hidden is unchanged.
+    void startLoading();
+    // Non-blocking: has the load finished with a usable engine?
+    bool isLoaded() const { return m_ready.loadAcquire() && m_engine; }
 
     // Pre-paint cosmetic hiding: install the hide selectors for url's host as
     // a document-start user style sheet on the view's content manager (once
@@ -95,13 +102,31 @@ public:
     static bool areHostsRelated(const QString& a, const QString& b);
 
 private:
+    friend class AdBlockEngineLoader;
+
     static QStringList s_allowlist;
 
     AdBlockEngine() = default;
     ~AdBlockEngine();
     AdBlockEngine(const AdBlockEngine&) = delete;
 
+    // The engine once the load has settled; waits for it (bounded) until then.
+    // nullptr if the load failed or did not finish in time.
+    AtlanticAdblockEngine* readyEngine();
+    void load(); // worker thread
+    static AtlanticAdblockEngine* createFromCache(const QString& path);
+    // uBO scriptlet/redirect resources (Brave adblock-resources JSON); not part
+    // of the engine cache. Enables ##+js(...) rules.
+    static bool loadResources(AtlanticAdblockEngine* engine, const QString& path);
+
+    // Written once by load(), before m_ready is released; read only after
+    // m_ready is acquired.
     AtlanticAdblockEngine* m_engine = nullptr;
+    QAtomicInt m_ready;
+    QMutex m_loadMutex;
+    QWaitCondition m_loadDone;
+    bool m_loadStarted = false; // guarded by m_loadMutex
+    bool m_loadSettled = false; // guarded by m_loadMutex
 
     static bool s_enabled;
 };
