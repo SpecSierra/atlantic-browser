@@ -1251,7 +1251,8 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
     // it is part of the document's first style resolution. The old form
     // appended a <style> with a universal selector at DOCUMENT_END in every
     // frame, which forced one extra full-document style recalc per document.
-    {
+    // Diagnostic: ATLANTIC_NO_PERF_CSS=1 skips it (style-cost A/B).
+    if (qgetenv("ATLANTIC_NO_PERF_CSS") != "1") {
         WebKitUserStyleSheet* perfSheet = webkit_user_style_sheet_new(
             WPEUserScripts::kPerfCssSheet, WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
             WEBKIT_USER_STYLE_LEVEL_USER, nullptr, nullptr);

@@ -217,6 +217,11 @@ void AdBlockEngine::installCosmetics(WebKitUserContentManager* ucm, const QUrl& 
     const QByteArray httpsPat = "https://" + hostUtf8 + "/*";
     const char* allowList[] = { httpPat.constData(), httpsPat.constData(), nullptr };
 
+    // Diagnostic: ATLANTIC_NO_COSMETIC_SHEET=1 skips the hide-rule sheet (scriptlets
+    // below still install) so the style-resolution cost of the sheet can be A/B'd.
+    if (qgetenv("ATLANTIC_NO_COSMETIC_SHEET") == "1")
+        css.clear();
+
     if (!css.isEmpty()) {
         WebKitUserStyleSheet* sheet = webkit_user_style_sheet_new(
             css.toUtf8().constData(),
