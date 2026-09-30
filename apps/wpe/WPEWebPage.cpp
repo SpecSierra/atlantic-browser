@@ -150,6 +150,12 @@ constexpr double kMaximumPinchZoomFactor = 3.0;
 constexpr double kMinimumViewportPinchScale = 1.0;
 constexpr double kMaximumViewportPinchScale = 5.0;
 constexpr int kDefaultFramePumpIntervalMs = 2000;
+// A single-finger touch that moves this far from where it went down is a drag,
+// not a tap. WebKit's gesture controller stops treating a touch as a click once
+// it moves Scrollbar::pixelsPerLineStep() = 40 logical px; logical px are
+// device px here, or up to 3x larger with ATLANTIC_TRUE_DEVICE_SCALE, so 120
+// is past WebKit's threshold either way.
+constexpr qreal kTouchDragPx = 120.0;
 constexpr int kMediaInactiveDebounceMs = 400;
 // Speculative connections: don't re-issue for the same origin inside this
 // window (an idle keep-alive connection outlives it comfortably), and never
@@ -4481,6 +4487,22 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
         event->touchPoints(),
         event->type());
     const bool shouldSyncKeyboard = (event->type() == QEvent::TouchEnd && activePoints.size() <= 1);
+
+    // Tap or drag? Decides what the keyboard sync does when the finger lifts.
+    // event->touchPoints() still carries a released point, with its final
+    // position, on TouchEnd.
+    const QList<QTouchEvent::TouchPoint> &eventPoints = event->touchPoints();
+    if (event->type() == QEvent::TouchBegin) {
+        m_touchDragged = eventPoints.size() > 1;
+        if (!eventPoints.isEmpty())
+            m_touchStartPos = eventPoints.at(0).pos();
+    } else if (eventPoints.size() > 1 || activePoints.size() > 1) {
+        m_touchDragged = true;
+    } else if (!m_touchDragged && !eventPoints.isEmpty()) {
+        const QPointF moved = eventPoints.at(0).pos() - m_touchStartPos;
+        if (qMax(qAbs(moved.x()), qAbs(moved.y())) >= kTouchDragPx)
+            m_touchDragged = true;
+    }
     if (activePoints.size() >= 2) {
         // 2-finger gestures are offered to the page before the browser pinch
         // engages: maps and other gesture-handling pages preventDefault the
@@ -4692,12 +4714,33 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
             m_lastInteractionX = point.pos().x();
             m_lastInteractionY = point.pos().y();
         }
-        scheduleVirtualKeyboardSync();
+        scheduleVirtualKeyboardSync(m_touchDragged);
     }
 }
 
-void WPEWebPage::scheduleVirtualKeyboardSync()
+void WPEWebPage::scheduleVirtualKeyboardSync(bool afterDrag)
 {
+    // After a scroll or fling the probes below have nothing to find: WebKit
+    // generated no click for a drag (kTouchDragPx), so focus did not move. Yet
+    // each one runs script in the page -- a focused-element walk and, failing
+    // that, two elementFromPoint() hit tests that force a layout -- on the main
+    // thread just as the fling starts, three times per scroll gesture. The hit
+    // test can also focus a field and raise the keyboard mid-scroll. So after a
+    // drag: nothing while the keyboard is hidden, and while it is up one probe
+    // without the hit test, which still hides it if the page blurred its field
+    // during the scroll. ATLANTIC_KEYBOARD_PROBE_AFTER_SCROLL=1 restores the
+    // three full probes.
+    static const bool probeAfterScroll = envVarEnabled(qgetenv("ATLANTIC_KEYBOARD_PROBE_AFTER_SCROLL"));
+    if (afterDrag && !probeAfterScroll) {
+        QInputMethod *inputMethod = QGuiApplication::inputMethod();
+        if (!inputMethod || !inputMethod->isVisible())
+            return;
+        QTimer::singleShot(0, this, [this]() {
+            syncVirtualKeyboardToFocusedElement(false);
+        });
+        return;
+    }
+
     QTimer::singleShot(0, this, [this]() {
         syncVirtualKeyboardToFocusedElement();
     });
@@ -4736,11 +4779,15 @@ void WPEWebPage::revealFocusedEditable()
     webkit_web_view_evaluate_javascript(wv, kRevealScript, -1, nullptr, nullptr, nullptr, nullptr, nullptr);
 }
 
-void WPEWebPage::syncVirtualKeyboardToFocusedElement()
+void WPEWebPage::syncVirtualKeyboardToFocusedElement(bool hitTestLastTouch)
 {
     WebKitWebView* wv = webView();
     if (!wv)
         return;
+
+    // Negative coordinates make the script skip the hit test.
+    const qreal probeX = hitTestLastTouch ? m_lastInteractionX : -1.0;
+    const qreal probeY = hitTestLastTouch ? m_lastInteractionY : -1.0;
 
     const QString editableProbeScript = QStringLiteral(
         "(function(x,y){"
@@ -4764,8 +4811,8 @@ void WPEWebPage::syncVirtualKeyboardToFocusedElement()
         "  }"
         "  return false;"
         "})(%1,%2);")
-        .arg(m_lastInteractionX, 0, 'f', 2)
-        .arg(m_lastInteractionY, 0, 'f', 2);
+        .arg(probeX, 0, 'f', 2)
+        .arg(probeY, 0, 'f', 2);
 
     std::unique_ptr<KeyboardProbeData> data = std::make_unique<KeyboardProbeData>();
     data->page = this;

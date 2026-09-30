@@ -568,8 +568,8 @@ private:
     qreal selectionDisplayScale() const;
     void syncEffectiveFullscreenState();
     void updateFramePumpState();
-    void scheduleVirtualKeyboardSync();
-    void syncVirtualKeyboardToFocusedElement();
+    void scheduleVirtualKeyboardSync(bool afterDrag = false);
+    void syncVirtualKeyboardToFocusedElement(bool hitTestLastTouch = true);
     double currentPageZoomLevel() const;
     void setPageZoomLevel(double zoomLevel);
     void rememberDefaultZoomLevel(double zoomLevel);
@@ -671,6 +671,10 @@ private:
     int m_perfFramesInWindow = 0;
     qreal m_lastInteractionX = -1.0;
     qreal m_lastInteractionY = -1.0;
+    // Current touch sequence: where the first finger went down, and whether it
+    // has turned into a drag / multi-finger gesture (see touchEvent()).
+    QPointF m_touchStartPos;
+    bool m_touchDragged = false;
     QHash<int, QTouchEvent::TouchPoint> m_trackedTouchPoints;
     QString m_lastSoftKeyboardText;
     QString m_lastPreeditText;
