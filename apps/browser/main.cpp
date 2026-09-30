@@ -578,6 +578,13 @@ static void configureMemoryTierFromRam()
     if (high) {
         qputenv("ATLANTIC_CACHE_MODEL", QByteArrayLiteral("web"));
         qputenv("WEBKIT_MEMORY_BASE_THRESHOLD_MB", QByteArrayLiteral("4000"));
+        // Keep a spare WebProcess warm (webkit-process-prewarm-env.patch). The
+        // first cross-site tap of a session otherwise launches a process on the
+        // critical path: J2 build 735, 5 interleaved reps, touch-up -> new page
+        // 327 ms (325-329) off vs 107 ms (100-117) on, for +1 process / ~+100 MB
+        // idle RSS.
+        if (!qEnvironmentVariableIsSet("WEBKIT_PROCESS_PREWARM"))
+            qputenv("WEBKIT_PROCESS_PREWARM", QByteArrayLiteral("1"));
     }
     fprintf(stderr, "[ATLANTIC] memory tier: %s (MemTotal %lld MB%s) cache_model=%s base_threshold=%s MB\n",
             high ? "high" : "low", static_cast<long long>(memTotalKb / 1024), forcedLow ? ", forced low" : "",
