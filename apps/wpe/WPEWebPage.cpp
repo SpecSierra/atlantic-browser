@@ -3376,49 +3376,196 @@ void WPEWebPage::preconnect(const QString &url)
     wpe_sfos_preconnect(wv, origin.toUtf8().constData());
 }
 
-// Convert a WebKitImage (BGRA8 premultiplied) to a scaled/cropped QImage.
-// webkit_image_as_bytes() is transfer-none; we deep-copy before wkImage is freed.
-static QImage snapshotToQImage(WebKitImage *wkImage, const QSize &targetSize)
+// ── Snapshot encoding ───────────────────────────────────────────────────────
+//
+// Tab thumbnails and history previews both start as a visible-area snapshot
+// (1080x2332 BGRA on the Xperia 10 II, ~10 MB), and the snapshot callback runs
+// on the GUI thread. The thumbnail paths used to do all of their image work
+// there: a deep copy of the whole snapshot, the crop, and a PNG encode at
+// zlib's default level -- hundreds of milliseconds on this device, landing
+// just as the tab switcher or a context menu animates open, or as the app goes
+// to the background. While the GUI thread is busy nothing reaches the page: no
+// frames are presented and no touches are delivered. The history preview,
+// taken at the start of EVERY navigation, already encoded on a pool thread but
+// still copied and smooth-scaled the full snapshot on the GUI thread first.
+//
+// The callback now only takes a reference on the snapshot's pixels (the GBytes
+// holds a ref on WebKit's thread-safe ShareableBitmap) and queues the rest.
+// Jobs run on a single thread, so they finish in the order they were requested
+// and an older thumbnail can never overwrite a newer one; they read the pixels
+// in place instead of copying them first; files are replaced atomically since a
+// QML Image may be reading the previous one; and results are handed back to the
+// GUI thread through the GLib main context.
+
+namespace {
+
+QThreadPool *snapshotEncodePool()
 {
-    int w = webkit_image_get_width(wkImage);
-    int h = webkit_image_get_height(wkImage);
-    guint stride = webkit_image_get_stride(wkImage);
-    GBytes *bytes = webkit_image_as_bytes(wkImage); // transfer none
-
-    gsize dataSize = 0;
-    const uchar *data = static_cast<const uchar *>(g_bytes_get_data(bytes, &dataSize));
-    if (!data || w <= 0 || h <= 0 || dataSize < static_cast<gsize>(stride) * static_cast<gsize>(h))
-        return QImage();
-
-    // WebKitImage pixel format is BGRA8 premultiplied.
-    // On little-endian ARM, QImage::Format_ARGB32_Premultiplied stores bytes as B,G,R,A — identical layout.
-    QImage img(data, w, h, static_cast<int>(stride), QImage::Format_ARGB32_Premultiplied);
-    img = img.copy(); // deep copy before wkImage is released by the caller
-
-    if (targetSize.width() > 0 && img.width() != targetSize.width())
-        img = img.scaledToWidth(targetSize.width(), Qt::SmoothTransformation);
-    if (targetSize.height() > 0 && img.height() > targetSize.height())
-        img = img.copy(0, 0, img.width(), targetSize.height());
-
-    return img;
+    static QThreadPool *pool = [] {
+        auto *p = new QThreadPool(QCoreApplication::instance());
+        p->setMaxThreadCount(1);
+        return p;
+    }();
+    return pool;
 }
 
-struct SnapshotFileData {
-    QPointer<WPEWebPage> page;
-    QString filePath;
-    QSize targetSize;
-};
+// Qt maps a PNG quality q to zlib level (100 - q) * 9 / 91, so 80 is level 1.
+// The default (-1) is zlib's level 6: several times the CPU for a thumbnail
+// that is only ever shown scaled down, and still well compressed at level 1.
+constexpr int kThumbnailPngQuality = 80;
 
-struct SnapshotThumbnailData {
-    QPointer<WPEWebPage> page;
-    QSize targetSize;
-};
-
-static void onSnapshotFileReady(GObject *object, GAsyncResult *result, gpointer userData)
+bool saveAtomically(const QImage &image, const QString &path, const char *format, int quality)
 {
-    std::unique_ptr<SnapshotFileData> ctx(static_cast<SnapshotFileData *>(userData));
-    if (!ctx->page)
-        return;
+    // Write-then-rename: a reader must never open a half-encoded file.
+    const QString tmp = path + QStringLiteral(".tmp");
+    if (!image.save(tmp, format, quality)) {
+        QFile::remove(tmp);
+        return false;
+    }
+    QFile::remove(path); // rename() will not clobber on POSIX
+    if (!QFile::rename(tmp, path)) {
+        QFile::remove(tmp);
+        return false;
+    }
+    return true;
+}
+
+// QtConcurrent would need a new module for this, and QRunnable::create() is
+// Qt 5.15+ while the device ships Qt 5.6.3, so this is a plain QRunnable.
+class SnapshotEncoder : public QRunnable
+{
+public:
+    enum class Output {
+        ThumbnailFile,    // PNG at path, then WPEWebPage::fileGrabWritten(path)
+        ThumbnailDataUri, // PNG data: URI, then WPEWebPage::thumbnailResult(uri)
+        HistoryPreview,   // half-resolution JPEG at path, nobody notified
+    };
+
+    // GUI thread. Takes its own reference on the pixels, so wkImage can be
+    // released as soon as this returns.
+    SnapshotEncoder(WebKitImage *wkImage, Output output, const QSize &targetSize,
+                    const QString &path, WPEWebPage *page)
+        : m_output(output)
+        , m_targetSize(targetSize)
+        , m_path(path)
+        , m_width(webkit_image_get_width(wkImage))
+        , m_height(webkit_image_get_height(wkImage))
+        , m_stride(webkit_image_get_stride(wkImage))
+        , m_bytes(g_bytes_ref(webkit_image_as_bytes(wkImage)))
+        // Built here and only ever touched again on the GUI thread, in deliver().
+        , m_delivery(output == Output::HistoryPreview ? nullptr : new Delivery { page, output, QString() })
+    {
+        setAutoDelete(true);
+    }
+
+    ~SnapshotEncoder() override
+    {
+        g_bytes_unref(m_bytes);
+    }
+
+    void run() override
+    {
+        const QImage image = pixels();
+        QString result;
+        if (!image.isNull()) {
+            switch (m_output) {
+            case Output::ThumbnailFile:
+                if (saveAtomically(thumbnail(image), m_path, "PNG", kThumbnailPngQuality))
+                    result = m_path;
+                break;
+            case Output::ThumbnailDataUri: {
+                QByteArray png;
+                QBuffer buffer(&png);
+                buffer.open(QIODevice::WriteOnly);
+                // A proper data: URI so consumers (FavoriteIcon.qml et al.) can render
+                // it directly. Without the prefix the raw base64 was fed to image://theme/,
+                // producing broken favicon tiles and log spam.
+                if (thumbnail(image).save(&buffer, "PNG", kThumbnailPngQuality))
+                    result = QStringLiteral("data:image/png;base64,") + QString::fromLatin1(png.toBase64());
+                break;
+            }
+            case Output::HistoryPreview:
+                // Half resolution: the preview is shown full-bleed but only ever briefly and
+                // never interacted with, and dpr is 3 on this device — half-res is still
+                // 1.5x the CSS pixel grid. Keeps each entry around 100 KB.
+                saveAtomically(image.scaled(image.size() / 2, Qt::KeepAspectRatio, Qt::SmoothTransformation),
+                               m_path, "JPEG", 80);
+                break;
+            }
+        }
+
+        if (m_delivery) {
+            m_delivery->result = result;
+            g_idle_add_full(G_PRIORITY_DEFAULT, deliver, m_delivery, nullptr);
+            m_delivery = nullptr;
+        }
+    }
+
+private:
+    struct Delivery {
+        QPointer<WPEWebPage> page;
+        Output output;
+        QString result;
+    };
+
+    // GUI thread: the default GLib main context is the one Qt's event loop
+    // (and WebKit's) runs on.
+    static gboolean deliver(gpointer data)
+    {
+        std::unique_ptr<Delivery> delivery(static_cast<Delivery *>(data));
+        if (delivery->page && !delivery->result.isEmpty()) {
+            if (delivery->output == Output::ThumbnailFile)
+                emit delivery->page->fileGrabWritten(delivery->result);
+            else
+                emit delivery->page->thumbnailResult(delivery->result);
+        }
+        return G_SOURCE_REMOVE;
+    }
+
+    // The snapshot as a QImage over WebKit's buffer, without a copy. WebKitImage
+    // is BGRA8 premultiplied; on little-endian ARM, Format_ARGB32_Premultiplied
+    // stores bytes as B,G,R,A — identical layout.
+    QImage pixels() const
+    {
+        gsize size = 0;
+        const auto *data = static_cast<const uchar *>(g_bytes_get_data(m_bytes, &size));
+        if (!data || m_width <= 0 || m_height <= 0
+            || size < static_cast<gsize>(m_stride) * static_cast<gsize>(m_height))
+            return QImage();
+        return QImage(data, m_width, m_height, static_cast<int>(m_stride),
+                      QImage::Format_ARGB32_Premultiplied);
+    }
+
+    QImage thumbnail(const QImage &image) const
+    {
+        QImage img = image;
+        if (m_targetSize.width() > 0 && img.width() != m_targetSize.width())
+            img = img.scaledToWidth(m_targetSize.width(), Qt::SmoothTransformation);
+        if (m_targetSize.height() > 0 && img.height() > m_targetSize.height())
+            img = img.copy(0, 0, img.width(), m_targetSize.height());
+        return img;
+    }
+
+    const Output m_output;
+    const QSize m_targetSize;
+    const QString m_path;
+    const int m_width;
+    const int m_height;
+    const guint m_stride;
+    GBytes *const m_bytes;
+    Delivery *m_delivery;
+};
+
+struct SnapshotRequest {
+    QPointer<WPEWebPage> page;
+    SnapshotEncoder::Output output;
+    QSize targetSize;
+    QString path;
+};
+
+void onSnapshotReady(GObject *object, GAsyncResult *result, gpointer userData)
+{
+    std::unique_ptr<SnapshotRequest> request(static_cast<SnapshotRequest *>(userData));
 
     GError *error = nullptr;
     WebKitImage *wkImage = webkit_web_view_get_snapshot_finish(WEBKIT_WEB_VIEW(object), result, &error);
@@ -3428,43 +3575,26 @@ static void onSnapshotFileReady(GObject *object, GAsyncResult *result, gpointer 
         return;
     }
 
-    QImage img = snapshotToQImage(wkImage, ctx->targetSize);
+    // A thumbnail is only wanted by a page that still exists; a history
+    // preview is keyed by tab and URL, so it is written regardless.
+    if (request->page || request->output == SnapshotEncoder::Output::HistoryPreview) {
+        snapshotEncodePool()->start(new SnapshotEncoder(wkImage, request->output, request->targetSize,
+                                                        request->path, request->page));
+    }
     g_object_unref(wkImage);
-
-    if (!img.isNull() && img.save(ctx->filePath, "PNG"))
-        emit ctx->page->fileGrabWritten(ctx->filePath);
 }
 
-static void onSnapshotThumbnailReady(GObject *object, GAsyncResult *result, gpointer userData)
+void requestSnapshot(WebKitWebView *wv, SnapshotRequest *request)
 {
-    std::unique_ptr<SnapshotThumbnailData> ctx(static_cast<SnapshotThumbnailData *>(userData));
-    if (!ctx->page)
-        return;
-
-    GError *error = nullptr;
-    WebKitImage *wkImage = webkit_web_view_get_snapshot_finish(WEBKIT_WEB_VIEW(object), result, &error);
-    if (!wkImage) {
-        if (error)
-            g_error_free(error);
-        return;
-    }
-
-    QImage img = snapshotToQImage(wkImage, ctx->targetSize);
-    g_object_unref(wkImage);
-
-    if (!img.isNull()) {
-        QByteArray ba;
-        QBuffer buf(&ba);
-        buf.open(QIODevice::WriteOnly);
-        img.save(&buf, "PNG");
-        buf.close();
-        // Emit a proper data: URI so consumers (FavoriteIcon.qml et al.) can render
-        // it directly. Without the prefix the raw base64 was fed to image://theme/,
-        // producing broken favicon tiles and log spam.
-        emit ctx->page->thumbnailResult(QStringLiteral("data:image/png;base64,")
-                                        + QString::fromLatin1(ba.toBase64()));
-    }
+    webkit_web_view_get_snapshot(wv,
+        WEBKIT_SNAPSHOT_REGION_VISIBLE,
+        WEBKIT_SNAPSHOT_OPTIONS_NONE,
+        nullptr,
+        onSnapshotReady,
+        request);
 }
+
+} // namespace
 
 void WPEWebPage::grabToFile(const QSize &size)
 {
@@ -3477,13 +3607,7 @@ void WPEWebPage::grabToFile(const QSize &size)
     QDir().mkpath(cacheDir);
     const QString filePath = cacheDir + QStringLiteral("/") + QString::number(m_tabId) + QStringLiteral(".png");
 
-    auto *ctx = new SnapshotFileData { this, filePath, size };
-    webkit_web_view_get_snapshot(wv,
-        WEBKIT_SNAPSHOT_REGION_VISIBLE,
-        WEBKIT_SNAPSHOT_OPTIONS_NONE,
-        nullptr,
-        onSnapshotFileReady,
-        ctx);
+    requestSnapshot(wv, new SnapshotRequest { this, SnapshotEncoder::Output::ThumbnailFile, size, filePath });
 }
 
 void WPEWebPage::grabThumbnail(const QSize &size)
@@ -3492,13 +3616,7 @@ void WPEWebPage::grabThumbnail(const QSize &size)
     if (!wv)
         return;
 
-    auto *ctx = new SnapshotThumbnailData { this, size };
-    webkit_web_view_get_snapshot(wv,
-        WEBKIT_SNAPSHOT_REGION_VISIBLE,
-        WEBKIT_SNAPSHOT_OPTIONS_NONE,
-        nullptr,
-        onSnapshotThumbnailReady,
-        ctx);
+    requestSnapshot(wv, new SnapshotRequest { this, SnapshotEncoder::Output::ThumbnailDataUri, size, QString() });
 }
 
 // ── History preview ("instant Back") ────────────────────────────────────────
@@ -3538,63 +3656,30 @@ QString historyPreviewFile(int tabId, const QUrl &url)
            + QStringLiteral(".jpg");
 }
 
-// Encoding a full-screen image is hundreds of milliseconds on this device, and
-// this runs at the instant the user presses Back — precisely the moment that
-// must not stall. Hand it to the pool; nothing waits on the result.
-// QtConcurrent would need a new module for one call, and QRunnable::create() is
-// Qt 5.15+ while the device ships Qt 5.6.3, so this is a plain QRunnable.
-class HistoryPreviewWriter : public QRunnable
+// Removes previews on the snapshot encoder thread: a session leaves one file per
+// page visited and the startup clear used to unlink them all on the GUI thread.
+// Sharing that single thread also orders a removal after any preview of the
+// same tab still being written, so nothing it meant to delete reappears.
+class HistoryPreviewCleaner : public QRunnable
 {
 public:
-    HistoryPreviewWriter(const QImage &image, const QString &path)
-        : m_image(image), m_path(path) { setAutoDelete(true); }
+    // An empty pattern removes every preview.
+    explicit HistoryPreviewCleaner(const QString &pattern)
+        : m_pattern(pattern) { setAutoDelete(true); }
 
     void run() override
     {
-        // Write-then-rename: a reader must never open a half-encoded file.
-        const QString tmp = m_path + QStringLiteral(".tmp");
-        if (!m_image.save(tmp, "JPEG", 80)) {
-            QFile::remove(tmp);
-            return;
-        }
-        QFile::remove(m_path); // rename() will not clobber on POSIX
-        if (!QFile::rename(tmp, m_path))
-            QFile::remove(tmp);
+        QDir dir(historyPreviewDir());
+        const QStringList files = m_pattern.isEmpty()
+            ? dir.entryList(QDir::Files)
+            : dir.entryList(QStringList() << m_pattern, QDir::Files);
+        for (const QString &name : files)
+            dir.remove(name);
     }
 
 private:
-    QImage m_image;
-    QString m_path;
+    QString m_pattern;
 };
-
-struct HistoryPreviewData {
-    QPointer<WPEWebPage> page;
-    QString filePath;
-};
-
-void onHistoryPreviewSnapshot(GObject *object, GAsyncResult *result, gpointer userData)
-{
-    std::unique_ptr<HistoryPreviewData> ctx(static_cast<HistoryPreviewData *>(userData));
-
-    GError *error = nullptr;
-    WebKitImage *wkImage = webkit_web_view_get_snapshot_finish(WEBKIT_WEB_VIEW(object), result, &error);
-    if (!wkImage) {
-        if (error)
-            g_error_free(error);
-        return;
-    }
-
-    QImage img = snapshotToQImage(wkImage, QSize());
-    g_object_unref(wkImage);
-    if (img.isNull())
-        return;
-
-    // Half resolution: the preview is shown full-bleed but only ever briefly and
-    // never interacted with, and dpr is 3 on this device — half-res is still
-    // 1.5x the CSS pixel grid. Keeps each entry around 100 KB.
-    const QImage scaled = img.scaled(img.size() / 2, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    QThreadPool::globalInstance()->start(new HistoryPreviewWriter(scaled, ctx->filePath));
-}
 
 } // namespace
 
@@ -3605,19 +3690,12 @@ void WPEWebPage::captureHistoryPreview()
 
 void WPEWebPage::removeHistoryPreviewsForTab(int tabId)
 {
-    QDir dir(historyPreviewDir());
-    const QStringList files = dir.entryList(
-        QStringList() << QStringLiteral("%1-*").arg(tabId), QDir::Files);
-    for (const QString &name : files)
-        dir.remove(name);
+    snapshotEncodePool()->start(new HistoryPreviewCleaner(QStringLiteral("%1-*").arg(tabId)));
 }
 
 void WPEWebPage::clearHistoryPreviews()
 {
-    QDir dir(historyPreviewDir());
-    const QStringList files = dir.entryList(QDir::Files);
-    for (const QString &name : files)
-        dir.remove(name);
+    snapshotEncodePool()->start(new HistoryPreviewCleaner(QString()));
 }
 
 void WPEWebPage::captureHistoryPreview(const QUrl &key)
@@ -3634,13 +3712,10 @@ void WPEWebPage::captureHistoryPreview(const QUrl &key)
     if (path.isEmpty())
         return;
 
-    auto *ctx = new HistoryPreviewData { this, path };
-    webkit_web_view_get_snapshot(wv,
-        WEBKIT_SNAPSHOT_REGION_VISIBLE,
-        WEBKIT_SNAPSHOT_OPTIONS_NONE,
-        nullptr,
-        onHistoryPreviewSnapshot,
-        ctx);
+    // Encoding a full-screen image is hundreds of milliseconds on this device,
+    // and Back is precisely the moment that must not stall: the pixels go
+    // straight to the encoder thread (see "Snapshot encoding" above).
+    requestSnapshot(wv, new SnapshotRequest { this, SnapshotEncoder::Output::HistoryPreview, QSize(), path });
 }
 
 QString WPEWebPage::historyPreviewFor(const QUrl &url) const
