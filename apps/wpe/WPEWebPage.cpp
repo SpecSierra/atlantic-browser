@@ -1043,20 +1043,28 @@ static void onAdblockClassIdMessage(WebKitUserContentManager*, JSCValue* value, 
     if (sels.isEmpty())
         return;
 
-    // Generic selectors are plain .class/#id — valid CSS — but insert one rule
-    // at a time under try/catch anyway, consistent with the specific-selector
-    // sheet. Selectors are passed as a JSON array so no manual escaping.
+    // Each batch goes into a NEW <style> appended at the end of the document.
+    // insertRule() into an already-active sheet makes WebKit clear the style
+    // resolver and invalidate every element (Scope::didChangeStyleSheetContents)
+    // — a full rule-set rebuild + restyle per batch, 246 ms on CNN / 455 ms on
+    // franceinfo on the J2. A sheet appended after all active sheets is an
+    // Additive resolver update with invalidation limited to the new class/id
+    // rules. One rule per selector, so an invalid one is dropped on its own.
+    // Selectors already applied to this document are skipped; selectors are
+    // passed as a JSON array so no manual escaping.
     QJsonArray selArray;
     for (const QString& s : sels.split(QLatin1Char('\n'), QString::SkipEmptyParts))
         selArray.append(s);
     const QString js = QStringLiteral(
         "(function(){var sels=%1;"
-        "var s=document.getElementById('__atl_adblock_gen_hide');"
-        "if(!s){s=document.createElement('style');s.id='__atl_adblock_gen_hide';"
-        "document.documentElement.appendChild(s);}"
-        "var sh=s.sheet;if(!sh)return;"
+        "var seen=window.__atlGenHideSeen||(window.__atlGenHideSeen=Object.create(null));"
+        "var css='';"
         "for(var i=0;i<sels.length;i++){"
-        "try{sh.insertRule(sels[i]+'{display:none!important}',sh.cssRules.length);}catch(e){}}"
+        "if(seen[sels[i]])continue;seen[sels[i]]=1;"
+        "css+=sels[i]+'{display:none!important}\\n';}"
+        "if(!css)return;"
+        "var s=document.createElement('style');s.className='__atl_adblock_gen_hide';"
+        "s.textContent=css;document.documentElement.appendChild(s);"
         "})()").arg(QString::fromUtf8(QJsonDocument(selArray).toJson(QJsonDocument::Compact)));
     page->runJavaScript(js);
     qDebug() << "[ADBLOCK] generic hides applied:" << selArray.size() << "selectors on" << page->url().host();
@@ -2639,13 +2647,15 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             // Generic cosmetic rules need the class/id names present in the
             // DOM: install the collector (document-start, batched) and its
             // message handler. Cheap when adblock is off (handler no-ops).
+            // Top frame only: the reply is evaluated in the main frame, so
+            // iframe batches only restyled the main document for nothing.
             g_signal_connect(ucm, "script-message-received::adblockClassId",
                              G_CALLBACK(onAdblockClassIdMessage), this);
             webkit_user_content_manager_register_script_message_handler(ucm, "adblockClassId", nullptr);
             {
                 WebKitUserScript* collector = webkit_user_script_new(
                     WPEUserScripts::kAdblockClassIdCollector,
-                    WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+                    WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
                     WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
                     nullptr, nullptr);
                 webkit_user_content_manager_add_script(ucm, collector);
@@ -5631,9 +5641,11 @@ void WPEWebPage::applyAdBlockEnabledGlobally(bool enabled)
                 AdBlockEngine::resetCosmetics(ucm);
                 // Also drop the generic-hide rules already injected in the page.
                 page->runJavaScript(QStringLiteral(
-                    "(function(){var ids=['__atl_adblock_gen_hide','__atl_adblock_lazy_hide'];"
-                    "for(var i=0;i<ids.length;i++){var s=document.getElementById(ids[i]);"
-                    "if(s)s.parentNode.removeChild(s);}"
+                    "(function(){var g=document.querySelectorAll('style.__atl_adblock_gen_hide');"
+                    "for(var j=0;j<g.length;j++)g[j].parentNode.removeChild(g[j]);"
+                    "delete window.__atlGenHideSeen;"
+                    "var s=document.getElementById('__atl_adblock_lazy_hide');"
+                    "if(s)s.parentNode.removeChild(s);"
                     "var l=window.__atlLazyHides;if(l){l.off=true;delete window.__atlLazyHides;}})()"));
             } else if (const gchar* uri = webkit_web_view_get_uri(wv)) {
                 QString lazyScript;
