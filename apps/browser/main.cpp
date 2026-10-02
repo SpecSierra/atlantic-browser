@@ -20,6 +20,7 @@
 #include <QFile>
 #include <QQuickView>
 #include <QQuickWindow>
+#include <QScreen>
 #include <QSet>
 #include <QStringList>
 #include <QSurfaceFormat>
@@ -591,7 +592,8 @@ static void configureMemoryTierFromRam()
             qgetenv("ATLANTIC_CACHE_MODEL").constData(), qgetenv("WEBKIT_MEMORY_BASE_THRESHOLD_MB").constData());
 }
 
-static void configureGpuModeFromCapabilities()
+// Returns true when the GPU is a Mali (the Jolla Phone 2).
+static bool configureGpuModeFromCapabilities()
 {
     const GpuCapabilityProbeResult probe = probeGpuCapability();
     const QByteArray conservativeAuto = probe.conservativeMode ? QByteArrayLiteral("1") : QByteArrayLiteral("0");
@@ -749,6 +751,48 @@ static void configureGpuModeFromCapabilities()
             gpuPaintingThreads.isEmpty() ? "unset" : gpuPaintingThreads.constData(),
             presetThreads ? "preset" : "auto",
             qPrintable(probe.reason));
+    return probe.isMali;
+}
+
+// Tell WebKit the panel's refresh rate. Its vblank source on Sailfish is a
+// timer that defaults to 60 Hz (webkit-display-refresh-rate-env.patch in
+// atlantic-engine), which capped requestAnimationFrame, animations and
+// rendering updates at ~62 Hz on the Jolla Phone 2's 90 Hz panel; the
+// independent-scroll tick (WEBKIT_INDEPENDENT_SCROLL_TICK_MS, default 16 ms)
+// capped scroll offset updates the same way. Both follow the rate chosen here.
+// Order: WEBKIT_DISPLAY_REFRESH_RATE if preset, else what Qt reports for the
+// screen when it is clearly above 60, else 90 on the Mali device (the J2 panel
+// runs at 90, but the compositor may not report it), else WebKit's 60.
+static void configureDisplayRefreshRate(QGuiApplication *app, bool isMali)
+{
+    static constexpr int kJollaPhone2RefreshRate = 90;
+    bool ok = false;
+    int rate = qEnvironmentVariableIntValue("WEBKIT_DISPLAY_REFRESH_RATE", &ok);
+    const char *source = "preset";
+    const QScreen *screen = app->primaryScreen();
+    const qreal screenRate = screen ? screen->refreshRate() : 0;
+    if (!ok || rate < 30 || rate > 240) {
+        rate = 0;
+        if (screenRate >= 75 && screenRate <= 240) {
+            rate = qRound(screenRate);
+            source = "screen";
+        } else if (isMali) {
+            rate = kJollaPhone2RefreshRate;
+            source = "mali-default";
+        }
+        if (rate)
+            qputenv("WEBKIT_DISPLAY_REFRESH_RATE", QByteArray::number(rate));
+    }
+
+    QByteArray tick = qgetenv("WEBKIT_INDEPENDENT_SCROLL_TICK_MS");
+    if (rate && tick.isEmpty()) {
+        tick = QByteArray::number(1000.0 / rate, 'f', 2);
+        qputenv("WEBKIT_INDEPENDENT_SCROLL_TICK_MS", tick);
+    }
+
+    fprintf(stderr, "[ATLANTIC] display refresh: %d Hz (%s, screen reports %.1f) scroll_tick=%s ms\n",
+            rate ? rate : 60, rate ? source : "webkit-default", screenRate,
+            tick.isEmpty() ? "16(default)" : tick.constData());
 }
 
 static void configureBrowserApplication(QGuiApplication *app, QQuickView *view)
@@ -996,8 +1040,9 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
 
     QScopedPointer<QGuiApplication> app(new QGuiApplication(argc, argv));
     logStartupPhase("qguiapp-created");
-    configureGpuModeFromCapabilities();
+    const bool isMali = configureGpuModeFromCapabilities();
     configureMemoryTierFromRam();
+    configureDisplayRefreshRate(app.data(), isMali);
     QScopedPointer<QQuickView> view(new QQuickView);
 
     configureBrowserApplication(app.data(), view.data());
