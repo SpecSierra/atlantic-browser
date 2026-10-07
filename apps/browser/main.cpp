@@ -790,6 +790,13 @@ static void configureDisplayRefreshRate(QGuiApplication *app, bool isMali)
         qputenv("WEBKIT_INDEPENDENT_SCROLL_TICK_MS", tick);
     }
 
+    // WPE WebKit 2.54.1 gives the legacy view a non-zero display ID so that
+    // DisplayVBlankMonitor tries a DRM vblank source before the timer. The
+    // panel here belongs to the Android composer, so keep the timer configured
+    // above as the pacing source rather than whatever a DRM node reports.
+    if (qEnvironmentVariableIsEmpty("WEBKIT_FORCE_VBLANK_TIMER"))
+        qputenv("WEBKIT_FORCE_VBLANK_TIMER", "1");
+
     fprintf(stderr, "[ATLANTIC] display refresh: %d Hz (%s, screen reports %.1f) scroll_tick=%s ms\n",
             rate ? rate : 60, rate ? source : "webkit-default", screenRate,
             tick.isEmpty() ? "16(default)" : tick.constData());

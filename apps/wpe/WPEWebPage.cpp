@@ -2354,8 +2354,8 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
                 // but that sites feature-detect, so their absence silently
                 // downgrades a page rather than breaking it visibly. All three
                 // are plain preferences — no cmake flag, no platform work — and
-                // are present in the shipped engine (2.54.0,
-                // libWPEWebKit-2.0.so.1.11.3). Identifiers drop the "Enabled"
+                // are present in the shipped engine (2.54.1,
+                // libWPEWebKit-2.0.so.1.11.4). Identifiers drop the "Enabled"
                 // suffix, per setRuntimeFeature above.
                 //
                 //  - DataListElement: without it <datalist> parses as
