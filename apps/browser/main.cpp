@@ -810,8 +810,10 @@ static void configureBrowserApplication(QGuiApplication *app, QQuickView *view)
 
     app->setQuitOnLastWindowClosed(true);
     app->setAttribute(Qt::AA_SynthesizeTouchForUnhandledMouseEvents, true);
-    app->setApplicationName(QStringLiteral("browser"));
-    app->setOrganizationName(QStringLiteral("org.sailfishos"));
+    // Atlantic's own identity, the one its sailjail desktop entry declares.
+    // It used to be org.sailfishos/browser, i.e. the stock browser's profile.
+    app->setApplicationName(QStringLiteral("atlanticbrowser"));
+    app->setOrganizationName(QStringLiteral("org.atlantic"));
 
     QString translationPath("/usr/share/translations/");
     QTranslator *engineeringEnglish = new QTranslator(app);
@@ -952,8 +954,8 @@ static int runSilicaMainSmokeUi(int argc, char *argv[])
     QScopedPointer<QQuickView> view(new QQuickView);
 
     app->setQuitOnLastWindowClosed(true);
-    app->setApplicationName(QStringLiteral("browser"));
-    app->setOrganizationName(QStringLiteral("org.sailfishos"));
+    app->setApplicationName(QStringLiteral("atlanticbrowser"));
+    app->setOrganizationName(QStringLiteral("org.atlantic"));
     view->setTitle(QStringLiteral("Atlantic"));
 #ifdef USE_RESOURCES
     view->setSource(QUrl(QStringLiteral("qrc:///browser-silica-main-smoke.qml")));

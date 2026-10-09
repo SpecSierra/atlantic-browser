@@ -180,7 +180,7 @@ QString WebExtensionManager::extensionsDirectory() const
 {
     QString base = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     if (base.isEmpty())
-        base = QStringLiteral("/home/defaultuser/.local/share/org.sailfishos/browser");
+        base = QStringLiteral("/home/defaultuser/.local/share/org.atlantic/atlanticbrowser");
     return base + QStringLiteral("/extensions");
 }
 
@@ -188,7 +188,7 @@ QString WebExtensionManager::extensionDataDirectory()
 {
     QString base = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     if (base.isEmpty())
-        base = QStringLiteral("/home/defaultuser/.local/share/org.sailfishos/browser");
+        base = QStringLiteral("/home/defaultuser/.local/share/org.atlantic/atlanticbrowser");
     return base + QStringLiteral("/extension-data");
 }
 

@@ -4,7 +4,7 @@
 DEFINES += BROWSER_OPENSEARCH_PATH=\"\\\"/usr/share/atlantic-browser/searchEngines/\\\"\"
 
 isEmpty(USER_OPENSEARCH_PATH) {
-  DEFINES += USER_OPENSEARCH_PATH=\"\\\"/.local/share/org.sailfishos/browser/searchEngines/\\\"\"
+  DEFINES += USER_OPENSEARCH_PATH=\"\\\"/.local/share/org.atlantic/atlanticbrowser/searchEngines/\\\"\"
 } else {
   DEFINES += USER_OPENSEARCH_PATH=\"\\\"$$USER_OPENSEARCH_PATH\\\"\"
 }

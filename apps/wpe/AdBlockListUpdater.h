@@ -27,7 +27,7 @@ public:
     // of the last one, or with ATLANTIC_ADBLOCK_UPDATE=0).
     static void start();
 
-    // Directory the updater downloads into (…/org.sailfishos/browser/adblock).
+    // Directory the updater downloads into (…/org.atlantic/atlanticbrowser/adblock).
     static QString cacheDir();
     // engine.version stamp in dir, 0 if absent/invalid.
     static qlonglong versionIn(const QString& dir);

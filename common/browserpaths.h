@@ -23,6 +23,15 @@ struct BrowserPaths
     static QString cacheLocation();
     static QString databasePath();
 
+    // The stock browser's data directory, which Atlantic shared up to 1.6.x.
+    // Not created if missing; only the migration and the bookmark import look
+    // at it.
+    static QString legacyDataLocation();
+    // One-shot move of Atlantic's files out of the stock browser's profile.
+    // Must run after the application names are set and before anything reads
+    // the data directory.
+    static void migrateSharedProfile();
+
     static bool createDirectory(const QString &dirStr);
 };
 

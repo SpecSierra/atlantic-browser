@@ -5,7 +5,7 @@ the device and load it, then check each of the five things it proves:
 
 ```
 scp -P 2222 -r tests/sample-extension \
-    root@localhost:.local/share/org.sailfishos/browser/extensions/smoke-test
+    root@localhost:.local/share/org.atlantic/atlanticbrowser/extensions/smoke-test
 ```
 
 Restart the browser (or Settings → Extensions → Reload extensions).

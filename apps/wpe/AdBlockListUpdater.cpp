@@ -45,7 +45,7 @@ const int kStartupDelayMs = 60 * 1000;
 
 QString AdBlockListUpdater::cacheDir()
 {
-    // ~/.cache/org.sailfishos/browser/adblock — inside the firejail whitelist,
+    // ~/.cache/org.atlantic/atlanticbrowser/adblock — inside the firejail whitelist,
     // unlike GenericCacheLocation.
     return QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
            + QStringLiteral("/adblock");

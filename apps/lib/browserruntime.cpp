@@ -24,6 +24,7 @@
 #include "secureaction.h"
 #include "faviconmanager.h"
 #include "bookmarkmanager.h"
+#include "browserpaths.h"
 #include "WPEChromeOverlay.h"
 #include "WPEWaylandSubsurface.h"
 #include "declarativewebutils.h"
@@ -381,6 +382,9 @@ extern "C" Q_DECL_EXPORT bool atlanticBrowserRuntimeStart(QQuickView *view,
     if (view->property("atlanticBrowserRuntimeLoaded").toBool()) {
         return true;
     }
+
+    // Before anything below opens the profile.
+    BrowserPaths::migrateSharedProfile();
 
     registerBrowserQmlTypes();
 

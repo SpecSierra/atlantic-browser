@@ -79,7 +79,7 @@ the web viewport via the container's bottom inset.
 
 Atlantic runs MV2 and the practical subset of MV3, unpacked or from a `.zip` /
 `.xpi` / `.crx`, out of
-`~/.local/share/org.sailfishos/browser/extensions/<id>/`. All of it is UI-process
+`~/.local/share/org.atlantic/atlanticbrowser/extensions/<id>/`. All of it is UI-process
 work on APIs WPE WebKit 2.52 already exposes — the engine repo carries no
 extension code. Design record, limits and the device-verification plan:
 `atlantic-engine/docs/investigations/webextensions.md`.
@@ -213,6 +213,12 @@ SQLite via `DBManager` (singleton) and `DBWorker` (dedicated `QThread`).
 | `DeclarativeBookmarkModel` | `bookmarks.json` (atomic writes) — bookmarks |
 | `DeclarativeLoginModel` | the password vault — `CredentialStore` over SQLCipher, unlocked by a master password |
 | `SearchEngineModel` | `data/searchEngines/` |
+
+Everything above lives in `~/.local/share/org.atlantic/atlanticbrowser/` (cache:
+`~/.cache/org.atlantic/atlanticbrowser/`). Up to 1.6.x it was the stock browser's
+`org.sailfishos/browser`; `BrowserPaths::migrateSharedProfile()` moves an existing
+user's files over on the first run and `BookmarkManager` imports the stock
+`bookmarks.json` once. The stock profile is otherwise never written.
 
 ### Bootstrap (`apps/lib/`)
 

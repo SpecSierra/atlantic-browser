@@ -2785,7 +2785,7 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             if (cookieManager) {
                 const QString dataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
                 const QString cookieDir = dataDir.isEmpty()
-                    ? QStringLiteral("/home/defaultuser/.local/share/org.sailfishos/browser")
+                    ? QStringLiteral("/home/defaultuser/.local/share/org.atlantic/atlanticbrowser")
                     : dataDir;
                 QDir().mkpath(cookieDir);
                 const QString cookieFile = cookieDir + QStringLiteral("/cookies.sqlite");
