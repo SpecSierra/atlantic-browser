@@ -636,9 +636,15 @@ static bool configureGpuModeFromCapabilities()
         // compositor thread (as gpu-explicit), plus two settings measured on
         // the device (build 722, heavy fling bench, see
         // docs/investigations/jolla-gpu-black-tiles.md in atlantic-engine):
-        //  - WEBKIT_TILE_GPU_READBACK_SYNC=1: a whole-tile GPU replay is
-        //    otherwise intermittently lost (black tile until a later repaint;
-        //    root cause open). 0/12 black vs 7/18 without it.
+        //  - WEBKIT_TILE_GPU_READBACK_ASYNC=1: a tile painted in the painting GL
+        //    context is otherwise not yet visible to the compositor's context
+        //    when that first samples it, so the composite comes out black and
+        //    stays until something redraws ("black tiles"). Only a read of the
+        //    tile's framebuffer makes it visible in time; a one-pixel read into
+        //    a pixel-pack buffer does it without blocking (0/14 black on build
+        //    756). The synchronous WEBKIT_TILE_GPU_READBACK_SYNC=1 used before
+        //    cost about a third of the stalled time in a scroll with repaints;
+        //    presetting it keeps it and leaves the async read off.
         //  - low-res tiles off (WEBKIT_LOWRES_TILE_SCALE=1.0): under GPU paint
         //    the low-res pass plus the sharpen repaint costs more than painting
         //    full-res (55.1 fps / p95 21.5 ms vs 53.4 / 32.5 with it). The
@@ -656,8 +662,9 @@ static bool configureGpuModeFromCapabilities()
         qputenv("WEBKIT_RASTER_ON_COMPOSITOR_THREAD", QByteArrayLiteral("1"));
         gpuPaintingThreads = QByteArrayLiteral("1");
         qputenv("WEBKIT_SKIA_GPU_PAINTING_THREADS", gpuPaintingThreads);
-        if (!qEnvironmentVariableIsSet("WEBKIT_TILE_GPU_READBACK_SYNC"))
-            qputenv("WEBKIT_TILE_GPU_READBACK_SYNC", QByteArrayLiteral("1"));
+        if (!qEnvironmentVariableIsSet("WEBKIT_TILE_GPU_READBACK_SYNC")
+            && !qEnvironmentVariableIsSet("WEBKIT_TILE_GPU_READBACK_ASYNC"))
+            qputenv("WEBKIT_TILE_GPU_READBACK_ASYNC", QByteArrayLiteral("1"));
         if (qgetenv("ATLANTIC_GPU_KEEP_LOWRES") != QByteArrayLiteral("1"))
             qputenv("WEBKIT_LOWRES_TILE_SCALE", QByteArrayLiteral("1.0"));
         if (!qEnvironmentVariableIsSet("WEBKIT_COMPOSITOR_GL_FINISH"))
