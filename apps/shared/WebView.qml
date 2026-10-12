@@ -188,9 +188,10 @@ WebContainer {
 
     // Refresh the active tab's thumbnail when the browser leaves the
     // foreground, so the cover shows the page as it was left (scroll position
-    // included) rather than as it looked when it finished loading. The
-    // snapshot is taken by WebKit itself (webkit_web_view_get_snapshot), not
-    // from the GL frame, so it still works once the window is minimised.
+    // included) rather than as it looked when it finished loading. The page
+    // keeps its own thumbnail current while it is on screen (WPEWebPage, "Tab
+    // thumbnails"), so this only catches what was drawn in the last seconds,
+    // and only if the window is still being rendered.
     onForegroundChanged: {
         if (!foreground) {
             grabActivePage()

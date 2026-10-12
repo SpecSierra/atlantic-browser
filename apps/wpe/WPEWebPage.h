@@ -652,6 +652,18 @@ private:
     qreal m_pinchCenterX = 0.0;
     qreal m_pinchCenterY = 0.0;
     QTimer m_framePump;
+    // Tab thumbnail upkeep, see "Tab thumbnails" in the .cpp.
+    void updateThumbnailTimer();
+    void checkThumbnail();
+    void captureThumbnail();
+    QTimer m_thumbnailTimer;
+    QSize m_thumbnailSize;                 // last size the UI asked for
+    QSharedPointer<QQuickItemGrabResult> m_thumbnailGrab;
+    QElapsedTimer m_thumbnailGrabStarted;
+    quint32 m_thumbnailSerial = 0;         // frameSerial() of the capture on disk
+    quint32 m_thumbnailSerialAtCheck = 0;  // frameSerial() at the previous check
+    int m_thumbnailBusyChecks = 0;
+    bool m_thumbnailCaptured = false;
     QTimer m_mediaInactiveDebounceTimer;
     QTimer m_deferredFullscreenLeaveTimer;
     QTimer m_chromeGestureDebounceTimer;

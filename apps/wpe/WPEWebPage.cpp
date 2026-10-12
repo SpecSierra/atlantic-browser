@@ -29,6 +29,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QKeyEvent>
+#include <QPainter>
 #include <QLineF>
 #include <QCryptographicHash>
 #include <QPointer>
@@ -45,6 +46,7 @@
 #include <QStringList>
 #include <QUrl>
 #include <QVector>
+#include <QtMath>
 #include <array>
 #include <memory>
 #include <string>
@@ -2187,6 +2189,9 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     // the plugin's default visible state and burn CPU in the background.
     setWebKitVisible(false);
 
+    m_thumbnailTimer.setTimerType(Qt::VeryCoarseTimer);
+    connect(&m_thumbnailTimer, &QTimer::timeout, this, &WPEWebPage::checkThumbnail);
+
     const int framePumpIntervalMs = framePumpIntervalForCurrentGpuMode();
     m_framePump.setInterval(framePumpIntervalMs);
     m_framePump.setTimerType(Qt::PreciseTimer);
@@ -3072,6 +3077,7 @@ void WPEWebPage::setActive(bool active)
         setVisible(active);
         updateFramePumpState();
         updateWebKitVisibility();
+        updateThumbnailTimer();
         emit activeChanged();
     }
 }
@@ -3081,6 +3087,7 @@ void WPEWebPage::setAppForeground(bool foreground)
     if (m_appForeground != foreground) {
         m_appForeground = foreground;
         updateWebKitVisibility();
+        updateThumbnailTimer();
     }
 }
 
@@ -3386,6 +3393,10 @@ void WPEWebPage::preconnect(const QString &url)
 // in place instead of copying them first; files are replaced atomically since a
 // QML Image may be reading the previous one; and results are handed back to the
 // GUI thread through the GLib main context.
+//
+// A tab thumbnail no longer normally comes from a snapshot at all, see
+// "Tab thumbnails" below: it is a half-resolution grab of the frame already on
+// screen, and the encoder is handed that image instead.
 
 namespace {
 
@@ -3403,6 +3414,22 @@ QThreadPool *snapshotEncodePool()
 // The default (-1) is zlib's level 6: several times the CPU for a thumbnail
 // that is only ever shown scaled down, and still well compressed at level 1.
 constexpr int kThumbnailPngQuality = 80;
+// Thumbnail files are JPEG: a fraction of PNG's encode time and size, and a
+// page picture has no use for an alpha channel.
+constexpr int kThumbnailJpegQuality = 85;
+
+// JPEG has no alpha, and Qt writes a transparent pixel as black. Anything the
+// page has not painted is put on white instead, the colour of an empty page.
+QImage flattened(const QImage &image)
+{
+    if (!image.hasAlphaChannel())
+        return image;
+    QImage out(image.size(), QImage::Format_RGB32);
+    out.fill(Qt::white);
+    QPainter painter(&out);
+    painter.drawImage(0, 0, image);
+    return out;
+}
 
 bool saveAtomically(const QImage &image, const QString &path, const char *format, int quality)
 {
@@ -3426,7 +3453,7 @@ class SnapshotEncoder : public QRunnable
 {
 public:
     enum class Output {
-        ThumbnailFile,    // PNG at path, then WPEWebPage::fileGrabWritten(path)
+        ThumbnailFile,    // JPEG at path, then WPEWebPage::fileGrabWritten(path)
         ThumbnailDataUri, // PNG data: URI, then WPEWebPage::thumbnailResult(uri)
         HistoryPreview,   // half-resolution JPEG at path, nobody notified
     };
@@ -3448,9 +3475,26 @@ public:
         setAutoDelete(true);
     }
 
+    // GUI thread. A picture that is already in hand: the scene-graph grab of a
+    // tab thumbnail, taken at its final width.
+    SnapshotEncoder(const QImage &image, const QSize &targetSize, const QString &path, WPEWebPage *page)
+        : m_output(Output::ThumbnailFile)
+        , m_targetSize(targetSize)
+        , m_path(path)
+        , m_width(image.width())
+        , m_height(image.height())
+        , m_stride(0)
+        , m_bytes(nullptr)
+        , m_image(image)
+        , m_delivery(new Delivery { page, Output::ThumbnailFile, QString() })
+    {
+        setAutoDelete(true);
+    }
+
     ~SnapshotEncoder() override
     {
-        g_bytes_unref(m_bytes);
+        if (m_bytes)
+            g_bytes_unref(m_bytes);
     }
 
     void run() override
@@ -3460,7 +3504,7 @@ public:
         if (!image.isNull()) {
             switch (m_output) {
             case Output::ThumbnailFile:
-                if (saveAtomically(thumbnail(image), m_path, "PNG", kThumbnailPngQuality))
+                if (saveAtomically(flattened(thumbnail(image)), m_path, "JPEG", kThumbnailJpegQuality))
                     result = m_path;
                 break;
             case Output::ThumbnailDataUri: {
@@ -3517,6 +3561,8 @@ private:
     // stores bytes as B,G,R,A — identical layout.
     QImage pixels() const
     {
+        if (!m_bytes)
+            return m_image;
         gsize size = 0;
         const auto *data = static_cast<const uchar *>(g_bytes_get_data(m_bytes, &size));
         if (!data || m_width <= 0 || m_height <= 0
@@ -3543,6 +3589,7 @@ private:
     const int m_height;
     const guint m_stride;
     GBytes *const m_bytes;
+    const QImage m_image;
     Delivery *m_delivery;
 };
 
@@ -3586,18 +3633,172 @@ void requestSnapshot(WebKitWebView *wv, SnapshotRequest *request)
 
 } // namespace
 
+// ── Tab thumbnails ──────────────────────────────────────────────────────────
+//
+// The tab cards and the app cover show a file per tab. It used to be written by
+// webkit_web_view_get_snapshot() at the moment something wanted to show it
+// (tab switcher opening, app going to the background), always to the same
+// <tabId>.png. Three things went wrong with that:
+//
+//  - The path never changed, so the model's "new" value was the old one and a
+//    QML Image that had already loaded the file kept its picture. The cover held
+//    one for as long as the tab stayed active; a tab card showed whatever was on
+//    disk when the switcher opened, which was the capture before the one just
+//    requested.
+//  - The snapshot is a second, software render of the page in the WebProcess,
+//    asked for exactly when the page is being hidden and throttled. It is not
+//    the frame the user saw, and it can come back empty.
+//  - It is the expensive way round: a full-resolution repaint, 10 MB across IPC,
+//    a smooth downscale and an encode.
+//
+// The picture wanted is already on the GPU: the frame the scene graph draws for
+// this item. grabToImage() redraws that one textured quad into a half-size FBO
+// and reads it back -- no WebProcess work, no IPC, and it is by construction
+// what was on screen. Because that only works while the window is being
+// rendered, the thumbnail is kept current while the page is in the foreground
+// instead of being fetched when it is about to be needed: a coarse timer
+// compares the engine's frame counter with its value at the last capture and
+// grabs once the page has gone quiet, so a page that is not changing costs two
+// integer compares every couple of seconds and nothing else. Every capture gets
+// a new file name, which is what makes the Images reload; the tab model deletes
+// the file it replaces.
+
+namespace {
+
+// Half the panel's width on both supported phones, and wider than a tab card.
+constexpr int kThumbnailMaxWidth = 540;
+constexpr int kThumbnailCheckIntervalMs = 2000;
+// A page that never stops animating is captured anyway after this many checks.
+constexpr int kThumbnailMaxBusyChecks = 5;
+// A grab that has not completed by now belongs to a window that stopped
+// rendering; it is dropped so that it cannot block the next one.
+constexpr int kThumbnailGrabTimeoutMs = 3000;
+
+QString thumbnailFile(int tabId)
+{
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
+                        + QStringLiteral("/thumbnails");
+    QDir().mkpath(dir);
+    return dir + QLatin1Char('/') + QString::number(tabId) + QLatin1Char('-')
+           + QString::number(QDateTime::currentMSecsSinceEpoch(), 36) + QStringLiteral(".jpg");
+}
+
+} // namespace
+
 void WPEWebPage::grabToFile(const QSize &size)
 {
-    WebKitWebView *wv = webView();
-    if (!wv)
+    if (size.width() > 0 && size.height() > 0)
+        m_thumbnailSize = size;
+    captureThumbnail();
+}
+
+void WPEWebPage::updateThumbnailTimer()
+{
+    // A private page's picture must never reach the disk.
+    const bool wanted = m_active && m_appForeground && !privateBrowsing();
+    if (wanted == m_thumbnailTimer.isActive())
+        return;
+    if (wanted) {
+        m_thumbnailBusyChecks = 0;
+        m_thumbnailSerialAtCheck = frameSerial();
+        m_thumbnailTimer.start(kThumbnailCheckIntervalMs);
+    } else {
+        m_thumbnailTimer.stop();
+    }
+}
+
+void WPEWebPage::checkThumbnail()
+{
+    const quint32 serial = frameSerial();
+    if (m_thumbnailCaptured && serial == m_thumbnailSerial) {
+        m_thumbnailBusyChecks = 0;
+        return;
+    }
+
+    // Still drawing (loading, scrolling, animating): wait for it to settle, so
+    // that the capture is of the page at rest and is not repeated per frame.
+    const bool quiet = serial == m_thumbnailSerialAtCheck;
+    m_thumbnailSerialAtCheck = serial;
+    if (!quiet && ++m_thumbnailBusyChecks < kThumbnailMaxBusyChecks)
         return;
 
-    QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
-                       + QStringLiteral("/thumbnails");
-    QDir().mkpath(cacheDir);
-    const QString filePath = cacheDir + QStringLiteral("/") + QString::number(m_tabId) + QStringLiteral(".png");
+    captureThumbnail();
+}
 
-    requestSnapshot(wv, new SnapshotRequest { this, SnapshotEncoder::Output::ThumbnailFile, size, filePath });
+void WPEWebPage::captureThumbnail()
+{
+    if (privateBrowsing() || m_tabId <= 0 || !m_painted)
+        return;
+
+    const quint32 serial = frameSerial();
+    if (m_thumbnailCaptured && serial == m_thumbnailSerial)
+        return; // nothing new has been drawn since the file was written
+
+    if (m_thumbnailGrab) {
+        if (m_thumbnailGrabStarted.elapsed() < kThumbnailGrabTimeoutMs)
+            return;
+        m_thumbnailGrab.clear();
+    }
+
+    QSize target = m_thumbnailSize;
+    if (target.isEmpty())
+        target = QSize(qRound(width()), qRound(width() * 1.4));
+    if (target.isEmpty())
+        return;
+    const int targetWidth = qMin(target.width(), kThumbnailMaxWidth);
+
+    QQuickWindow *win = window();
+    const bool onScreen = sceneGraphComposited() && win && win->isVisible() && win->isExposed()
+                          && isVisible() && width() >= 1 && height() >= 1;
+    if (!onScreen) {
+        // Nothing is rendering this item (app minimised, tab switcher on top) or
+        // it has no scene-graph node (direct composite). While a capture exists
+        // it is at most a few seconds old and is kept; only a tab that has none
+        // falls back to the WebKit snapshot.
+        if (m_thumbnailCaptured && sceneGraphComposited())
+            return;
+        WebKitWebView *wv = webView();
+        if (!wv)
+            return;
+        m_thumbnailBusyChecks = 0;
+        m_thumbnailCaptured = true;
+        m_thumbnailSerial = serial;
+        requestSnapshot(wv, new SnapshotRequest { this, SnapshotEncoder::Output::ThumbnailFile,
+                                                  QSize(targetWidth, targetWidth * target.height() / target.width()),
+                                                  thumbnailFile(m_tabId) });
+        return;
+    }
+
+    // A whole divisor of the item's width: the frame is sampled without
+    // filtering, and an even decimation keeps text clean where an arbitrary
+    // ratio would not.
+    const int divisor = qMax(1, qFloor(width() / targetWidth));
+    const QSize grabSize(qMax(1, qRound(width() / divisor)), qMax(1, qRound(height() / divisor)));
+    // The card's shape, cut from the top of the page.
+    const int cropHeight = qRound(grabSize.width() * qreal(target.height()) / target.width());
+
+    QSharedPointer<QQuickItemGrabResult> grab = grabToImage(grabSize);
+    if (!grab)
+        return;
+    m_thumbnailGrab = grab;
+    m_thumbnailGrabStarted.start();
+    m_thumbnailBusyChecks = 0;
+
+    QQuickItemGrabResult *pending = grab.data();
+    connect(pending, &QQuickItemGrabResult::ready, this, [this, pending, serial, cropHeight]() {
+        if (m_thumbnailGrab.data() != pending)
+            return; // timed out, and possibly replaced
+        const QImage image = m_thumbnailGrab->image();
+        m_thumbnailGrab.clear();
+        if (image.isNull())
+            return;
+        // The serial read when the grab was asked for: a frame that arrived in
+        // between may or may not be in the picture, so it counts as not captured.
+        m_thumbnailCaptured = true;
+        m_thumbnailSerial = serial;
+        snapshotEncodePool()->start(new SnapshotEncoder(image, QSize(0, cropHeight),
+                                                        thumbnailFile(m_tabId), this));
+    });
 }
 
 void WPEWebPage::grabThumbnail(const QSize &size)

@@ -509,6 +509,14 @@ void DeclarativeTabModel::updateThumbnailPath(int tabId, const QString &path)
 #if DEBUG_LOGS
             qDebug() << "model tab thumbnail updated: " << path << i << tabId;
 #endif
+            // Every capture is a new file (that is what makes an Image showing
+            // the old one reload), so the one it replaces goes here.
+            const QString previous = m_tabs.at(i).thumbnailPath();
+            if (previous == path)
+                continue;
+            if (previous.startsWith(QLatin1Char('/')))
+                QFile::remove(previous);
+
             QModelIndex start = index(i, 0);
             QModelIndex end = index(i, 0);
             m_tabs[i].setThumbnailPath(path);
