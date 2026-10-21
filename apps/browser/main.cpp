@@ -17,7 +17,10 @@
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
 #include <QColor>
+#include <QCryptographicHash>
+#include <QDateTime>
 #include <QFile>
+#include <QSaveFile>
 #include <QQuickView>
 #include <QQuickWindow>
 #include <QScreen>
@@ -223,8 +226,112 @@ static int restartCountFromEnvironment()
     return restartCount;
 }
 
+// Roots behind the eMudhra intermediates whose private keys leaked in October 2026
+// (https://emudhra.we-have-a-problem.com/, roots.json). SHA-256 of the DER.
+// Browsers block the intermediates through their revocation feeds; WebKit's
+// OpenSSL TLS backend has no such feed and trusts whatever the system bundle
+// holds, and older SFOS ca-certificates still ship emSign ECC Root CA - G3.
+static const char *const kDistrustedRootSha256[] = {
+    "86a1ecba089c4a8d3bbe2734c612ba341d813e043cf9e8a862cd5c57a36bbe6b", // emSign ECC Root CA - G3
+    "d7a7a0fb5d7e2731d771e9484ebcdef71d5f0c3e0a2948782bc83ee0ea699ef4", // AAA Certificate Services
+    "7dd78d5f4f13459a83dff9abbba62edbaf6f2d102bf257fd712f4d9f2746ed8d", // emSign Root TLS CA - G3
+    "f2edaaff3d9b701fb4d14c9f285f8c0bad90fc3bcc1fa07d47f4718edaba34a5", // emSign Root CS CA - G3
+};
+
+// Point OpenSSL (glib-networking in the NetworkProcess, and this process) at a copy
+// of the system CA bundle without the roots above. Helpers inherit the env.
+// SSL_CERT_DIR goes to an empty directory, since the system hash directory holds
+// the same roots. The copy is rebuilt only when the system bundle changes, so
+// later CA updates and user-added anchors still reach the browser.
+static void configureDistrustedRoots()
+{
+    if (!qEnvironmentVariableIsEmpty("SSL_CERT_FILE") || !qEnvironmentVariableIsEmpty("SSL_CERT_DIR"))
+        return;
+    if (qgetenv("ATLANTIC_CA_FILTER") == "0")
+        return;
+
+    QString source;
+    for (const char *candidate : { "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
+                                    "/etc/ssl/certs/ca-bundle.crt" }) {
+        if (QFileInfo::exists(QString::fromLatin1(candidate))) {
+            source = QString::fromLatin1(candidate);
+            break;
+        }
+    }
+    if (source.isEmpty())
+        return;
+
+    QString cacheHome = QFile::decodeName(qgetenv("XDG_CACHE_HOME"));
+    if (cacheHome.isEmpty())
+        cacheHome = QDir::homePath() + QStringLiteral("/.cache");
+    const QString dir = cacheHome + QStringLiteral("/org.atlantic/atlanticbrowser/ca");
+    // Bump the suffix whenever kDistrustedRootSha256 changes.
+    const QString filtered = dir + QStringLiteral("/tls-ca-bundle-v1.pem");
+    const QString emptyDir = dir + QStringLiteral("/empty");
+    if (!QDir().mkpath(emptyDir))
+        return;
+
+    const QFileInfo sourceInfo(source);
+    const QFileInfo filteredInfo(filtered);
+    if (!filteredInfo.exists() || filteredInfo.size() == 0
+            || filteredInfo.lastModified() < sourceInfo.lastModified()) {
+        QFile in(source);
+        if (!in.open(QIODevice::ReadOnly))
+            return;
+        QSet<QByteArray> distrusted;
+        for (const char *hash : kDistrustedRootSha256)
+            distrusted.insert(QByteArray(hash));
+
+        static const QByteArray kBegin("-----BEGIN CERTIFICATE-----");
+        static const QByteArray kEnd("-----END CERTIFICATE-----");
+        QByteArray out;
+        QByteArray block;
+        QByteArray body;
+        bool inBlock = false;
+        int dropped = 0;
+        while (!in.atEnd()) {
+            const QByteArray line = in.readLine();
+            const QByteArray trimmed = line.trimmed();
+            if (!inBlock) {
+                if (trimmed == kBegin) {
+                    inBlock = true;
+                    block = line;
+                    body.clear();
+                } else {
+                    out += line;
+                }
+                continue;
+            }
+            block += line;
+            if (trimmed != kEnd) {
+                body += trimmed;
+                continue;
+            }
+            inBlock = false;
+            const QByteArray der = QByteArray::fromBase64(body);
+            if (distrusted.contains(QCryptographicHash::hash(der, QCryptographicHash::Sha256).toHex()))
+                ++dropped;
+            else
+                out += block;
+        }
+        if (inBlock)
+            return; // truncated bundle: leave the system default alone
+
+        QSaveFile save(filtered);
+        if (!save.open(QIODevice::WriteOnly) || save.write(out) != out.size() || !save.commit())
+            return;
+        fprintf(stderr, "[ATLANTIC-CA] filtered %s: %d distrusted root(s) dropped\n",
+                source.toUtf8().constData(), dropped);
+    }
+
+    qputenv("SSL_CERT_FILE", QFile::encodeName(filtered));
+    qputenv("SSL_CERT_DIR", QFile::encodeName(emptyDir));
+}
+
 static void configureBrowserProcessEnvironment()
 {
+    configureDistrustedRoots();
+
     auto needsUtf8Locale = [](const char *value) {
         QByteArray normalized(value ? value : "");
         normalized = normalized.trimmed().toLower();
