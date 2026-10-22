@@ -8,7 +8,7 @@ INCLUDEPATH += $${WPE_SFOS_PREFIX}/include/wpe-webkit-2.0
 INCLUDEPATH += $${WPE_SFOS_PREFIX}/include/wpe-1.0
 INCLUDEPATH += $${WPE_SFOS_PREFIX}/include/wpe-fdo-1.0
 INCLUDEPATH += $${SFOS_SYSROOT}/usr/include/glib-2.0
-INCLUDEPATH += $${SFOS_SYSROOT}/usr/lib64/glib-2.0/include
+INCLUDEPATH += $${SFOS_SYSROOT}/usr/$${SFOS_LIBDIR}/glib-2.0/include
 INCLUDEPATH += $${SFOS_SYSROOT}/usr/include/libsoup-3.0
 INCLUDEPATH += $${SFOS_SYSROOT}/usr/include/gio-unix-2.0
 
@@ -16,11 +16,11 @@ LIBS += -L$${WPE_SFOS_PREFIX}/lib/qt5/qml/org/wpewebkit/qtwpe -lqtwpe
 LIBS += -L$${WPE_SFOS_PREFIX}/lib -lWPEWebKit-2.0
 # WPEBackend-fdo: offscreen backend for extension background pages
 LIBS += -L$${WPE_SFOS_PREFIX}/lib -lWPEBackend-fdo-1.0 -lwpe-1.0
-LIBS += -L$${SFOS_SYSROOT}/usr/lib64 -lgio-2.0 -lgobject-2.0 -lglib-2.0
+LIBS += -L$${SFOS_SYSROOT}/usr/$${SFOS_LIBDIR} -lgio-2.0 -lgobject-2.0 -lglib-2.0
 # zlib: raw inflate for extension packages (WebExtensionArchive)
-LIBS += -L$${SFOS_SYSROOT}/usr/lib64 -lz
+LIBS += -L$${SFOS_SYSROOT}/usr/$${SFOS_LIBDIR} -lz
 # libsoup: response headers for the atlantic-extension:// scheme (CORS)
-LIBS += -L$${SFOS_SYSROOT}/usr/lib64 -lsoup-3.0
+LIBS += -L$${SFOS_SYSROOT}/usr/$${SFOS_LIBDIR} -lsoup-3.0
 LIBS += -L$${WPE_SFOS_PREFIX}/lib -latlantic_adblock
 
 QT += network

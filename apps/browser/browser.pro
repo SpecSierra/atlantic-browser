@@ -12,9 +12,10 @@ INSTALLS += target
 DEPLOYMENT_PATH = /usr/share/$$TARGET
 DEFINES += DEPLOYMENT_PATH=\"\\\"\"$${DEPLOYMENT_PATH}/\"\\\"\"
 
+isEmpty(SFOS_LIBDIR): SFOS_LIBDIR = lib64
 !isEmpty(SFOS_SYSROOT) {
-    QMAKE_LIBDIR += $${SFOS_SYSROOT}/usr/lib64
-    QMAKE_LFLAGS += -Wl,-rpath-link,$${SFOS_SYSROOT}/usr/lib64
+    QMAKE_LIBDIR += $${SFOS_SYSROOT}/usr/$${SFOS_LIBDIR}
+    QMAKE_LFLAGS += -Wl,-rpath-link,$${SFOS_SYSROOT}/usr/$${SFOS_LIBDIR}
 }
 
 
