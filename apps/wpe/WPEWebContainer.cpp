@@ -377,7 +377,7 @@ qreal WPEWebContainer::initialPageDeviceScaleFactor(const QSizeF &screenSize) co
     if (m_uiPixelRatio > 0.0) {
         const qreal scale = WPERuntimePaths::kReferenceDeviceScale
                             * m_uiPixelRatio / WPERuntimePaths::kReferenceUiPixelRatio;
-        return qMax(qreal(1.0), qRound(scale * 4.0) / 4.0);
+        return qMax(qreal(1.0), qreal(qRound(scale * 4.0) / 4.0));
     }
     return screenSize.width() / WPERuntimePaths::kReferenceViewportWidth;
 }
