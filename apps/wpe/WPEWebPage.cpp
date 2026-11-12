@@ -453,6 +453,14 @@ static bool urlIsTwitch(const QUrl &url)
         || host.endsWith(QStringLiteral(".twitch.tv"));
 }
 
+// x.com, twitter.com and their subdomains (dot-bounded: not "fax.com").
+static bool urlIsX(const QUrl &url)
+{
+    const QString host = url.host().toLower();
+    return host == QStringLiteral("x.com") || host.endsWith(QStringLiteral(".x.com"))
+        || host == QStringLiteral("twitter.com") || host.endsWith(QStringLiteral(".twitter.com"));
+}
+
 // Per-site UA quirk. Under our default mobile UA the Google Maps loader aborts
 // with "app undefined" and leaves a blank page: its bootstrap branches on the
 // platform token and has no working path for the unrecognised
@@ -487,6 +495,17 @@ QString atlanticUserAgentForUrl(const QUrl &url, bool desktopMode)
         return iphoneMobileUserAgent();
     if (!desktopMode && urlIsMgpSite(url))
         return iphoneMobileUserAgent();
+    // X refuses the username step of its login under our default identity
+    // ("blocked"), while Iroise signs in on the same phone presenting itself
+    // as plain Chrome on Android. Use that exact identity here: this string
+    // plus kXIdentity (navigator.vendor/platform/maxTouchPoints).
+    // ATLANTIC_DISABLE_X_IDENTITY=1 turns both off.
+    if (!desktopMode && urlIsX(url) && !envVarEnabled(qgetenv("ATLANTIC_DISABLE_X_IDENTITY"))) {
+        return QStringLiteral(
+            "Mozilla/5.0 (Linux; Android 10; K) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/153.0.0.0 Mobile Safari/537.36");
+    }
     if (!desktopMode && urlIsTwitch(url)) {
         return QStringLiteral(
             "Mozilla/5.0 (Linux; Android 14; Pixel 7) "
@@ -1488,6 +1507,13 @@ static void onSelectionBridgeInstall(WebKitUserContentManager* ucm, WPEWebPage* 
     // pauses the page. DOCUMENT_START so the play() wrapper is in place before
     // Twitch's player autoplays; all frames since the player can be iframed.
     // Twitch-scoped inside the script. Set ATLANTIC_DISABLE_TWITCH=1 to disable.
+    // X: Chrome-on-Android navigator values to match the UA quirk
+    // (atlanticUserAgentForUrl). Host-scoped inside the script too.
+    if (!envVarEnabled(qgetenv("ATLANTIC_DISABLE_X_IDENTITY"))) {
+        addHostScopedScript(ucm, WPEUserScripts::kXIdentity,
+                            WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START, { "x.com", "twitter.com" });
+    }
+
     if (!envVarEnabled(qgetenv("ATLANTIC_DISABLE_TWITCH"))) {
         addHostScopedScript(ucm, WPEUserScripts::kTwitch,
                             WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START, { "twitch.tv" });

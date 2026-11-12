@@ -1263,6 +1263,35 @@ static const char* const kMgpNativeHls = R"JS(
 })();
 )JS";
 
+// x.com / twitter.com: finish the Chrome-on-Android identity that the UA quirk
+// (atlanticUserAgentForUrl) starts. Left alone, the engine reports
+// navigator.vendor "Apple Computer, Inc.", platform "Linux aarch64" and
+// maxTouchPoints 0 next to a Chrome/Android user agent: a mix no real browser
+// produces, of the kind login risk checks look for. The values are the ones
+// Chrome on an Android phone reports (and the ones Iroise presents, which
+// can sign in). DOCUMENT_START, all frames: before any page script reads them.
+static const char* const kXIdentity = R"JS(
+(function() {
+    try {
+        if (!/(^|\.)(x|twitter)\.com$/i.test(location.hostname)) return;
+        // Only alongside the Chrome UA quirk: not in desktop mode, nor under a
+        // user-chosen site user agent.
+        if (!/ Chrome\//.test(navigator.userAgent)) return;
+        if (window.__wpeXIdentityInstalled) return;
+        window.__wpeXIdentityInstalled = true;
+        var define = function(name, value) {
+            try {
+                Object.defineProperty(Navigator.prototype, name, {
+                    get: function() { return value; }, configurable: true, enumerable: true });
+            } catch (e) {}
+        };
+        define('vendor', 'Google Inc.');
+        define('platform', 'Linux armv81');
+        define('maxTouchPoints', 5);
+    } catch (e) {}
+})();
+)JS";
+
 static const char* const kTwitch = R"JS(
 (function() {
     try {
