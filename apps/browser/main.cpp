@@ -694,6 +694,15 @@ static void configureMemoryTierFromRam()
         if (!qEnvironmentVariableIsSet("WEBKIT_PROCESS_PREWARM"))
             qputenv("WEBKIT_PROCESS_PREWARM", QByteArrayLiteral("1"));
     }
+    // Low tier: WebKit's own WebProcess cache is off there (it needs the "web"
+    // cache model and sizes itself at 4 processes per GB), so every return to
+    // a site just left starts a new process. Keep ONE page-less process for
+    // reuse (webkit-web-process-cache-capacity-env.patch in atlantic-engine):
+    // enough for A -> B -> A, for one idle process of resident memory, which
+    // WebKit drops after 5 minutes or under memory pressure. The high tier
+    // keeps WebKit's own, larger, capacity. Not yet measured on a device.
+    if (!high && !qEnvironmentVariableIsSet("WEBKIT_WEB_PROCESS_CACHE_CAPACITY"))
+        qputenv("WEBKIT_WEB_PROCESS_CACHE_CAPACITY", QByteArrayLiteral("1"));
     fprintf(stderr, "[ATLANTIC] memory tier: %s (MemTotal %lld MB%s) cache_model=%s base_threshold=%s MB\n",
             high ? "high" : "low", static_cast<long long>(memTotalKb / 1024), forcedLow ? ", forced low" : "",
             qgetenv("ATLANTIC_CACHE_MODEL").constData(), qgetenv("WEBKIT_MEMORY_BASE_THRESHOLD_MB").constData());
